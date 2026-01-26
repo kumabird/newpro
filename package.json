@@ -1,0 +1,13 @@
+{
+  "name": "youtube-viewer",
+  "version": "1.0.0",
+  "main": "server.js",
+  "type": "module",
+  "engines": {
+    "node": "18.x"
+  },
+  "dependencies": {
+    "express": "^4.18.2",
+    "node-fetch": "^3.3.2"
+  }
+}
