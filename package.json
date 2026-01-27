@@ -1,7 +1,7 @@
 {
   "name": "newpro",
   "version": "1.0.0",
-  "description": "パスコード付き動画ギャラリー",
+  "description": "パスコード付き動画ギャラリー（YouTube対応）",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
