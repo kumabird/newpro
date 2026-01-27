@@ -7,6 +7,12 @@ const PORT = 3000;
 const videoDir = path.join(__dirname, 'videos');
 const PASSCODE = '157514';
 
+// YouTube動画のリスト（ここに追加していく）
+const youtubeVideos = [
+  { title: 'ネイチャー映像', url: 'https://www.youtube.com/embed/ScMzIvxBSi4' },
+  { title: '音楽ライブ', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }
+];
+
 app.use('/videos', express.static(videoDir));
 
 app.get('/', (req, res) => {
@@ -18,8 +24,8 @@ app.get('/', (req, res) => {
       <style>
         body { background: #111; color: white; font-family: sans-serif; margin: 0; padding: 0; }
         #login, #viewer { display: none; }
-        #video-container { display: flex; overflow-x: auto; gap: 8px; padding: 16px; }
-        video { width: 300px; background: #000; }
+        #video-container { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
+        video, iframe { width: 300px; height: 180px; background: #000; }
         #search-bar { margin: 16px; }
         input, button { font-size: 16px; padding: 8px; }
       </style>
@@ -34,7 +40,7 @@ app.get('/', (req, res) => {
 
       <div id="viewer">
         <div id="search-bar">
-          <input type="text" id="search" placeholder="動画名で検索">
+          <input type="text" id="search" placeholder="動画名やキーワードで検索">
           <button onclick="startSearch()">検索</button>
         </div>
         <div id="video-container"></div>
@@ -71,13 +77,23 @@ app.get('/', (req, res) => {
             const res = await fetch(\`/api/videos?page=\${page}&pass=\${CORRECT_PASS}&keyword=\${encodeURIComponent(currentKeyword)}\`);
             const data = await res.json();
             const container = document.getElementById('video-container');
+
             data.videos.forEach(src => {
               const video = document.createElement('video');
               video.src = src;
               video.controls = true;
               container.appendChild(video);
             });
-            if (data.videos.length > 0) page++;
+
+            data.youtube.forEach(item => {
+              const iframe = document.createElement('iframe');
+              iframe.src = item.url;
+              iframe.allowFullscreen = true;
+              iframe.title = item.title;
+              container.appendChild(iframe);
+            });
+
+            if (data.videos.length > 0 || data.youtube.length > 0) page++;
           } catch (err) {
             console.error('読み込み失敗', err);
           }
@@ -118,12 +134,14 @@ app.get('/api/videos', (req, res) => {
       .sort();
 
     const start = (page - 1) * pageSize;
-    const paginated = videoFiles.slice(start, start + pageSize).map(file => \`/videos/\${file}\`);
+    const paginated = videoFiles.slice(start, start + pageSize).map(file => `/videos/${file}`);
 
-    res.json({ videos: paginated });
+    const filteredYouTube = youtubeVideos.filter(v => v.title.includes(keyword));
+
+    res.json({ videos: paginated, youtube: filteredYouTube });
   });
 });
 
 app.listen(PORT, () => {
-  console.log(\`🔐 http://localhost:\${PORT} でサーバー起動中\`);
+  console.log(`🔐 http://localhost:${PORT} でサーバー起動中`);
 });
