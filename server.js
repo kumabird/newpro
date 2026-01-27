@@ -7,10 +7,8 @@ const PORT = 3000;
 const videoDir = path.join(__dirname, 'videos');
 const PASSCODE = '157514';
 
-// 静的ファイル（動画）を提供
 app.use('/videos', express.static(videoDir));
 
-// トップページ：パスコード入力＋動画表示（すべてクライアントで制御）
 app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
@@ -41,17 +39,33 @@ app.get('/', (req, res) => {
           flex-shrink: 0;
           background: #000;
         }
+        #search-bar {
+          margin: 16px;
+        }
+        input[type="text"] {
+          padding: 8px;
+          font-size: 16px;
+          width: 200px;
+        }
+        button {
+          padding: 8px 12px;
+          font-size: 16px;
+        }
       </style>
     </head>
     <body>
       <div id="login" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;">
         <p>パスコードを入力してください：</p>
-        <input type="password" id="passcode" placeholder="パスコード" style="padding:8px;font-size:16px;">
-        <button onclick="checkPass()" style="padding:8px 12px;font-size:16px;margin-top:8px;">送信</button>
+        <input type="password" id="passcode" placeholder="パスコード">
+        <button onclick="checkPass()">送信</button>
         <p id="error" style="color: red; margin-top: 10px;"></p>
       </div>
 
       <div id="viewer">
+        <div id="search-bar">
+          <input type="text" id="search" placeholder="動画名で検索">
+          <button onclick="startSearch()">検索</button>
+        </div>
         <div id="video-container"></div>
       </div>
 
@@ -59,6 +73,7 @@ app.get('/', (req, res) => {
         const CORRECT_PASS = '${PASSCODE}';
         let page = 1;
         let loading = false;
+        let currentKeyword = '';
 
         function checkPass() {
           const input = document.getElementById('passcode').value;
@@ -72,12 +87,19 @@ app.get('/', (req, res) => {
           }
         }
 
+        function startSearch() {
+          page = 1;
+          currentKeyword = document.getElementById('search').value.trim();
+          document.getElementById('video-container').innerHTML = '';
+          loadVideos();
+        }
+
         async function loadVideos() {
           if (loading) return;
           loading = true;
 
           try {
-            const res = await fetch('/api/videos?page=' + page + '&pass=' + CORRECT_PASS);
+            const res = await fetch(\`/api/videos?page=\${page}&pass=\${CORRECT_PASS}&keyword=\${encodeURIComponent(currentKeyword)}\`);
             const data = await res.json();
 
             const container = document.getElementById('video-container');
@@ -114,9 +136,9 @@ app.get('/', (req, res) => {
   `);
 });
 
-// 動画API（パスコード必須）
 app.get('/api/videos', (req, res) => {
   const pass = req.query.pass;
+  const keyword = req.query.keyword || '';
   if (pass !== PASSCODE) {
     return res.status(403).json({ error: 'パスコードが違います' });
   }
@@ -130,17 +152,17 @@ app.get('/api/videos', (req, res) => {
     }
 
     const videoFiles = files
-      .filter(file => file.endsWith('.mp4'))
+      .filter(file => file.endsWith('.mp4') && file.includes(keyword))
       .sort();
 
     const start = (page - 1) * pageSize;
     const end = start + pageSize;
-    const paginated = videoFiles.slice(start, end).map(file => `/videos/${file}`);
+    const paginated = videoFiles.slice(start, end).map(file => \`/videos/\${file}\`);
 
     res.json({ videos: paginated });
   });
 });
 
 app.listen(PORT, () => {
-  console.log(`🔐 サーバーが http://localhost:${PORT} で起動中`);
+  console.log(\`🔐 サーバーが http://localhost:\${PORT} で起動中\`);
 });
