@@ -56,11 +56,11 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":{"runs":
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
 
 \[\{"text":"(.*?)"\}\]
 
-}/gs)];
+\}/gs)];
   const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>検索結果: ${q}</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
@@ -97,11 +97,11 @@ app.get("/channel", async (req, res) => {
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":{"runs":
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
 
 \[\{"text":"(.*?)"\}\]
 
-}/gs)];
+\}/gs)];
   const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>チャンネル動画一覧</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
