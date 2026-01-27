@@ -121,5 +121,5 @@ app.get('/api/videos', checkPass, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`🔐 サーバーが http://localhost:\${PORT}/?pass=\${PASSCODE} で起動中\`);
+  console.log(`🔐 サーバーが http://localhost:\${PORT}/?pass=\${PASSCODE} で起動中`);
 });
