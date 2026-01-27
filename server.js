@@ -7,20 +7,11 @@ const PORT = 3000;
 const videoDir = path.join(__dirname, 'videos');
 const PASSCODE = '157514';
 
-// パスコードチェック用ミドルウェア
-function checkPass(req, res, next) {
-  const pass = req.query.pass;
-  if (pass !== PASSCODE) {
-    return res.status(403).send('アクセス拒否：正しいパスコードを指定してください');
-  }
-  next();
-}
-
 // 静的ファイル（動画）を提供
 app.use('/videos', express.static(videoDir));
 
-// トップページ（動画ビューア）
-app.get('/', checkPass, (req, res) => {
+// トップページ：パスコード入力＋動画表示（すべてクライアントで制御）
+app.get('/', (req, res) => {
   res.send(`
     <!DOCTYPE html>
     <html lang="ja">
@@ -30,8 +21,12 @@ app.get('/', checkPass, (req, res) => {
         body {
           margin: 0;
           padding: 0;
-          overflow-x: hidden;
-          background: #000;
+          background: #111;
+          color: white;
+          font-family: sans-serif;
+        }
+        #login, #viewer {
+          display: none;
         }
         #video-container {
           display: flex;
@@ -49,24 +44,39 @@ app.get('/', checkPass, (req, res) => {
       </style>
     </head>
     <body>
-      <div id="video-container"></div>
-      <script>
-        // 現在のURLからパスコードを取得
-        const urlParams = new URLSearchParams(window.location.search);
-        const pass = urlParams.get('pass');
-        if (!pass) {
-          document.body.innerHTML = '<p style="color:white;text-align:center;margin-top:2em;">パスコードが必要です</p>';
-          throw new Error('パスコードがありません');
-        }
+      <div id="login" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;">
+        <p>パスコードを入力してください：</p>
+        <input type="password" id="passcode" placeholder="パスコード" style="padding:8px;font-size:16px;">
+        <button onclick="checkPass()" style="padding:8px 12px;font-size:16px;margin-top:8px;">送信</button>
+        <p id="error" style="color: red; margin-top: 10px;"></p>
+      </div>
 
+      <div id="viewer">
+        <div id="video-container"></div>
+      </div>
+
+      <script>
+        const CORRECT_PASS = '${PASSCODE}';
         let page = 1;
         let loading = false;
+
+        function checkPass() {
+          const input = document.getElementById('passcode').value;
+          const error = document.getElementById('error');
+          if (input === CORRECT_PASS) {
+            document.getElementById('login').style.display = 'none';
+            document.getElementById('viewer').style.display = 'block';
+            loadVideos();
+          } else {
+            error.textContent = 'パスコードが違います';
+          }
+        }
 
         async function loadVideos() {
           if (loading) return;
           loading = true;
 
-          const res = await fetch('/api/videos?page=' + page + '&pass=' + pass);
+          const res = await fetch('/api/videos?page=' + page + '&pass=' + CORRECT_PASS);
           const data = await res.json();
 
           const container = document.getElementById('video-container');
@@ -84,7 +94,9 @@ app.get('/', checkPass, (req, res) => {
           loading = false;
         }
 
-        loadVideos();
+        document.addEventListener('DOMContentLoaded', () => {
+          document.getElementById('login').style.display = 'flex';
+        });
 
         document.getElementById('video-container').addEventListener('scroll', (e) => {
           const el = e.target;
@@ -99,7 +111,12 @@ app.get('/', checkPass, (req, res) => {
 });
 
 // 動画API（パスコード必須）
-app.get('/api/videos', checkPass, (req, res) => {
+app.get('/api/videos', (req, res) => {
+  const pass = req.query.pass;
+  if (pass !== PASSCODE) {
+    return res.status(403).json({ error: 'パスコードが違います' });
+  }
+
   const page = parseInt(req.query.page) || 1;
   const pageSize = 3;
 
@@ -121,5 +138,5 @@ app.get('/api/videos', checkPass, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🔐 サーバーが http://localhost:\${PORT}/?pass=\${PASSCODE} で起動中`);
+  console.log(\`🔐 サーバーが http://localhost:\${PORT} で起動中\`);
 });
