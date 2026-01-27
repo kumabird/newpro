@@ -25,7 +25,7 @@ app.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.send("検索ワードがありません");
 
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
   // ★ 正規表現は必ず1行で書く（改行禁止）
