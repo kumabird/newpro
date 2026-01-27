@@ -16,41 +16,12 @@ app.get('/', (req, res) => {
     <head>
       <meta charset="UTF-8">
       <style>
-        body {
-          margin: 0;
-          padding: 0;
-          background: #111;
-          color: white;
-          font-family: sans-serif;
-        }
-        #login, #viewer {
-          display: none;
-        }
-        #video-container {
-          display: flex;
-          overflow-x: auto;
-          white-space: nowrap;
-          padding: 0;
-          gap: 8px;
-        }
-        video {
-          width: 300px;
-          height: auto;
-          flex-shrink: 0;
-          background: #000;
-        }
-        #search-bar {
-          margin: 16px;
-        }
-        input[type="text"] {
-          padding: 8px;
-          font-size: 16px;
-          width: 200px;
-        }
-        button {
-          padding: 8px 12px;
-          font-size: 16px;
-        }
+        body { background: #111; color: white; font-family: sans-serif; margin: 0; padding: 0; }
+        #login, #viewer { display: none; }
+        #video-container { display: flex; overflow-x: auto; gap: 8px; padding: 16px; }
+        video { width: 300px; background: #000; }
+        #search-bar { margin: 16px; }
+        input, button { font-size: 16px; padding: 8px; }
       </style>
     </head>
     <body>
@@ -58,7 +29,7 @@ app.get('/', (req, res) => {
         <p>パスコードを入力してください：</p>
         <input type="password" id="passcode" placeholder="パスコード">
         <button onclick="checkPass()">送信</button>
-        <p id="error" style="color: red; margin-top: 10px;"></p>
+        <p id="error" style="color: red;"></p>
       </div>
 
       <div id="viewer">
@@ -77,13 +48,12 @@ app.get('/', (req, res) => {
 
         function checkPass() {
           const input = document.getElementById('passcode').value;
-          const error = document.getElementById('error');
           if (input === CORRECT_PASS) {
             document.getElementById('login').style.display = 'none';
             document.getElementById('viewer').style.display = 'block';
             loadVideos();
           } else {
-            error.textContent = 'パスコードが違います';
+            document.getElementById('error').textContent = 'パスコードが違います';
           }
         }
 
@@ -97,11 +67,9 @@ app.get('/', (req, res) => {
         async function loadVideos() {
           if (loading) return;
           loading = true;
-
           try {
             const res = await fetch(\`/api/videos?page=\${page}&pass=\${CORRECT_PASS}&keyword=\${encodeURIComponent(currentKeyword)}\`);
             const data = await res.json();
-
             const container = document.getElementById('video-container');
             data.videos.forEach(src => {
               const video = document.createElement('video');
@@ -109,14 +77,10 @@ app.get('/', (req, res) => {
               video.controls = true;
               container.appendChild(video);
             });
-
-            if (data.videos.length > 0) {
-              page++;
-            }
+            if (data.videos.length > 0) page++;
           } catch (err) {
-            console.error('動画の読み込みに失敗しました', err);
+            console.error('読み込み失敗', err);
           }
-
           loading = false;
         }
 
@@ -147,22 +111,19 @@ app.get('/api/videos', (req, res) => {
   const pageSize = 3;
 
   fs.readdir(videoDir, (err, files) => {
-    if (err) {
-      return res.status(500).json({ error: '動画の読み込みに失敗しました' });
-    }
+    if (err) return res.status(500).json({ error: '動画の読み込みに失敗しました' });
 
     const videoFiles = files
       .filter(file => file.endsWith('.mp4') && file.includes(keyword))
       .sort();
 
     const start = (page - 1) * pageSize;
-    const end = start + pageSize;
-    const paginated = videoFiles.slice(start, end).map(file => \`/videos/\${file}\`);
+    const paginated = videoFiles.slice(start, start + pageSize).map(file => \`/videos/\${file}\`);
 
     res.json({ videos: paginated });
   });
 });
 
 app.listen(PORT, () => {
-  console.log(\`🔐 サーバーが http://localhost:\${PORT} で起動中\`);
+  console.log(\`🔐 http://localhost:\${PORT} でサーバー起動中\`);
 });
