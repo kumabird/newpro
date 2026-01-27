@@ -142,7 +142,9 @@ app.get('/api/videos', (req, res) => {
   const start = (page - 1) * pageSize;
   const paginated = videoFiles.slice(start, start + pageSize).map(file => `/videos/${file}`);
 
-  const filteredYouTube = youtubeVideos.filter(v => v.title.includes(keyword));
+  const filteredYouTube = youtubeVideos.filter(v =>
+    keyword === '' || v.title.includes(keyword)
+  );
 
   res.json({ videos: paginated, youtube: filteredYouTube });
 });
