@@ -2,14 +2,12 @@ import express from "express";
 import fetch from "node-fetch";
 
 const app = express();
-app.disable("x-powered-by");
-
 const PORT = process.env.PORT || 3000;
 const AUTH_CODE = "157514";
 
 app.use(express.urlencoded({ extended: true }));
 
-// 🔐 認証ミドルウェア（/login と /auth 以外は保護）
+// 🔐 認証ミドルウェア
 app.use((req, res, next) => {
   const allowed = ["/login", "/auth"];
   if (allowed.includes(req.path)) return next();
@@ -38,7 +36,7 @@ app.post("/auth", (req, res) => {
   }
 });
 
-// 🏠 ホーム（検索フォーム）
+// 🏠 ホーム
 app.get("/", (req, res) => {
   res.send(`
     <h2>YouTube Viewer（API不要）</h2>
@@ -58,17 +56,12 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html = await fetch(url).then(r => r.text());
 
-  // ✅ 正規表現（ESM対応・1行）
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":{"runs":
 
 \[\{"text":"(.*?)"\}\]
 
 }/gs)];
-
-  const videos = matches.slice(0, 42).map(m => ({
-    id: m[1],
-    title: m[2]
-  }));
+  const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>検索結果: ${q}</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
   list += videos.map(v => `
@@ -96,18 +89,6 @@ app.get("/watch", (req, res) => {
   `);
 });
 
-// 🎬 Shorts 再生
-app.get("/shorts", (req, res) => {
-  const id = req.query.v;
-  if (!id) return res.send("Shorts ID がありません");
-
-  res.send(`
-    <h2>Shorts 再生</h2>
-    <iframe width="315" height="560" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>
-    <br><br><a href='/?auth=1'>ホーム</a>
-  `);
-});
-
 // 📺 チャンネル動画一覧
 app.get("/channel", async (req, res) => {
   const id = req.query.id;
@@ -121,11 +102,7 @@ app.get("/channel", async (req, res) => {
 \[\{"text":"(.*?)"\}\]
 
 }/gs)];
-
-  const videos = matches.slice(0, 42).map(m => ({
-    id: m[1],
-    title: m[2]
-  }));
+  const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>チャンネル動画一覧</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
   list += videos.map(v => `
