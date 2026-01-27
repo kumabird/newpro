@@ -1,7 +1,7 @@
 {
-  "name": "video-gallery",
+  "name": "newpro",
   "version": "1.0.0",
-  "description": "3つ横並びで無限スクロールする動画ギャラリー",
+  "description": "パスコード付き動画ギャラリー",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
