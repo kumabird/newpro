@@ -7,7 +7,7 @@ const PORT = 3000;
 const videoDir = path.join(__dirname, 'videos');
 const PASSCODE = '157514';
 
-// YouTube動画のリスト（ここに追加していく）
+// YouTube動画のリスト
 const youtubeVideos = [
   { title: 'ネイチャー映像', url: 'https://www.youtube.com/embed/ScMzIvxBSi4' },
   { title: '音楽ライブ', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }
