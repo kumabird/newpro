@@ -126,20 +126,25 @@ app.get('/api/videos', (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const pageSize = 3;
 
-  fs.readdir(videoDir, (err, files) => {
-    if (err) return res.status(500).json({ error: '動画の読み込みに失敗しました' });
+  let videoFiles = [];
 
-    const videoFiles = files
-      .filter(file => file.endsWith('.mp4') && file.includes(keyword))
-      .sort();
+  if (fs.existsSync(videoDir)) {
+    try {
+      const files = fs.readdirSync(videoDir);
+      videoFiles = files
+        .filter(file => file.endsWith('.mp4') && file.includes(keyword))
+        .sort();
+    } catch (err) {
+      return res.status(500).json({ error: '動画の読み込みに失敗しました' });
+    }
+  }
 
-    const start = (page - 1) * pageSize;
-    const paginated = videoFiles.slice(start, start + pageSize).map(file => `/videos/${file}`);
+  const start = (page - 1) * pageSize;
+  const paginated = videoFiles.slice(start, start + pageSize).map(file => `/videos/${file}`);
 
-    const filteredYouTube = youtubeVideos.filter(v => v.title.includes(keyword));
+  const filteredYouTube = youtubeVideos.filter(v => v.title.includes(keyword));
 
-    res.json({ videos: paginated, youtube: filteredYouTube });
-  });
+  res.json({ videos: paginated, youtube: filteredYouTube });
 });
 
 app.listen(PORT, () => {
