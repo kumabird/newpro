@@ -48,7 +48,7 @@ app.get("/", (req, res) => {
   `);
 });
 
-// 🔍 検索結果（最大51本・3列表示）
+// 🔍 検索結果（3列・最大51本）
 app.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.send("検索ワードがありません");
@@ -59,16 +59,52 @@ app.get("/search", async (req, res) => {
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]\}/gs)];
   const videos = matches.slice(0, 51).map(m => ({ id: m[1], title: m[2] }));
 
-  let list = `<h2>検索結果: ${q}</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
+  let list = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>検索結果</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      .grid img {
+        width: 100%;
+        border-radius: 8px;
+      }
+      .title {
+        margin-top: 5px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>検索結果: ${q}</h2>
+    <div class="grid">
+  `;
+
   list += videos.map(v => `
-    <div>
-      <a href="/watch?v=${v.id}&auth=1">
-        <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" style="width:100%; border-radius:8px;">
-        <div style="margin-top:5px; font-weight:bold;">${v.title}</div>
-      </a>
-    </div>
+      <div>
+        <a href="/watch?v=${v.id}&auth=1">
+          <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+          <div class="title">${v.title}</div>
+        </a>
+      </div>
   `).join("");
-  list += "</div><br><a href='/?auth=1'>戻る</a>";
+
+  list += `
+    </div>
+    <br><a href='/?auth=1'>戻る</a>
+  </body>
+  </html>
+  `;
 
   res.send(list);
 });
@@ -79,17 +115,45 @@ app.get("/watch", (req, res) => {
   if (!id) return res.send("動画IDがありません");
 
   res.send(`
-    <h2>動画再生</h2>
-    <div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; max-width:100%;">
-      <iframe src="https://www.youtube.com/embed/${id}"
-        style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;"
-        allowfullscreen></iframe>
-    </div>
-    <br><br><a href='/?auth=1'>ホーム</a>
+    <!DOCTYPE html>
+    <html>
+    <head>
+      <meta charset="UTF-8">
+      <title>動画再生</title>
+      <style>
+        body {
+          font-family: sans-serif;
+          padding: 20px;
+        }
+        .video-container {
+          position: relative;
+          padding-bottom: 56.25%;
+          height: 0;
+          overflow: hidden;
+          max-width: 100%;
+        }
+        .video-container iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          border: 0;
+        }
+      </style>
+    </head>
+    <body>
+      <h2>動画再生</h2>
+      <div class="video-container">
+        <iframe src="https://www.youtube.com/embed/${id}" allowfullscreen></iframe>
+      </div>
+      <br><br><a href='/?auth=1'>ホーム</a>
+    </body>
+    </html>
   `);
 });
 
-// 📺 チャンネル動画一覧（最大51本・3列表示）
+// 📺 チャンネル動画一覧（3列・最大51本）
 app.get("/channel", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
@@ -100,19 +164,54 @@ app.get("/channel", async (req, res) => {
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]\}/gs)];
   const videos = matches.slice(0, 51).map(m => ({ id: m[1], title: m[2] }));
 
-  let list = `<h2>チャンネル動画一覧</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
+  let list = `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <title>チャンネル動画一覧</title>
+    <style>
+      body {
+        font-family: sans-serif;
+        padding: 20px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 20px;
+      }
+      .grid img {
+        width: 100%;
+        border-radius: 8px;
+      }
+      .title {
+        margin-top: 5px;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>チャンネル動画一覧</h2>
+    <div class="grid">
+  `;
+
   list += videos.map(v => `
-    <div>
-      <a href="/watch?v=${v.id}&auth=1">
-        <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" style="width:100%; border-radius:8px;">
-        <div style="margin-top:5px; font-weight:bold;">${v.title}</div>
-      </a>
-    </div>
+      <div>
+        <a href="/watch?v=${v.id}&auth=1">
+          <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+          <div class="title">${v.title}</div>
+        </a>
+      </div>
   `).join("");
-  list += "</div><br><a href='/?auth=1'>戻る</a>";
+
+  list += `
+    </div>
+    <br><a href='/?auth=1'>戻る</a>
+  </body>
+  </html>
+  `;
 
   res.send(list);
 });
 
 app.listen(PORT, () => console.log(`🌊 Server running at http://localhost:${PORT}`));
-
