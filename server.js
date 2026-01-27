@@ -48,7 +48,7 @@ app.get("/", (req, res) => {
   `);
 });
 
-// 🔍 検索結果
+// 🔍 検索結果（最大51本・3列表示）
 app.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.send("検索ワードがありません");
@@ -56,8 +56,12 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]\}/gs)];
-  const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+\}/gs)];
+  const videos = matches.slice(0, 51).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>検索結果: ${q}</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
   list += videos.map(v => `
@@ -73,19 +77,23 @@ app.get("/search", async (req, res) => {
   res.send(list);
 });
 
-// ▶️ 動画再生
+// ▶️ 動画再生（レスポンシブ対応）
 app.get("/watch", (req, res) => {
   const id = req.query.v;
   if (!id) return res.send("動画IDがありません");
 
   res.send(`
     <h2>動画再生</h2>
-    <iframe width="560" height="315" src="https://www.youtube.com/embed/${id}" frameborder="0" allowfullscreen></iframe>
+    <div style="position:relative; padding-bottom:56.25%; height:0; overflow:hidden; max-width:100%;">
+      <iframe src="https://www.youtube.com/embed/${id}"
+        style="position:absolute; top:0; left:0; width:100%; height:100%; border:0;"
+        allowfullscreen></iframe>
+    </div>
     <br><br><a href='/?auth=1'>ホーム</a>
   `);
 });
 
-// 📺 チャンネル動画一覧
+// 📺 チャンネル動画一覧（最大51本・3列表示）
 app.get("/channel", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
@@ -93,8 +101,12 @@ app.get("/channel", async (req, res) => {
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]\}/gs)];
-  const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+\}/gs)];
+  const videos = matches.slice(0, 51).map(m => ({ id: m[1], title: m[2] }));
 
   let list = `<h2>チャンネル動画一覧</h2><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
   list += videos.map(v => `
