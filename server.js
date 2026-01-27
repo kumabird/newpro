@@ -138,5 +138,5 @@ app.get('/api/videos', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(\`🔐 サーバーが http://localhost:\${PORT} で起動中\`);
+  console.log(`🔐 サーバーが http://localhost:\${PORT} で起動中`);
 });
