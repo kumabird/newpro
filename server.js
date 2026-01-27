@@ -40,7 +40,7 @@ app.get('/', (req, res) => {
       </style>
     </head>
     <body>
-      <h1 style="text-align:center;">🍄 動画ギャラリー</h1>
+      <h1 style="text-align:center;">動画ギャラリー</h1>
       <div id="video-container"></div>
 
       <script>
@@ -106,5 +106,5 @@ app.get('/api/videos', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🌟 サーバーが http://localhost:${PORT} で起動中`);
+  console.log(`サーバーが http://localhost:${PORT} で起動中`);
 });
