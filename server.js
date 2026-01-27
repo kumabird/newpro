@@ -4,45 +4,53 @@ const path = require('path');
 const app = express();
 const PORT = 3000;
 
-// 動画フォルダのパス
 const videoDir = path.join(__dirname, 'videos');
+const PASSCODE = '157514';
+
+// パスコードチェック用ミドルウェア
+function checkPass(req, res, next) {
+  const pass = req.query.pass;
+  if (pass !== PASSCODE) {
+    return res.status(403).send('アクセス拒否：正しいパスコードを指定してください');
+  }
+  next();
+}
 
 // 静的ファイル（動画）を提供
 app.use('/videos', express.static(videoDir));
 
-// HTMLを返す
-app.get('/', (req, res) => {
+// トップページ（動画ビューア）
+app.get('/', checkPass, (req, res) => {
+  const passParam = `?pass=${PASSCODE}`;
   res.send(`
     <!DOCTYPE html>
     <html lang="ja">
     <head>
       <meta charset="UTF-8">
-      <title>動画ギャラリー</title>
       <style>
         body {
           margin: 0;
           padding: 0;
           overflow-x: hidden;
-          font-family: sans-serif;
+          background: #000;
         }
         #video-container {
           display: flex;
           overflow-x: auto;
           white-space: nowrap;
-          padding: 20px;
-          gap: 10px;
+          padding: 0;
+          gap: 8px;
         }
         video {
           width: 300px;
           height: auto;
           flex-shrink: 0;
+          background: #000;
         }
       </style>
     </head>
     <body>
-      <h1 style="text-align:center;">動画ギャラリー</h1>
       <div id="video-container"></div>
-
       <script>
         let page = 1;
         let loading = false;
@@ -51,7 +59,7 @@ app.get('/', (req, res) => {
           if (loading) return;
           loading = true;
 
-          const res = await fetch('/api/videos?page=' + page);
+          const res = await fetch('/api/videos?page=' + page + '${passParam}');
           const data = await res.json();
 
           const container = document.getElementById('video-container');
@@ -83,8 +91,8 @@ app.get('/', (req, res) => {
   `);
 });
 
-// 動画一覧をページごとに返すAPI
-app.get('/api/videos', (req, res) => {
+// 動画API（パスコード必須）
+app.get('/api/videos', checkPass, (req, res) => {
   const page = parseInt(req.query.page) || 1;
   const pageSize = 3;
 
@@ -106,5 +114,5 @@ app.get('/api/videos', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`サーバーが http://localhost:${PORT} で起動中`);
+  console.log(`サーバがhttp://localhost:${PORT}/?pass=${PASSCODE} で起動中`);
 });
