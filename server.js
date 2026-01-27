@@ -57,9 +57,7 @@ app.get("/search", async (req, res) => {
   const html = await fetch(url).then(r => r.text());
 
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
-
 \[\{"text":"(.*?)"\}\]
-
 \}/gs)];
   const videos = matches.slice(0, 42).map(m => ({ id: m[1], title: m[2] }));
 
