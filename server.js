@@ -1,154 +1,106 @@
-const express = require('express');
-const fs = require('fs');
-const path = require('path');
+import express from "express";
+import fetch from "node-fetch";
+
 const app = express();
-const PORT = 3000;
+app.disable("x-powered-by");
 
-const videoDir = path.join(__dirname, 'videos');
-const PASSCODE = '157514';
+const PORT = process.env.PORT || 3000;
+const YOUTUBE_API_KEY = "YOUR_API_KEY"; // ← ここに自分のAPIキーを入れてね！
 
-// YouTube動画のリスト
-const youtubeVideos = [
-  { title: 'ネイチャー映像', url: 'https://www.youtube.com/embed/ScMzIvxBSi4' },
-  { title: '音楽ライブ', url: 'https://www.youtube.com/embed/dQw4w9WgXcQ' }
-];
+app.use(express.urlencoded({ extended: true }));
 
-app.use('/videos', express.static(videoDir));
-
-app.get('/', (req, res) => {
+// ホーム（検索フォーム）
+app.get("/", (req, res) => {
   res.send(`
-    <!DOCTYPE html>
-    <html lang="ja">
-    <head>
-      <meta charset="UTF-8">
-      <style>
-        body { background: #111; color: white; font-family: sans-serif; margin: 0; padding: 0; }
-        #login, #viewer { display: none; }
-        #video-container { display: flex; flex-wrap: wrap; gap: 16px; padding: 16px; }
-        video, iframe { width: 300px; height: 180px; background: #000; }
-        #search-bar { margin: 16px; }
-        input, button { font-size: 16px; padding: 8px; }
-      </style>
-    </head>
-    <body>
-      <div id="login" style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100vh;">
-        <p>パスコードを入力してください：</p>
-        <input type="password" id="passcode" placeholder="パスコード">
-        <button onclick="checkPass()">送信</button>
-        <p id="error" style="color: red;"></p>
-      </div>
-
-      <div id="viewer">
-        <div id="search-bar">
-          <input type="text" id="search" placeholder="動画名やキーワードで検索">
-          <button onclick="startSearch()">検索</button>
-        </div>
-        <div id="video-container"></div>
-      </div>
-
-      <script>
-        const CORRECT_PASS = '${PASSCODE}';
-        let page = 1;
-        let loading = false;
-        let currentKeyword = '';
-
-        function checkPass() {
-          const input = document.getElementById('passcode').value;
-          if (input === CORRECT_PASS) {
-            document.getElementById('login').style.display = 'none';
-            document.getElementById('viewer').style.display = 'block';
-            loadVideos();
-          } else {
-            document.getElementById('error').textContent = 'パスコードが違います';
-          }
-        }
-
-        function startSearch() {
-          page = 1;
-          currentKeyword = document.getElementById('search').value.trim();
-          document.getElementById('video-container').innerHTML = '';
-          loadVideos();
-        }
-
-        async function loadVideos() {
-          if (loading) return;
-          loading = true;
-          try {
-            const res = await fetch(\`/api/videos?page=\${page}&pass=\${CORRECT_PASS}&keyword=\${encodeURIComponent(currentKeyword)}\`);
-            const data = await res.json();
-            const container = document.getElementById('video-container');
-
-            data.videos.forEach(src => {
-              const video = document.createElement('video');
-              video.src = src;
-              video.controls = true;
-              container.appendChild(video);
-            });
-
-            data.youtube.forEach(item => {
-              const iframe = document.createElement('iframe');
-              iframe.src = item.url;
-              iframe.allowFullscreen = true;
-              iframe.title = item.title;
-              container.appendChild(iframe);
-            });
-
-            if (data.videos.length > 0 || data.youtube.length > 0) page++;
-          } catch (err) {
-            console.error('読み込み失敗', err);
-          }
-          loading = false;
-        }
-
-        document.addEventListener('DOMContentLoaded', () => {
-          document.getElementById('login').style.display = 'flex';
-        });
-
-        document.getElementById('video-container').addEventListener('scroll', (e) => {
-          const el = e.target;
-          if (el.scrollLeft + el.clientWidth >= el.scrollWidth - 10) {
-            loadVideos();
-          }
-        });
-      </script>
-    </body>
-    </html>
+    <h2>YouTube Viewer</h2>
+    <form action="/search">
+      <input type="text" name="q" placeholder="検索ワードを入力" style="width:300px;">
+      <button type="submit">検索</button>
+    </form>
   `);
 });
 
-app.get('/api/videos', (req, res) => {
-  const pass = req.query.pass;
-  const keyword = req.query.keyword || '';
-  if (pass !== PASSCODE) {
-    return res.status(403).json({ error: 'パスコードが違います' });
-  }
+// 検索結果（通常動画＋Shorts）
+app.get("/search", async (req, res) => {
+  const q = req.query.q || "猫";
 
-  const page = parseInt(req.query.page) || 1;
-  const pageSize = 3;
+  const url = `https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&maxResults=15&q=${encodeURIComponent(q)}&key=${YOUTUBE_API_KEY}`;
 
-  let videoFiles = [];
+  try {
+    const response = await fetch(url);
+    const data = await response.json();
 
-  if (fs.existsSync(videoDir)) {
-    try {
-      const files = fs.readdirSync(videoDir);
-      videoFiles = files
-        .filter(file => file.endsWith('.mp4') && file.includes(keyword))
-        .sort();
-    } catch (err) {
-      return res.status(500).json({ error: '動画の読み込みに失敗しました' });
+    const videos = data.items.map(item => ({
+      id: item.id.videoId,
+      title: item.snippet.title
+    }));
+
+    const normalVideos = videos.filter(v => !v.title.toLowerCase().includes("shorts"));
+    const shortsVideos = videos.filter(v => v.title.toLowerCase().includes("shorts"));
+
+    let html = `<h2>検索結果: ${q}</h2>`;
+
+    if (normalVideos.length) {
+      html += `<h3>通常の動画</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
+      html += normalVideos.map(v => `
+        <div>
+          <a href="/watch?v=${v.id}">
+            <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" style="width:100%; border-radius:8px;">
+            <div style="margin-top:5px; font-weight:bold;">${v.title}</div>
+          </a>
+        </div>
+      `).join("");
+      html += "</div>";
     }
+
+    if (shortsVideos.length) {
+      html += `<h3>Shorts</h3><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:20px;">`;
+      html += shortsVideos.map(v => `
+        <div>
+          <a href="/shorts?v=${v.id}">
+            <img src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg" style="width:100%; border-radius:8px;">
+            <div style="margin-top:5px; font-weight:bold;">${v.title}</div>
+          </a>
+        </div>
+      `).join("");
+      html += "</div>";
+    }
+
+    html += `<br><a href="/">戻る</a>`;
+    res.send(html);
+  } catch (err) {
+    res.send("検索に失敗しました: " + err.message);
   }
-
-  const start = (page - 1) * pageSize;
-  const paginated = videoFiles.slice(start, start + pageSize).map(file => `/videos/${file}`);
-
-  const filteredYouTube = youtubeVideos.filter(v =>
-    keyword === '' || v.title.includes(keyword)
-  );
-
-  res.json({ videos: paginated, youtube: filteredYouTube });
 });
 
-app.listen(PORT, () => {
-  console.log(`🔐 http://localhost:${PORT} でサーバー起動中`);
+// 通常動画の再生
+app.get("/watch", (req, res) => {
+  const id = req.query.v;
+  if (!id) return res.send("動画IDがありません");
+
+  res.send(`
+    <h2>動画再生</h2>
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/${id}?autoplay=1"
+      frameborder="0" allowfullscreen></iframe>
+    <br><br>
+    <a href="/">ホーム</a>
+  `);
 });
+
+// Shorts 再生
+app.get("/shorts", (req, res) => {
+  const id = req.query.v;
+  if (!id) return res.send("Shorts ID がありません");
+
+  res.send(`
+    <h2>Shorts 再生</h2>
+    <iframe width="315" height="560"
+      src="https://www.youtube.com/embed/${id}"
+      frameborder="0" allowfullscreen></iframe>
+    <br><br>
+    <a href="/">ホーム</a>
+  `);
+});
+
+app.listen(PORT, () => console.log("YouTube Viewer 起動中！"));
