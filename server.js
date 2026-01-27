@@ -21,7 +21,6 @@ app.use('/videos', express.static(videoDir));
 
 // トップページ（動画ビューア）
 app.get('/', checkPass, (req, res) => {
-  const passParam = `?pass=${PASSCODE}`;
   res.send(`
     <!DOCTYPE html>
     <html lang="ja">
@@ -52,6 +51,14 @@ app.get('/', checkPass, (req, res) => {
     <body>
       <div id="video-container"></div>
       <script>
+        // 現在のURLからパスコードを取得
+        const urlParams = new URLSearchParams(window.location.search);
+        const pass = urlParams.get('pass');
+        if (!pass) {
+          document.body.innerHTML = '<p style="color:white;text-align:center;margin-top:2em;">パスコードが必要です</p>';
+          throw new Error('パスコードがありません');
+        }
+
         let page = 1;
         let loading = false;
 
@@ -59,7 +66,7 @@ app.get('/', checkPass, (req, res) => {
           if (loading) return;
           loading = true;
 
-          const res = await fetch('/api/videos?page=' + page + '${passParam}');
+          const res = await fetch('/api/videos?page=' + page + '&pass=' + pass);
           const data = await res.json();
 
           const container = document.getElementById('video-container');
@@ -114,5 +121,5 @@ app.get('/api/videos', checkPass, (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`サーバがhttp://localhost:${PORT}/?pass=${PASSCODE} で起動中`);
+  console.log(\`🔐 サーバーが http://localhost:\${PORT}/?pass=\${PASSCODE} で起動中\`);
 });
