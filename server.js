@@ -76,19 +76,23 @@ app.get('/', (req, res) => {
           if (loading) return;
           loading = true;
 
-          const res = await fetch('/api/videos?page=' + page + '&pass=' + CORRECT_PASS);
-          const data = await res.json();
+          try {
+            const res = await fetch('/api/videos?page=' + page + '&pass=' + CORRECT_PASS);
+            const data = await res.json();
 
-          const container = document.getElementById('video-container');
-          data.videos.forEach(src => {
-            const video = document.createElement('video');
-            video.src = src;
-            video.controls = true;
-            container.appendChild(video);
-          });
+            const container = document.getElementById('video-container');
+            data.videos.forEach(src => {
+              const video = document.createElement('video');
+              video.src = src;
+              video.controls = true;
+              container.appendChild(video);
+            });
 
-          if (data.videos.length > 0) {
-            page++;
+            if (data.videos.length > 0) {
+              page++;
+            }
+          } catch (err) {
+            console.error('動画の読み込みに失敗しました', err);
           }
 
           loading = false;
@@ -138,5 +142,5 @@ app.get('/api/videos', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`🔐 サーバーが http://localhost:\${PORT} で起動中`);
+  console.log(`🔐 サーバーが http://localhost:${PORT} で起動中`);
 });
