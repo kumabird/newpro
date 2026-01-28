@@ -395,11 +395,7 @@ app.get("/channel-search/result", async (req, res) => {
 
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"channelId":"(.*?)".*?"title":\{"runs":
-
-\[\{"text":"(.*?)"\}\]
-
-/gs)];
+  const matches = [...html.matchAll(/"channelId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const channels = matches.slice(0, 60).map(m => ({
     id: m[1],
