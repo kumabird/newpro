@@ -58,7 +58,12 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  // ★ 正規表現は必ず1行
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -137,7 +142,12 @@ app.get("/channel", async (req, res) => {
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  // ★ 必ず1行
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -199,9 +209,16 @@ app.get("/history", (req, res) => {
 
   html += data
     .map(
-      (item) =>
-        `<li>${item.time} — <strong>${item.keyword}</strong>  
-        （${item.title} / ${item.videoId}）</li>`
+      (item, index) =>
+        `<li>
+          ${item.time} — <strong>${item.keyword}</strong><br>
+          <a href="/watch?v=${item.videoId}">
+            ${item.title}（${item.videoId}）
+          </a>
+          <br>
+          <a href="/history/delete-one?index=${index}&pass=${encodeURIComponent(pass)}"
+             style="color:red;">この履歴を削除</a>
+        </li>`
     )
     .join("");
 
@@ -211,7 +228,7 @@ app.get("/history", (req, res) => {
 });
 
 // ------------------------------
-// 履歴削除
+// 履歴削除（全削除）
 // ------------------------------
 app.post("/history/delete", (req, res) => {
   const pass = req.body.pass;
@@ -222,6 +239,37 @@ app.post("/history/delete", (req, res) => {
 
   if (fs.existsSync("history.json")) {
     fs.unlinkSync("history.json");
+  }
+
+  res.send(`
+    <h2>履歴を削除しました</h2>
+    <a href="/history?pass=${encodeURIComponent(pass)}">戻る</a>
+  `);
+});
+
+// ------------------------------
+// 履歴削除（個別）
+// ------------------------------
+app.get("/history/delete-one", (req, res) => {
+  const pass = req.query.pass;
+  const index = parseInt(req.query.index);
+
+  if (pass !== '1JaGdYufr5t&"') {
+    return res.send("パスコードが違います");
+  }
+
+  if (isNaN(index)) {
+    return res.send("削除対象が不正です");
+  }
+
+  let data = [];
+  if (fs.existsSync("history.json")) {
+    data = JSON.parse(fs.readFileSync("history.json", "utf8"));
+  }
+
+  if (data[index]) {
+    data.splice(index, 1);
+    fs.writeFileSync("history.json", JSON.stringify(data, null, 2));
   }
 
   res.send(`
