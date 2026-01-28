@@ -92,14 +92,13 @@ app.get("/register", (req, res) => {
     <h2>ユーザー登録</h2>
     <form method="POST" action="/register">
       <input name="invite" placeholder="招待コード" required><br>
-      <input name="pass" type="password" placeholder="パスワード" required><br>
       <button>登録</button>
     </form>
   `);
 });
 
 app.post("/register", (req, res) => {
-  const { invite, pass } = req.body;
+  const { invite } = req.body;
 
   const invites = loadInvites();
   const users = loadUsers();
@@ -110,6 +109,7 @@ app.post("/register", (req, res) => {
   if (inv.used) return res.send("この招待コードはすでに使用されています");
 
   const user = inv.user;
+  const pass = inv.pass;
 
   if (users.find(u => u.user === user)) {
     return res.send("このユーザー名はすでに登録されています");
@@ -123,7 +123,8 @@ app.post("/register", (req, res) => {
 
   res.send(`
     登録完了！<br>
-    あなたのユーザー名は <strong>${user}</strong> です。<br>
+    あなたのユーザー名は <strong>${user}</strong><br>
+    パスワードは <strong>${pass}</strong><br>
     <a href="/login">ログインへ</a>
   `);
 });
@@ -174,7 +175,11 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -303,3 +308,4 @@ app.get("/history/delete-one", (req, res) => {
 
 // ------------------------------
 app.listen(PORT, () => console.log("Server running"));
+
