@@ -12,7 +12,7 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // ------------------------------
-// ユーザー管理（固定ユーザー）
+// 固定ユーザー管理
 // ------------------------------
 function loadUsers() {
   if (!fs.existsSync("users.json")) return [];
@@ -63,7 +63,8 @@ app.get("/", (req, res) => {
     </form>
     <br>
     <a href="/history">検索履歴</a><br>
-    <a href="/logout">ログアウト</a>
+    <a href="/logout">ログアウト</a><br>
+    <a href="/admin">管理者ページ</a>
   `);
 });
 
@@ -101,7 +102,7 @@ app.get("/logout", (req, res) => {
 });
 
 // ------------------------------
-// 検索
+// YouTube検索
 // ------------------------------
 app.get("/search", async (req, res) => {
   const user = req.cookies.user;
@@ -174,6 +175,9 @@ app.get("/history", (req, res) => {
     data = JSON.parse(fs.readFileSync(file, "utf8"));
   }
 
+  // 日付順にソート
+  data.sort((a, b) => new Date(b.time) - new Date(a.time));
+
   let html = `
     <h2>${user} さんの検索履歴</h2>
     <form action="/history/delete" method="POST">
@@ -237,6 +241,106 @@ app.get("/history/delete-one", (req, res) => {
   res.send(`
     <h2>履歴を削除しました</h2>
     <a href="/history">戻る</a>
+  `);
+});
+
+// ------------------------------
+// 管理者ページ（全履歴 + 検索 + 削除）
+// ------------------------------
+const ADMIN_PASSWORD = "jagdyufr5t62";
+
+app.get("/admin", (req, res) => {
+  const pass = req.query.pass;
+
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send(`
+      <h2>管理者ログイン</h2>
+      <form>
+        <input name="pass" type="password" placeholder="管理者パスワード" required>
+        <button>ログイン</button>
+      </form>
+    `);
+  }
+
+  const files = fs.readdirSync("./").filter(f => f.startsWith("history_") && f.endsWith(".json"));
+
+  let html = `<h2>管理者ページ（全ユーザー履歴）</h2>`;
+
+  html += `
+    <form method="GET" action="/admin">
+      <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+      <input name="q" placeholder="キーワード検索">
+      <button>検索</button>
+    </form>
+    <hr>
+  `;
+
+  const keyword = req.query.q ? req.query.q.toLowerCase() : null;
+
+  for (const file of files) {
+    const user = file.replace("history_", "").replace(".json", "");
+    let data = JSON.parse(fs.readFileSync(file, "utf8"));
+
+    data.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    if (keyword) {
+      data = data.filter(item =>
+        item.keyword.toLowerCase().includes(keyword) ||
+        item.title.toLowerCase().includes(keyword)
+      );
+    }
+
+    html += `<h3>${user} さんの履歴</h3>`;
+
+    html += `
+      <form method="POST" action="/admin/delete-user">
+        <input type="hidden" name="user" value="${user}">
+        <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+        <button style="color:red;">このユーザーの履歴をすべて削除</button>
+      </form>
+    `;
+
+    if (data.length === 0) {
+      html += `<p>履歴なし</p><hr>`;
+      continue;
+    }
+
+    html += `<ul>`;
+    data.forEach(item => {
+      html += `
+        <li>
+          ${item.time} — <strong>${item.keyword}</strong><br>
+          <a href="/watch?v=${item.videoId}">
+            ${item.title}
+          </a>
+        </li>
+      `;
+    });
+    html += `</ul><hr>`;
+  }
+
+  res.send(html);
+});
+
+// ------------------------------
+// 管理者：ユーザーの履歴削除
+// ------------------------------
+app.post("/admin/delete-user", (req, res) => {
+  const { user, pass } = req.body;
+
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send("管理者パスワードが違います");
+  }
+
+  const file = `history_${user}.json`;
+
+  if (fs.existsSync(file)) {
+    fs.unlinkSync(file);
+  }
+
+  res.send(`
+    <h2>${user} さんの履歴を削除しました</h2>
+    <a href="/admin?pass=${ADMIN_PASSWORD}">管理者ページへ戻る</a>
   `);
 });
 
