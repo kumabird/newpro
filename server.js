@@ -252,11 +252,7 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
-
-\[\{"text":"(.*?)"\}\]
-
-/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
