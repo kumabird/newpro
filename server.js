@@ -12,27 +12,11 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // ------------------------------
-// ユーザー管理
+// ユーザー管理（固定ユーザー）
 // ------------------------------
 function loadUsers() {
   if (!fs.existsSync("users.json")) return [];
   return JSON.parse(fs.readFileSync("users.json", "utf8"));
-}
-
-function saveUsers(users) {
-  fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
-}
-
-// ------------------------------
-// 招待コード管理（使い捨て）
-// ------------------------------
-function loadInvites() {
-  if (!fs.existsSync("invites.json")) return [];
-  return JSON.parse(fs.readFileSync("invites.json", "utf8"));
-}
-
-function saveInvites(invites) {
-  fs.writeFileSync("invites.json", JSON.stringify(invites, null, 2));
 }
 
 // ------------------------------
@@ -67,8 +51,7 @@ app.get("/", (req, res) => {
   if (!user) {
     return res.send(`
       <h2>ホーム</h2>
-      <a href="/login">ログイン</a><br>
-      <a href="/register">新規登録（招待コード必要）</a>
+      <a href="/login">ログイン</a>
     `);
   }
 
@@ -81,51 +64,6 @@ app.get("/", (req, res) => {
     <br>
     <a href="/history">検索履歴</a><br>
     <a href="/logout">ログアウト</a>
-  `);
-});
-
-// ------------------------------
-// ユーザー登録（招待コード方式）
-// ------------------------------
-app.get("/register", (req, res) => {
-  res.send(`
-    <h2>ユーザー登録</h2>
-    <form method="POST" action="/register">
-      <input name="invite" placeholder="招待コード" required><br>
-      <button>登録</button>
-    </form>
-  `);
-});
-
-app.post("/register", (req, res) => {
-  const { invite } = req.body;
-
-  const invites = loadInvites();
-  const users = loadUsers();
-
-  const inv = invites.find(i => i.code === invite);
-
-  if (!inv) return res.send("招待コードが存在しません");
-  if (inv.used) return res.send("この招待コードはすでに使用されています");
-
-  const user = inv.user;
-  const pass = inv.pass;
-
-  if (users.find(u => u.user === user)) {
-    return res.send("このユーザー名はすでに登録されています");
-  }
-
-  users.push({ user, pass });
-  saveUsers(users);
-
-  inv.used = true;
-  saveInvites(invites);
-
-  res.send(`
-    登録完了！<br>
-    あなたのユーザー名は <strong>${user}</strong><br>
-    パスワードは <strong>${pass}</strong><br>
-    <a href="/login">ログインへ</a>
   `);
 });
 
@@ -304,4 +242,3 @@ app.get("/history/delete-one", (req, res) => {
 
 // ------------------------------
 app.listen(PORT, () => console.log("Server running"));
-
