@@ -11,7 +11,9 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
-// 共通CSS
+// --------------------------------------
+// 共通CSS（YouTube風サイドバー対応）
+// --------------------------------------
 const CSS = `
 <style>
   body {
@@ -26,6 +28,90 @@ const CSS = `
     margin-bottom: 20px;
     color: #2c3e50;
     text-align: center;
+  }
+
+  /* サイドバー（閉じた状態） */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 60px;
+    height: 100%;
+    background: white;
+    border-right: 1px solid #ddd;
+    padding-top: 60px;
+    transition: width 0.25s ease;
+    overflow: hidden;
+    z-index: 1000;
+  }
+
+  /* 開いた状態 */
+  .sidebar.open {
+    width: 220px;
+  }
+
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    font-size: 17px;
+    color: #333;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .sidebar a:hover {
+    background: #eaf4ff;
+  }
+
+  .sidebar-icon {
+    font-size: 20px;
+  }
+
+  /* メインコンテンツ */
+  .main-content {
+    margin-left: 80px;
+    padding: 20px;
+    transition: margin-left 0.25s ease;
+  }
+
+  .main-content.shift {
+    margin-left: 240px;
+  }
+
+  /* カードレイアウト */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .card {
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  }
+
+  .thumb {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .history-card {
+    background: white;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
   }
 
   .center-box {
@@ -65,95 +151,52 @@ const CSS = `
   .danger:hover {
     background: #c0392b;
   }
-
-  a {
-    color: #3498db;
-    text-decoration: none;
-  }
-
-  a:hover {
-    text-decoration: underline;
-  }
-
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
-    padding: 20px;
-  }
-
-  .card {
-    background: white;
-    padding: 15px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-  }
-
-  .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-  }
-
-  .thumb {
-    width: 100%;
-    border-radius: 10px;
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-  }
-
-  .thumb:hover {
-    transform: scale(1.05);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.25);
-  }
-
-  .history-card {
-    background: white;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  }
-
-  .tabs {
-    display: flex;
-    border-bottom: 2px solid #ddd;
-    margin-bottom: 20px;
-  }
-
-  .tab {
-    padding: 12px 20px;
-    cursor: pointer;
-    border-bottom: 3px solid transparent;
-    font-weight: bold;
-    color: #555;
-  }
-
-  .tab.active {
-    border-bottom: 3px solid #3498db;
-    color: #3498db;
-  }
-
-  .tab-content {
-    display: none;
-  }
-
-  .tab-content.active {
-    display: block;
-  }
 </style>
 `;
 
-// ------------------------------
+// --------------------------------------
+// サイドバー HTML（全ページ共通）
+// --------------------------------------
+const SIDEBAR_HTML = `
+<div id="sidebar" class="sidebar">
+  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
+  <a href="/search"><span class="sidebar-icon">🔍</span> <span class="sidebar-text">動画検索</span></a>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
+  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
+  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
+</div>
+`;
+
+// --------------------------------------
+// サイドバー JS（ホバーで開閉）
+// --------------------------------------
+const SIDEBAR_JS = `
+<script>
+const sidebar = document.getElementById("sidebar");
+const main = document.getElementById("main-content");
+
+sidebar.addEventListener("mouseenter", () => {
+  sidebar.classList.add("open");
+  main.classList.add("shift");
+});
+
+sidebar.addEventListener("mouseleave", () => {
+  sidebar.classList.remove("open");
+  main.classList.remove("shift");
+});
+</script>
+`;
+// --------------------------------------
 // 固定ユーザー管理
-// ------------------------------
+// --------------------------------------
 function loadUsers() {
   if (!fs.existsSync("users.json")) return [];
   return JSON.parse(fs.readFileSync("users.json", "utf8"));
 }
 
-// ------------------------------
+// --------------------------------------
 // 履歴保存（ユーザー用 + 管理者用）
-// ------------------------------
+// --------------------------------------
 function saveHistory(user, keyword, videoId, title) {
   const userFile = `history_user_${user}.json`;
   const adminFile = `history_admin_${user}.json`;
@@ -182,14 +225,15 @@ function saveHistory(user, keyword, videoId, title) {
   fs.writeFileSync(adminFile, JSON.stringify(adminData, null, 2));
 }
 
-// ------------------------------
+// --------------------------------------
 // ログイン画面
-// ------------------------------
+// --------------------------------------
 app.get("/login", (req, res) => {
   res.send(`
     <html>
     <head>${CSS}</head>
     <body>
+
       <div class="center-box">
         <h2>ログイン</h2>
         <form method="POST" action="/login">
@@ -198,6 +242,7 @@ app.get("/login", (req, res) => {
           <button>ログイン</button>
         </form>
       </div>
+
     </body>
     </html>
   `);
@@ -214,9 +259,9 @@ app.post("/login", (req, res) => {
   res.redirect("/");
 });
 
-// ------------------------------
+// --------------------------------------
 // ホーム
-// ------------------------------
+// --------------------------------------
 app.get("/", (req, res) => {
   const user = req.cookies.user;
 
@@ -225,26 +270,31 @@ app.get("/", (req, res) => {
   res.send(`
     <html>
     <head>${CSS}</head>
-    <body style="padding:20px;">
-      <h2>ようこそ ${user} さん</h2>
-      <center>
-        <form action="/search">
-          <input type="text" name="q" placeholder="検索ワード" required style="max-width:400px;">
-          <button style="width:200px;">検索</button>
-        </form>
-        <br>
-        <a href="/history">検索履歴</a><br><br>
-        <a href="/admin">管理者ページ</a><br><br>
-        <a href="/logout">ログアウト</a>
-      </center>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>ようこそ ${user} さん</h2>
+        <center>
+          <form action="/search">
+            <input type="text" name="q" placeholder="検索ワード" required style="max-width:400px;">
+            <button style="width:200px;">検索</button>
+          </form>
+          <br>
+          <a href="/logout">ログアウト</a>
+        </center>
+      </div>
+
+      ${SIDEBAR_JS}
+
     </body>
     </html>
   `);
 });
-
-// ------------------------------
-// YouTube検索
-// ------------------------------
+// --------------------------------------
+// 動画検索（60件）
+// --------------------------------------
 app.get("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -255,13 +305,19 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  // 動画抽出
+  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
 
-  const videos = matches.slice(0, 60).map(m => ({
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
+  const videos = videoMatches.slice(0, 60).map(m => ({
+    type: "video",
     id: m[1],
     title: m[2]
   }));
 
+  // 履歴保存（動画が1件以上あれば）
   if (videos.length > 0) {
     saveHistory(user, q, videos[0].id, videos[0].title);
   }
@@ -270,8 +326,12 @@ app.get("/search", async (req, res) => {
     <html>
     <head>${CSS}</head>
     <body>
-      <h2>検索結果: ${q}</h2>
-      <div class="card-grid">
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>動画検索結果: ${q}</h2>
+        <div class="card-grid">
   `;
 
   list += videos.map(v => `
@@ -284,8 +344,11 @@ app.get("/search", async (req, res) => {
   `).join("");
 
   list += `
+        </div>
       </div>
-      <center><a href="/">ホームへ戻る</a></center>
+
+      ${SIDEBAR_JS}
+
     </body>
     </html>
   `;
@@ -293,9 +356,96 @@ app.get("/search", async (req, res) => {
   res.send(list);
 });
 
-// ------------------------------
+// --------------------------------------
+// チャンネル検索ページ（入力フォーム）
+// --------------------------------------
+app.get("/channel-search", (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>チャンネル検索</h2>
+        <center>
+          <form action="/channel-search/result">
+            <input type="text" name="q" placeholder="チャンネル名" required style="max-width:400px;">
+            <button style="width:200px;">検索</button>
+          </form>
+        </center>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `);
+});
+
+// --------------------------------------
+// チャンネル検索結果（60件）
+// --------------------------------------
+app.get("/channel-search/result", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const q = req.query.q;
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
+
+  const html = await fetch(url).then(r => r.text());
+
+  const matches = [...html.matchAll(/"channelId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
+
+  const channels = matches.slice(0, 60).map(m => ({
+    id: m[1],
+    title: m[2]
+  }));
+
+  let list = `
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>チャンネル検索結果: ${q}</h2>
+        <div class="card-grid">
+  `;
+
+  list += channels.map(c => `
+    <div class="card">
+      <a href="https://www.youtube.com/channel/${c.id}" target="_blank">
+        <img class="thumb" src="https://yt3.googleusercontent.com/ytc/${c.id}=s900-c-k-c0x00ffffff-no-rj">
+        <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
+      </a>
+    </div>
+  `).join("");
+
+  list += `
+        </div>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `;
+
+  res.send(list);
+});
+// --------------------------------------
 // 動画再生
-// ------------------------------
+// --------------------------------------
 app.get("/watch", (req, res) => {
   const id = req.query.v;
   if (!id) return res.send("動画IDがありません");
@@ -303,23 +453,31 @@ app.get("/watch", (req, res) => {
   res.send(`
     <html>
     <head>${CSS}</head>
-    <body style="padding:20px;">
-      <h2>動画再生</h2>
-      <center>
-        <iframe width="560" height="315"
-          src="https://www.youtube.com/embed/${id}"
-          frameborder="0" allowfullscreen></iframe>
-        <br><br>
-        <a href="/">ホーム</a>
-      </center>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>動画再生</h2>
+        <center>
+          <iframe width="560" height="315"
+            src="https://www.youtube.com/embed/${id}"
+            frameborder="0" allowfullscreen></iframe>
+          <br><br>
+          <a href="/">ホーム</a>
+        </center>
+      </div>
+
+      ${SIDEBAR_JS}
+
     </body>
     </html>
   `);
 });
 
-// ------------------------------
+// --------------------------------------
 // 履歴ページ（ユーザー用）
-// ------------------------------
+// --------------------------------------
 app.get("/history", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -336,12 +494,17 @@ app.get("/history", (req, res) => {
   let html = `
     <html>
     <head>${CSS}</head>
-    <body style="padding:20px;">
-      <h2>${user} さんの検索履歴</h2>
-      <form action="/history/delete" method="POST">
-        <button class="danger" style="width:200px;">履歴をすべて削除</button>
-      </form>
-      <br>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>${user} さんの検索履歴</h2>
+
+        <form action="/history/delete" method="POST">
+          <button class="danger" style="width:200px;">履歴をすべて削除</button>
+        </form>
+        <br>
   `;
 
   html += data.map((item, index) => `
@@ -350,13 +513,18 @@ app.get("/history", (req, res) => {
       <strong>${item.keyword}</strong><br>
       <a href="/watch?v=${item.videoId}">
         ${item.title}
-      </a><br><br>
+      </a>
+      <br><br>
       <a href="/history/delete-one?index=${index}" style="color:red;">この履歴を削除</a>
     </div>
   `).join("");
 
   html += `
-      <br><center><a href="/">ホームへ戻る</a></center>
+        <br><center><a href="/">ホームへ戻る</a></center>
+      </div>
+
+      ${SIDEBAR_JS}
+
     </body>
     </html>
   `;
@@ -364,9 +532,9 @@ app.get("/history", (req, res) => {
   res.send(html);
 });
 
-// ------------------------------
-// 履歴削除（ユーザー用）
-// ------------------------------
+// --------------------------------------
+// 履歴削除（ユーザー用・全削除）
+// --------------------------------------
 app.post("/history/delete", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -378,6 +546,9 @@ app.post("/history/delete", (req, res) => {
   res.redirect("/history");
 });
 
+// --------------------------------------
+// 履歴削除（ユーザー用・1件削除）
+// --------------------------------------
 app.get("/history/delete-one", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -397,10 +568,9 @@ app.get("/history/delete-one", (req, res) => {
 
   res.redirect("/history");
 });
-
-// ------------------------------
+// --------------------------------------
 // 管理者ページ（本物の履歴）
-// ------------------------------
+// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
 app.get("/admin", (req, res) => {
@@ -411,13 +581,21 @@ app.get("/admin", (req, res) => {
       <html>
       <head>${CSS}</head>
       <body>
-        <div class="center-box">
-          <h2>管理者ログイン</h2>
-          <form>
-            <input name="pass" type="password" placeholder="管理者パスワード" required>
-            <button>ログイン</button>
-          </form>
+
+        ${SIDEBAR_HTML}
+
+        <div id="main-content" class="main-content">
+          <div class="center-box">
+            <h2>管理者ログイン</h2>
+            <form>
+              <input name="pass" type="password" placeholder="管理者パスワード" required>
+              <button>ログイン</button>
+            </form>
+          </div>
         </div>
+
+        ${SIDEBAR_JS}
+
       </body>
       </html>
     `);
@@ -458,50 +636,47 @@ app.get("/admin", (req, res) => {
   res.send(`
     <html>
     <head>${CSS}</head>
-    <body style="padding:20px;">
-      <h2>管理者ページ</h2>
+    <body>
 
-      <div class="tabs">
-        <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
-        <div class="tab" id="tab-search" onclick="openTab('search')">検索</div>
-        <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>管理者ページ</h2>
+
+        <div class="tabs">
+          <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
+          <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+        </div>
+
+        <div class="tab-content active" id="content-all">
+          ${allHistoryHTML}
+        </div>
+
+        <div class="tab-content" id="content-delete">
+          ${deleteButtonsHTML}
+        </div>
+
+        <script>
+          function openTab(name) {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+            document.getElementById("tab-" + name).classList.add("active");
+            document.getElementById("content-" + name).classList.add("active");
+          }
+        </script>
       </div>
 
-      <div class="tab-content active" id="content-all">
-        ${allHistoryHTML}
-      </div>
+      ${SIDEBAR_JS}
 
-      <div class="tab-content" id="content-search">
-        <form method="GET" action="/admin">
-          <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-          <input name="q" placeholder="キーワード検索">
-          <button>検索</button>
-        </form>
-      </div>
-
-      <div class="tab-content" id="content-delete">
-        ${deleteButtonsHTML}
-      </div>
-
-      <script>
-        function openTab(name) {
-          document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
-          document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
-
-          document.getElementById("tab-" + name).classList.add("active");
-          document.getElementById("content-" + name).classList.add("active");
-        }
-      </script>
-
-      <br><center><a href="/">ホームへ戻る</a></center>
     </body>
     </html>
   `);
 });
 
-// ------------------------------
+// --------------------------------------
 // 管理者：ユーザー履歴削除（本物）
-// ------------------------------
+// --------------------------------------
 app.post("/admin/delete-user", (req, res) => {
   const { user, pass } = req.body;
 
@@ -515,14 +690,17 @@ app.post("/admin/delete-user", (req, res) => {
 
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
-
-// ------------------------------
+// --------------------------------------
 // ログアウト
-// ------------------------------
+// --------------------------------------
 app.get("/logout", (req, res) => {
   res.clearCookie("user");
   res.redirect("/login");
 });
 
-// ------------------------------
-app.listen(PORT, () => console.log("Server running"));
+// --------------------------------------
+// サーバー起動
+// --------------------------------------
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
