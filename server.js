@@ -28,7 +28,6 @@ const CSS = `
     text-align: center;
   }
 
-  /* 中央配置フォーム（ログイン用） */
   .center-box {
     max-width: 380px;
     margin: 80px auto;
@@ -76,7 +75,6 @@ const CSS = `
     text-decoration: underline;
   }
 
-  /* カードレイアウト（検索結果） */
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -97,7 +95,6 @@ const CSS = `
     box-shadow: 0 6px 16px rgba(0,0,0,0.15);
   }
 
-  /* YouTube風サムネイル */
   .thumb {
     width: 100%;
     border-radius: 10px;
@@ -109,7 +106,6 @@ const CSS = `
     box-shadow: 0 6px 16px rgba(0,0,0,0.25);
   }
 
-  /* 履歴カード */
   .history-card {
     background: white;
     padding: 12px;
@@ -118,7 +114,6 @@ const CSS = `
     box-shadow: 0 1px 4px rgba(0,0,0,0.1);
   }
 
-  /* 管理者タブ */
   .tabs {
     display: flex;
     border-bottom: 2px solid #ddd;
@@ -180,7 +175,7 @@ function saveHistory(user, keyword, videoId, title) {
 }
 
 // ------------------------------
-// ログイン画面（デザイン版）
+// ログイン画面
 // ------------------------------
 app.get("/login", (req, res) => {
   res.send(`
@@ -240,7 +235,7 @@ app.get("/", (req, res) => {
 });
 
 // ------------------------------
-// YouTube検索（デザイン版）
+// YouTube検索
 // ------------------------------
 app.get("/search", async (req, res) => {
   const user = req.cookies.user;
@@ -252,7 +247,11 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -315,7 +314,7 @@ app.get("/watch", (req, res) => {
 });
 
 // ------------------------------
-// 履歴ページ（デザイン版）
+// 履歴ページ
 // ------------------------------
 app.get("/history", (req, res) => {
   const user = req.cookies.user;
@@ -497,6 +496,8 @@ app.get("/admin", (req, res) => {
 });
 
 // ------------------------------
+// 管理者：ユーザー履歴削除
+// ------------------------------
 app.post("/admin/delete-user", (req, res) => {
   const { user, pass } = req.body;
 
@@ -509,6 +510,14 @@ app.post("/admin/delete-user", (req, res) => {
   if (fs.existsSync(file)) fs.unlinkSync(file);
 
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+// ------------------------------
+// ログアウト（←これが無かった）
+// ------------------------------
+app.get("/logout", (req, res) => {
+  res.clearCookie("user");
+  res.redirect("/login");
 });
 
 // ------------------------------
