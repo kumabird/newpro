@@ -1,6 +1,6 @@
-
 import express from "express";
 import fetch from "node-fetch";
+import fs from "fs";
 
 const app = express();
 app.disable("x-powered-by");
@@ -9,7 +9,33 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 
-// ホーム（検索フォーム）
+// ------------------------------
+// 履歴保存関数
+// ------------------------------
+function saveHistory(keyword, videoId, title) {
+  const file = "history.json";
+
+  let data = [];
+  if (fs.existsSync(file)) {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  }
+
+  data.unshift({
+    keyword,
+    videoId,
+    title,
+    time: new Date().toISOString()
+  });
+
+  // 最大100件
+  data = data.slice(0, 100);
+
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+// ------------------------------
+// ホーム
+// ------------------------------
 app.get("/", (req, res) => {
   res.send(`
     <h2>YouTube Viewer（API不要）</h2>
@@ -17,10 +43,14 @@ app.get("/", (req, res) => {
       <input type="text" name="q" placeholder="検索ワードを入力" style="width:300px;">
       <button type="submit">検索</button>
     </form>
+    <br>
+    <a href="/history">検索履歴を見る（パスコード必要）</a>
   `);
 });
 
-// 検索結果（HTML解析）
+// ------------------------------
+// 検索
+// ------------------------------
 app.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.send("検索ワードがありません");
@@ -28,13 +58,21 @@ app.get("/search", async (req, res) => {
   const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  // ★ 正規表現は必ず1行で書く（改行禁止）
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
     title: m[2]
   }));
+
+  // ★ 履歴保存（1件目）
+  if (videos.length > 0) {
+    saveHistory(q, videos[0].id, videos[0].title);
+  }
 
   let list = `
     <h2>検索結果: ${q}</h2>
@@ -59,7 +97,9 @@ app.get("/search", async (req, res) => {
   res.send(list);
 });
 
-// 動画再生（埋め込み）
+// ------------------------------
+// 動画再生
+// ------------------------------
 app.get("/watch", (req, res) => {
   const id = req.query.v;
   if (!id) return res.send("動画IDがありません");
@@ -74,7 +114,9 @@ app.get("/watch", (req, res) => {
   `);
 });
 
-// Shorts 再生（埋め込み）
+// ------------------------------
+// Shorts 再生
+// ------------------------------
 app.get("/shorts", (req, res) => {
   const id = req.query.v;
   if (!id) return res.send("Shorts ID がありません");
@@ -89,7 +131,9 @@ app.get("/shorts", (req, res) => {
   `);
 });
 
-// チャンネル動画一覧（HTML解析）
+// ------------------------------
+// チャンネル動画一覧
+// ------------------------------
 app.get("/channel", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
@@ -97,8 +141,11 @@ app.get("/channel", async (req, res) => {
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
-  // ★ ここも必ず1行で書く
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -128,4 +175,68 @@ app.get("/channel", async (req, res) => {
   res.send(list);
 });
 
+// ------------------------------
+// 履歴ページ（パスコード必須）
+// ------------------------------
+app.get("/history", (req, res) => {
+  const pass = req.query.pass;
+
+  if (pass !== '1JaGdYufr5t&"') {
+    return res.send(`
+      <h2>履歴ページ（パスコード必須）</h2>
+      <form>
+        <input type="password" name="pass" placeholder="パスコードを入力">
+        <button type="submit">表示</button>
+      </form>
+    `);
+  }
+
+  let data = [];
+  if (fs.existsSync("history.json")) {
+    data = JSON.parse(fs.readFileSync("history.json", "utf8"));
+  }
+
+  let html = `
+    <h2>検索履歴</h2>
+    <form action="/history/delete" method="POST">
+      <input type="hidden" name="pass" value="${pass}">
+      <button type="submit" style="margin-bottom:20px;">履歴をすべて削除</button>
+    </form>
+    <ul>
+  `;
+
+  html += data
+    .map(
+      (item) =>
+        `<li>${item.time} — <strong>${item.keyword}</strong>  
+        （${item.title} / ${item.videoId}）</li>`
+    )
+    .join("");
+
+  html += "</ul><br><a href='/'>ホーム</a>";
+
+  res.send(html);
+});
+
+// ------------------------------
+// 履歴削除
+// ------------------------------
+app.post("/history/delete", (req, res) => {
+  const pass = req.body.pass;
+
+  if (pass !== '1JaGdYufr5t&"') {
+    return res.send("パスコードが違います");
+  }
+
+  if (fs.existsSync("history.json")) {
+    fs.unlinkSync("history.json");
+  }
+
+  res.send(`
+    <h2>履歴を削除しました</h2>
+    <a href="/history?pass=${encodeURIComponent(pass)}">戻る</a>
+  `);
+});
+
+// ------------------------------
 app.listen(PORT, () => console.log("Server running"));
