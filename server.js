@@ -152,26 +152,34 @@ function loadUsers() {
 }
 
 // ------------------------------
-// 履歴保存
+// 履歴保存（ユーザー用 + 管理者用）
 // ------------------------------
 function saveHistory(user, keyword, videoId, title) {
-  const file = `history_${user}.json`;
+  const userFile = `history_user_${user}.json`;
+  const adminFile = `history_admin_${user}.json`;
 
-  let data = [];
-  if (fs.existsSync(file)) {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  let userData = [];
+  let adminData = [];
+
+  if (fs.existsSync(userFile)) {
+    userData = JSON.parse(fs.readFileSync(userFile, "utf8"));
+  }
+  if (fs.existsSync(adminFile)) {
+    adminData = JSON.parse(fs.readFileSync(adminFile, "utf8"));
   }
 
-  data.unshift({
+  const entry = {
     keyword,
     videoId,
     title,
     time: new Date().toISOString()
-  });
+  };
 
-  data = data.slice(0, 100);
+  userData.unshift(entry);
+  adminData.unshift(entry);
 
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  fs.writeFileSync(userFile, JSON.stringify(userData, null, 2));
+  fs.writeFileSync(adminFile, JSON.stringify(adminData, null, 2));
 }
 
 // ------------------------------
@@ -310,13 +318,13 @@ app.get("/watch", (req, res) => {
 });
 
 // ------------------------------
-// 履歴ページ
+// 履歴ページ（ユーザー用）
 // ------------------------------
 app.get("/history", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const file = `history_${user}.json`;
+  const file = `history_user_${user}.json`;
 
   let data = [];
   if (fs.existsSync(file)) {
@@ -357,13 +365,13 @@ app.get("/history", (req, res) => {
 });
 
 // ------------------------------
-// 履歴削除
+// 履歴削除（ユーザー用）
 // ------------------------------
 app.post("/history/delete", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const file = `history_${user}.json`;
+  const file = `history_user_${user}.json`;
 
   if (fs.existsSync(file)) fs.unlinkSync(file);
 
@@ -375,7 +383,7 @@ app.get("/history/delete-one", (req, res) => {
   if (!user) return res.redirect("/login");
 
   const index = parseInt(req.query.index);
-  const file = `history_${user}.json`;
+  const file = `history_user_${user}.json`;
 
   let data = [];
   if (fs.existsSync(file)) {
@@ -391,7 +399,7 @@ app.get("/history/delete-one", (req, res) => {
 });
 
 // ------------------------------
-// 管理者ページ（タブ形式）
+// 管理者ページ（本物の履歴）
 // ------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
@@ -415,13 +423,13 @@ app.get("/admin", (req, res) => {
     `);
   }
 
-  const files = fs.readdirSync("./").filter(f => f.startsWith("history_") && f.endsWith(".json"));
+  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
 
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
   for (const file of files) {
-    const user = file.replace("history_", "").replace(".json", "");
+    const user = file.replace("history_admin_", "").replace(".json", "");
     let data = JSON.parse(fs.readFileSync(file, "utf8"));
 
     data.sort((a, b) => new Date(b.time) - new Date(a.time));
@@ -492,7 +500,7 @@ app.get("/admin", (req, res) => {
 });
 
 // ------------------------------
-// 管理者：ユーザー履歴削除
+// 管理者：ユーザー履歴削除（本物）
 // ------------------------------
 app.post("/admin/delete-user", (req, res) => {
   const { user, pass } = req.body;
@@ -501,7 +509,7 @@ app.post("/admin/delete-user", (req, res) => {
     return res.send("管理者パスワードが違います");
   }
 
-  const file = `history_${user}.json`;
+  const file = `history_admin_${user}.json`;
 
   if (fs.existsSync(file)) fs.unlinkSync(file);
 
@@ -509,7 +517,7 @@ app.post("/admin/delete-user", (req, res) => {
 });
 
 // ------------------------------
-// ログアウト（←これが無かった）
+// ログアウト
 // ------------------------------
 app.get("/logout", (req, res) => {
   res.clearCookie("user");
