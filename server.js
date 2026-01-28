@@ -59,11 +59,7 @@ app.get("/search", async (req, res) => {
   const html = await fetch(url).then(r => r.text());
 
   // ★ 正規表現は必ず1行
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
-
-\[\{"text":"(.*?)"\}\]
-
-/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
@@ -143,11 +139,7 @@ app.get("/channel", async (req, res) => {
   const html = await fetch(url).then(r => r.text());
 
   // ★ 必ず1行
-  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
-
-\[\{"text":"(.*?)"\}\]
-
-/gs)];
+  const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const videos = matches.slice(0, 42).map(m => ({
     id: m[1],
