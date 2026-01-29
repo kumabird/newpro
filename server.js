@@ -35,7 +35,7 @@ const CSS = `
     position: fixed;
     top: 0;
     left: 0;
-    width: 40px;
+    width: 50px;
     height: 100%;
     background: white;
     border-right: 1px solid #ddd;
