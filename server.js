@@ -432,6 +432,74 @@ app.get("/channel-videos", async (req, res) => {
   res.send(list);
 });
 
+  // HTML 出力
+  let list = `
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>${title} の動画一覧</h2>
+        <div class="card-grid">
+  `;
+
+  list += list60.map(v => `
+    <div class="card">
+      <a href="/watch?v=${v.id}">
+        <img class="thumb" src="${v.thumb}">
+        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+      </a>
+    </div>
+  `).join("");
+
+  list += `
+        </div>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `;
+
+  res.send(list);
+});
+// --------------------------------------
+// 動画視聴 + 履歴保存
+// --------------------------------------
+app.get("/watch", (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const videoId = req.query.v;
+  if (!videoId) return res.send("動画IDがありません");
+
+  // 履歴保存（検索履歴と同じ形式で保存）
+  saveHistory(user, "視聴", videoId, "動画視聴");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>動画視聴</h2>
+        <iframe width="560" height="315"
+          src="https://www.youtube.com/embed/${videoId}"
+          frameborder="0" allowfullscreen></iframe>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `);
+});
+
 
 // --------------------------------------
 // チャンネル検索ページ（入力フォーム）
