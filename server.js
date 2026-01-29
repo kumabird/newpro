@@ -14,13 +14,14 @@ app.use(cookieParser());
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
-/* サイドバー全体 */
 const CSS = `
+/* ← ここから CSS を入れる */
+
 .sidebar {
   position: fixed;
   top: 0;
   left: 0;
-  width: 70px;                 /* 閉じた状態の幅 */
+  width: 70px;
   height: 100vh;
   background: #ffffff;
   border-right: 1px solid #ddd;
@@ -29,12 +30,10 @@ const CSS = `
   z-index: 1000;
 }
 
-/* 開いた状態 */
 .sidebar.open {
-  width: 220px;                /* YouTube と同じくらいの幅 */
+  width: 220px;
 }
 
-/* メニュー（☰）ボタン */
 #toggle-btn {
   padding: 15px;
   cursor: pointer;
@@ -44,10 +43,9 @@ const CSS = `
 
 #toggle-btn .sidebar-icon {
   font-size: 26px;
-  margin-left: 18px;           /* ← メニューを右に寄せる（調整可能） */
+  margin-left: 20px;
 }
 
-/* 各メニュー項目 */
 .sidebar a {
   display: flex;
   align-items: center;
@@ -58,20 +56,17 @@ const CSS = `
   transition: background 0.2s ease;
 }
 
-/* ホバー時の YouTube 風グレー背景 */
 .sidebar a:hover {
   background: #f2f2f2;
 }
 
-/* アイコン（絵文字） */
 .sidebar-icon {
   font-size: 22px;
-  width: 40px;                 /* ← アイコン位置を揃える */
+  width: 40px;
   text-align: center;
   margin-right: 10px;
 }
 
-/* テキスト（閉じた状態では非表示） */
 .sidebar-text {
   opacity: 0;
   white-space: nowrap;
@@ -81,6 +76,8 @@ const CSS = `
 .sidebar.open .sidebar-text {
   opacity: 1;
 }
+
+/* ← ここまで CSS */
 `;
 
 // --------------------------------------
