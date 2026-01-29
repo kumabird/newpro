@@ -14,145 +14,72 @@ app.use(cookieParser());
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
-const CSS = `
-<style>
-  body {
-    font-family: "Segoe UI", sans-serif;
-    background: #f0f6ff;
-    margin: 0;
-    padding: 0;
-    color: #333;
-  }
+/* サイドバー全体 */
+.sidebar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 70px;                 /* 閉じた状態の幅 */
+  height: 100vh;
+  background: #ffffff;
+  border-right: 1px solid #ddd;
+  transition: width 0.25s ease;
+  overflow: hidden;
+  z-index: 1000;
+}
 
-  h2 {
-    margin-bottom: 20px;
-    color: #2c3e50;
-    text-align: center;
-  }
+/* 開いた状態 */
+.sidebar.open {
+  width: 220px;                /* YouTube と同じくらいの幅 */
+}
 
-  /* サイドバー（閉じた状態） */
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 50px;
-    height: 100%;
-    background: white;
-    border-right: 1px solid #ddd;
-    padding-top: 60px;
-    transition: width 0.25s ease;
-    overflow: hidden;
-    z-index: 1000;
-  }
+/* メニュー（☰）ボタン */
+#toggle-btn {
+  padding: 15px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+}
 
-  /* 開いた状態 */
-  .sidebar.open {
-    width: 220px;
-  }
+#toggle-btn .sidebar-icon {
+  font-size: 26px;
+  margin-left: 18px;           /* ← メニューを右に寄せる（調整可能） */
+}
 
-  .sidebar a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
-    font-size: 17px;
-    color: #333;
-    text-decoration: none;
-    white-space: nowrap;
-  }
+/* 各メニュー項目 */
+.sidebar a {
+  display: flex;
+  align-items: center;
+  padding: 12px 15px;
+  text-decoration: none;
+  color: #333;
+  font-size: 15px;
+  transition: background 0.2s ease;
+}
 
-  .sidebar a:hover {
-    background: #eaf4ff;
-  }
+/* ホバー時の YouTube 風グレー背景 */
+.sidebar a:hover {
+  background: #f2f2f2;
+}
 
-  .sidebar-icon {
-    font-size: 20px;
-  }
+/* アイコン（絵文字） */
+.sidebar-icon {
+  font-size: 22px;
+  width: 40px;                 /* ← アイコン位置を揃える */
+  text-align: center;
+  margin-right: 10px;
+}
 
-  /* メインコンテンツ */
-  .main-content {
-    margin-left: 80px;
-    padding: 20px;
-    transition: margin-left 0.25s ease;
-  }
+/* テキスト（閉じた状態では非表示） */
+.sidebar-text {
+  opacity: 0;
+  white-space: nowrap;
+  transition: opacity 0.2s ease;
+}
 
-  .main-content.shift {
-    margin-left: 240px;
-  }
-
-  /* カードレイアウト */
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
-    padding: 20px;
-  }
-
-  .card {
-    background: white;
-    padding: 15px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-  }
-
-  .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-  }
-
-  .thumb {
-    width: 100%;
-    border-radius: 10px;
-  }
-
-  .history-card {
-    background: white;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  }
-
-  .center-box {
-    max-width: 380px;
-    margin: 80px auto;
-    background: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  }
-
-  input, button {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 16px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    margin-bottom: 15px;
-  }
-
-  button {
-    background: #3498db;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-  }
-
-  button:hover {
-    background: #2d89c6;
-  }
-
-  .danger {
-    background: #e74c3c;
-  }
-
-  .danger:hover {
-    background: #c0392b;
-  }
-</style>
-`;
+.sidebar.open .sidebar-text {
+  opacity: 1;
+}
 
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
