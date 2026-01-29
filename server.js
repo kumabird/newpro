@@ -158,7 +158,11 @@ const CSS = `
 // サイドバー HTML（全ページ共通）
 // --------------------------------------
 const SIDEBAR_HTML = `
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
+  <div class="toggle-btn" id="toggle-btn">
+    <span class="material-symbols-outlined">menu</span>
+  </div>
+
   <a href="/">
     <span class="material-symbols-outlined">home</span>
     <span class="sidebar-text">ホーム</span>
@@ -187,20 +191,15 @@ const SIDEBAR_HTML = `
 // --------------------------------------
 const SIDEBAR_JS = `
 <script>
-const sidebar = document.getElementById("sidebar");
-const main = document.getElementById("main-content");
+  const sidebar = document.getElementById("sidebar");
+  const toggleBtn = document.getElementById("toggle-btn");
 
-sidebar.addEventListener("mouseenter", () => {
-  sidebar.classList.add("open");
-  main.classList.add("shift");
-});
-
-sidebar.addEventListener("mouseleave", () => {
-  sidebar.classList.remove("open");
-  main.classList.remove("shift");
-});
+  toggleBtn.addEventListener("click", () => {
+    sidebar.classList.toggle("open");
+  });
 </script>
 `;
+
 // --------------------------------------
 // 固定ユーザー管理
 // --------------------------------------
