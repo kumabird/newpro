@@ -161,32 +161,31 @@ const SIDEBAR_HTML = `
 <div class="sidebar" id="sidebar">
 
   <div class="toggle-btn" id="toggle-btn">
-    <span class="material-symbols-outlined">menu</span>
+    <span class="sidebar-icon">☰</span>
   </div>
 
   <a href="/">
-    <span class="material-symbols-outlined">home</span>
+    <span class="sidebar-icon">🏠</span>
     <span class="sidebar-text">ホーム</span>
   </a>
 
   <a href="/channel-search">
-    <span class="material-symbols-outlined">subscriptions</span>
+    <span class="sidebar-icon">📺</span>
     <span class="sidebar-text">チャンネル検索</span>
   </a>
 
   <a href="/history">
-    <span class="material-symbols-outlined">history</span>
+    <span class="sidebar-icon">🕘</span>
     <span class="sidebar-text">履歴</span>
   </a>
 
   <a href="/admin">
-    <span class="material-symbols-outlined">settings</span>
+    <span class="sidebar-icon">⚙️</span>
     <span class="sidebar-text">管理者</span>
   </a>
 
 </div>
 `;
-
 
 
 // --------------------------------------
