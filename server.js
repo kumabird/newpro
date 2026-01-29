@@ -365,52 +365,54 @@ app.get("/channel-videos", async (req, res) => {
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
-// ytInitialData を抽出（複数パターン対応）
-let jsonText =
-  html.match(/ytInitialData"\]
+  // ytInitialData を抽出（複数パターン対応）
+  let jsonText =
+    html.match(/ytInitialData"\]
 
 \s*=\s*(\{.*?\});/) ||
-  html.match(/var ytInitialData = (\{.*?\});/) ||
-  html.match(/window
+    html.match(/var ytInitialData = (\{.*?\});/) ||
+    html.match(/window
 
 \["ytInitialData"\]
+
 \s*=\s*(\{.*?\});/);
 
-if (!jsonText) return res.send("データを取得できませんでした");
+  if (!jsonText) {
+    return res.send("データを取得できませんでした（ytInitialData が見つかりません）");
+  }
 
-const data = JSON.parse(jsonText[1]);
+  const data = JSON.parse(jsonText[1]);
 
   // 動画一覧を抽出
   const videos = [];
 
-function scan(obj) {
-  if (!obj || typeof obj !== "object") return;
+  function scan(obj) {
+    if (!obj || typeof obj !== "object") return;
 
-  // gridVideoRenderer（チャンネル動画ページ）
-  if (obj.gridVideoRenderer) {
-    const v = obj.gridVideoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-    });
+    // gridVideoRenderer（チャンネル動画ページ）
+    if (obj.gridVideoRenderer) {
+      const v = obj.gridVideoRenderer;
+      videos.push({
+        id: v.videoId,
+        title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
+        thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+      });
+    }
+
+    // videoRenderer（検索結果など）
+    if (obj.videoRenderer) {
+      const v = obj.videoRenderer;
+      videos.push({
+        id: v.videoId,
+        title: v.title?.runs?.[0]?.text || "No Title",
+        thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+      });
+    }
+
+    for (const key in obj) scan(obj[key]);
   }
 
-  // videoRenderer（検索結果など）
-  if (obj.videoRenderer) {
-    const v = obj.videoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-    });
-  }
-
-  for (const key in obj) scan(obj[key]);
-}
-
-scan(data);
-
+  scan(data);
 
   // 最大 60 件
   const list60 = videos.slice(0, 60);
@@ -419,7 +421,6 @@ scan(data);
   const title =
     data.metadata?.channelMetadataRenderer?.title ||
     "チャンネル名取得不可";
-
 
   // HTML 出力
   let list = `
@@ -455,35 +456,7 @@ scan(data);
 
   res.send(list);
 });
-app.get("/watch", (req, res) => {
-  const user = req.cookies.user;
-  if (!user) return res.redirect("/login");
 
-  const videoId = req.query.v;
-  if (!videoId) return res.send("動画IDがありません");
-
-  saveHistory(user, "視聴", videoId, "動画視聴");
-
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-        <h2>動画視聴</h2>
-        <iframe width="560" height="315"
-          src="https://www.youtube.com/embed/${videoId}"
-          frameborder="0" allowfullscreen></iframe>
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `);
-});
 
 
 // --------------------------------------
