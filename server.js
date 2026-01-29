@@ -352,6 +352,84 @@ app.get("/search", async (req, res) => {
 });
 
 // --------------------------------------
+// チャンネル表示
+// --------------------------------------
+app.get("/channel-videos", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const id = req.query.id;
+  if (!id) return res.send("チャンネルIDがありません");
+
+  const url = `https://www.youtube.com/channel/${id}/videos`;
+  const html = await fetch(url).then(r => r.text());
+
+  // ytInitialData を抽出
+  const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
+  if (!jsonText) return res.send("データを取得できませんでした");
+
+  const data = JSON.parse(jsonText[1]);
+
+  // 動画一覧を抽出
+  const videos = [];
+  function scan(obj) {
+    if (typeof obj !== "object" || obj === null) return;
+
+    if (obj.gridVideoRenderer) {
+      const v = obj.gridVideoRenderer;
+      videos.push({
+        id: v.videoId,
+        title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
+        thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
+      });
+    }
+
+    for (const key in obj) scan(obj[key]);
+  }
+  scan(data);
+
+  const list60 = videos.slice(0, 60);
+
+  // チャンネル名
+  const title =
+    data.metadata?.channelMetadataRenderer?.title ||
+    "チャンネル名取得不可";
+
+  let list = `
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>${title} の動画一覧</h2>
+        <div class="card-grid">
+  `;
+
+  list += list60.map(v => `
+    <div class="card">
+      <a href="/channel-videos?id=${c.id}">
+        <img class="thumb" src="${v.thumb}">
+        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+      </a>
+    </div>
+  `).join("");
+
+  list += `
+        </div>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `;
+
+  res.send(list);
+});
+
+// --------------------------------------
 // チャンネル検索ページ（入力フォーム）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
