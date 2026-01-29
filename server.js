@@ -429,9 +429,6 @@ app.get("/channel-videos", async (req, res) => {
     </html>
   `;
 
-  res.send(list);
-});
-
   // HTML 出力
   let list = `
     <html>
@@ -466,9 +463,6 @@ app.get("/channel-videos", async (req, res) => {
 
   res.send(list);
 });
-// --------------------------------------
-// 動画視聴 + 履歴保存
-// --------------------------------------
 app.get("/watch", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -476,7 +470,6 @@ app.get("/watch", (req, res) => {
   const videoId = req.query.v;
   if (!videoId) return res.send("動画IDがありません");
 
-  // 履歴保存（検索履歴と同じ形式で保存）
   saveHistory(user, "視聴", videoId, "動画視聴");
 
   res.send(`
