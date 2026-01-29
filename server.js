@@ -53,9 +53,6 @@ const SIDEBAR_HTML = `
 </div>
 `;
 
-// --------------------------------------
-// HTML 出力（CSS を正しく埋め込む）
-// --------------------------------------
 function renderPage(content) {
   return `
   <!DOCTYPE html>
@@ -73,6 +70,7 @@ function renderPage(content) {
   </html>
   `;
 }
+
 
 // --------------------------------------
 // ルート
