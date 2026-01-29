@@ -12,73 +12,80 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // --------------------------------------
-// 共通CSS（YouTube風サイドバー対応）
+// 元の CSS（最低限のレイアウトだけ）
 // --------------------------------------
 const CSS = `
-/* ここから CSS */
+body {
+  margin: 0;
+  padding: 0;
+  font-family: sans-serif;
+}
 
 .sidebar {
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 70px;
+  width: 200px;
+  background: #f5f5f5;
   height: 100vh;
-  background: #ffffff;
-  border-right: 1px solid #ddd;
-  transition: width 0.25s ease;
-  overflow: hidden;
-  z-index: 1000;
-}
-
-.sidebar.open {
-  width: 220px;
-}
-
-#toggle-btn {
-  padding: 15px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-}
-
-#toggle-btn .sidebar-icon {
-  font-size: 26px;
-  margin-left: 20px;
+  padding: 10px;
 }
 
 .sidebar a {
-  display: flex;
-  align-items: center;
-  padding: 12px 15px;
+  display: block;
+  padding: 10px;
   text-decoration: none;
-  color: #333;
-  font-size: 15px;
-  transition: background 0.2s ease;
+  color: black;
 }
 
-.sidebar a:hover {
-  background: #f2f2f2;
+.content {
+  margin-left: 200px;
+  padding: 20px;
 }
-
-.sidebar-icon {
-  font-size: 22px;
-  width: 40px;
-  text-align: center;
-  margin-right: 10px;
-}
-
-.sidebar-text {
-  opacity: 0;
-  white-space: nowrap;
-  transition: opacity 0.2s ease;
-}
-
-.sidebar.open .sidebar-text {
-  opacity: 1;
-}
-
-/* ここまで CSS */
 `;
+
+// --------------------------------------
+// 元のサイドバー（絵文字なし）
+// --------------------------------------
+const SIDEBAR_HTML = `
+<div class="sidebar">
+  <a href="/">Home</a>
+  <a href="/channel-search">Channel Search</a>
+  <a href="/history">History</a>
+  <a href="/admin">Admin</a>
+</div>
+`;
+
+// --------------------------------------
+// HTML 出力（CSS を正しく埋め込む）
+// --------------------------------------
+function renderPage(content) {
+  return `
+  <!DOCTYPE html>
+  <html>
+  <head>
+    <meta charset="UTF-8">
+    <style>${CSS}</style>
+  </head>
+  <body>
+    ${SIDEBAR_HTML}
+    <div class="content">
+      ${content}
+    </div>
+  </body>
+  </html>
+  `;
+}
+
+// --------------------------------------
+// ルート
+// --------------------------------------
+app.get("/", (req, res) => {
+  res.send(renderPage("<h1>Welcome</h1>"));
+});
+
+// --------------------------------------
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
+});
+
 
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
