@@ -352,7 +352,7 @@ app.get("/search", async (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル表示
+// チャンネル動画一覧（内部ページ）
 // --------------------------------------
 app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
@@ -361,6 +361,7 @@ app.get("/channel-videos", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
+  // チャンネルの動画一覧ページを取得
   const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
@@ -375,6 +376,7 @@ app.get("/channel-videos", async (req, res) => {
   function scan(obj) {
     if (typeof obj !== "object" || obj === null) return;
 
+    // gridVideoRenderer が動画
     if (obj.gridVideoRenderer) {
       const v = obj.gridVideoRenderer;
       videos.push({
@@ -388,6 +390,7 @@ app.get("/channel-videos", async (req, res) => {
   }
   scan(data);
 
+  // 最大 60 件
   const list60 = videos.slice(0, 60);
 
   // チャンネル名
@@ -395,6 +398,7 @@ app.get("/channel-videos", async (req, res) => {
     data.metadata?.channelMetadataRenderer?.title ||
     "チャンネル名取得不可";
 
+  // HTML 出力
   let list = `
     <html>
     <head>${CSS}</head>
@@ -407,12 +411,11 @@ app.get("/channel-videos", async (req, res) => {
         <div class="card-grid">
   `;
 
+  // カード生成（YouTube に飛ばない・内部再生のみ）
   list += list60.map(v => `
-    <div class="card">
-      <a href="/channel-videos?id=${c.id}">
-        <img class="thumb" src="${v.thumb}">
-        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-      </a>
+    <div class="card" onclick="location.href='/watch?v=${v.id}'" style="cursor:pointer;">
+      <img class="thumb" src="${v.thumb}" style="pointer-events:none;">
+      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
     </div>
   `).join("");
 
@@ -428,6 +431,7 @@ app.get("/channel-videos", async (req, res) => {
 
   res.send(list);
 });
+
 
 // --------------------------------------
 // チャンネル検索ページ（入力フォーム）
