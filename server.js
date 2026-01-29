@@ -12,94 +12,179 @@ app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
 // --------------------------------------
-// 元の CSS（最低限のレイアウトだけ）
+// 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
 const CSS = `
-body {
-  margin: 0;
-  padding: 0;
-  font-family: sans-serif;
-}
+<style>
+  body {
+    font-family: "Segoe UI", sans-serif;
+    background: #f0f6ff;
+    margin: 0;
+    padding: 0;
+    color: #333;
+  }
 
-.sidebar {
-  width: 200px;
-  background: #f5f5f5;
-  height: 100vh;
-  padding: 10px;
-}
+  h2 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    text-align: center;
+  }
 
-.sidebar a {
-  display: block;
-  padding: 10px;
-  text-decoration: none;
-  color: black;
-}
+  /* サイドバー（閉じた状態） */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 50px;
+    height: 100%;
+    background: white;
+    border-right: 1px solid #ddd;
+    padding-top: 60px;
+    transition: width 0.25s ease;
+    overflow: hidden;
+    z-index: 1000;
+  }
 
-.content {
-  margin-left: 200px;
-  padding: 20px;
-}
+  /* 開いた状態 */
+  .sidebar.open {
+    width: 220px;
+  }
+
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 18px;
+    font-size: 17px;
+    color: #333;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .sidebar a:hover {
+    background: #eaf4ff;
+  }
+
+  .sidebar-icon {
+    font-size: 20px;
+  }
+
+  /* メインコンテンツ */
+  .main-content {
+    margin-left: 80px;
+    padding: 20px;
+    transition: margin-left 0.25s ease;
+  }
+
+  .main-content.shift {
+    margin-left: 240px;
+  }
+
+  /* カードレイアウト */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+    padding: 20px;
+  }
+
+  .card {
+    background: white;
+    padding: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    transition: transform 0.25s ease, box-shadow 0.25s ease;
+  }
+
+  .card:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
+  }
+
+  .thumb {
+    width: 100%;
+    border-radius: 10px;
+  }
+
+  .history-card {
+    background: white;
+    padding: 12px;
+    margin: 10px 0;
+    border-radius: 10px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+  }
+
+  .center-box {
+    max-width: 380px;
+    margin: 80px auto;
+    background: white;
+    padding: 30px;
+    border-radius: 12px;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+  }
+
+  input, button {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+  }
+
+  button {
+    background: #3498db;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: bold;
+  }
+
+  button:hover {
+    background: #2d89c6;
+  }
+
+  .danger {
+    background: #e74c3c;
+  }
+
+  .danger:hover {
+    background: #c0392b;
+  }
+</style>
 `;
 
 // --------------------------------------
-// 元のサイドバー（絵文字なし）
+// サイドバー HTML（全ページ共通）
 // --------------------------------------
 const SIDEBAR_HTML = `
-<div class="sidebar">
-  <a href="/">Home</a>
-  <a href="/channel-search">Channel Search</a>
-  <a href="/history">History</a>
-  <a href="/admin">Admin</a>
+<div id="sidebar" class="sidebar">
+  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
+  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
+  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
 </div>
 `;
-
-function renderPage(content) {
-  return `
-  <!DOCTYPE html>
-  <html>
-  <head>
-    <meta charset="UTF-8">
-    <style>${CSS}</style>
-  </head>
-  <body>
-    ${SIDEBAR_HTML}
-    <div class="content">
-      ${content}
-    </div>
-  </body>
-  </html>
-  `;
-}
-
-
-// --------------------------------------
-// ルート
-// --------------------------------------
-app.get("/", (req, res) => {
-  res.send(renderPage("<h1>Welcome</h1>"));
-});
-
-// --------------------------------------
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
-
-
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
 // --------------------------------------
 const SIDEBAR_JS = `
 <script>
-  const sidebar = document.getElementById("sidebar");
-  const toggleBtn = document.getElementById("toggle-btn");
+const sidebar = document.getElementById("sidebar");
+const main = document.getElementById("main-content");
 
-  toggleBtn.addEventListener("click", () => {
-    sidebar.classList.toggle("open");
-  });
+sidebar.addEventListener("mouseenter", () => {
+  sidebar.classList.add("open");
+  main.classList.add("shift");
+});
+
+sidebar.addEventListener("mouseleave", () => {
+  sidebar.classList.remove("open");
+  main.classList.remove("shift");
+});
 </script>
 `;
-
 // --------------------------------------
 // 固定ユーザー管理
 // --------------------------------------
@@ -267,7 +352,7 @@ app.get("/search", async (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル動画一覧（60件）
+// チャンネル動画一覧（内部ページ）
 // --------------------------------------
 app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
@@ -276,31 +361,22 @@ app.get("/channel-videos", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
-  const url = `https://www.youtube.com/channel/${id}/videos?gl=JP&hl=ja`;
+  // チャンネルの動画一覧ページを取得
+  const url = `https://www.youtube.com/channel/${id}/videos`;
   const html = await fetch(url).then(r => r.text());
 
+  // ytInitialData を抽出
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
   const data = JSON.parse(jsonText[1]);
 
+  // 動画一覧を抽出
   const videos = [];
-
-  // 2026年のYouTube構造に対応
   function scan(obj) {
     if (typeof obj !== "object" || obj === null) return;
 
-    // 新構造
-    if (obj.richItemRenderer?.content?.videoRenderer) {
-      const v = obj.richItemRenderer.content.videoRenderer;
-      videos.push({
-        id: v.videoId,
-        title: v.title?.runs?.[0]?.text || "No Title",
-        thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
-      });
-    }
-
-    // 旧構造（保険）
+    // gridVideoRenderer が動画
     if (obj.gridVideoRenderer) {
       const v = obj.gridVideoRenderer;
       videos.push({
@@ -314,23 +390,28 @@ app.get("/channel-videos", async (req, res) => {
   }
   scan(data);
 
+  // 最大 60 件
   const list60 = videos.slice(0, 60);
 
+  // チャンネル名
   const title =
     data.metadata?.channelMetadataRenderer?.title ||
     "チャンネル名取得不可";
 
+  // HTML 出力
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
+
       ${SIDEBAR_HTML}
+
       <div id="main-content" class="main-content">
         <h2>${title} の動画一覧</h2>
         <div class="card-grid">
   `;
 
-  // /watch に飛ばす → 履歴が残る
+  // カード生成（YouTube に飛ばない・内部再生のみ）
   list += list60.map(v => `
     <div class="card" onclick="location.href='/watch?v=${v.id}'" style="cursor:pointer;">
       <img class="thumb" src="${v.thumb}" style="pointer-events:none;">
@@ -341,7 +422,9 @@ app.get("/channel-videos", async (req, res) => {
   list += `
         </div>
       </div>
+
       ${SIDEBAR_JS}
+
     </body>
     </html>
   `;
@@ -389,17 +472,17 @@ app.get("/channel-search/result", async (req, res) => {
   if (!user) return res.redirect("/login");
 
   const q = req.query.q;
-
-  // 日本優先検索
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&gl=JP&hl=ja`;
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
 
   const html = await fetch(url).then(r => r.text());
 
+  // ytInitialData を抽出
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
   const data = JSON.parse(jsonText[1]);
 
+  // channelRenderer をすべて抽出
   const channels = [];
   function scan(obj) {
     if (typeof obj !== "object" || obj === null) return;
@@ -417,19 +500,22 @@ app.get("/channel-search/result", async (req, res) => {
   }
   scan(data);
 
+  // 最大 60 件
   const list60 = channels.slice(0, 60);
 
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
+
       ${SIDEBAR_HTML}
+
       <div id="main-content" class="main-content">
         <h2>チャンネル検索結果: ${q}</h2>
         <div class="card-grid">
   `;
 
-  // YouTubeに飛ばない内部リンク
+  // ★★★ ここを修正 ★★★
   list += list60.map(c => `
     <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
       <img class="thumb" src="${c.icon}" style="pointer-events:none;">
@@ -440,14 +526,15 @@ app.get("/channel-search/result", async (req, res) => {
   list += `
         </div>
       </div>
+
       ${SIDEBAR_JS}
+
     </body>
     </html>
   `;
 
   res.send(list);
 });
-
 
 
 
