@@ -85,38 +85,6 @@ app.listen(PORT, () => {
 });
 
 
-// --------------------------------------
-// サイドバー HTML（全ページ共通）
-// --------------------------------------
-const SIDEBAR_HTML = `
-<div class="sidebar" id="sidebar">
-
-  <div class="toggle-btn" id="toggle-btn">
-    <span class="sidebar-icon">☰</span>
-  </div>
-
-  <a href="/">
-    <span class="sidebar-icon">🏠</span>
-    <span class="sidebar-text">ホーム</span>
-  </a>
-
-  <a href="/channel-search">
-    <span class="sidebar-icon">📺</span>
-    <span class="sidebar-text">チャンネル検索</span>
-  </a>
-
-  <a href="/history">
-    <span class="sidebar-icon">🕘</span>
-    <span class="sidebar-text">履歴</span>
-  </a>
-
-  <a href="/admin">
-    <span class="sidebar-icon">⚙️</span>
-    <span class="sidebar-text">管理者</span>
-  </a>
-
-</div>
-`;
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
