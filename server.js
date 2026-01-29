@@ -398,36 +398,6 @@ app.get("/channel-videos", async (req, res) => {
     data.metadata?.channelMetadataRenderer?.title ||
     "チャンネル名取得不可";
 
-  // HTML 出力
-  let list = `
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-        <h2>${title} の動画一覧</h2>
-        <div class="card-grid">
-  `;
-
-  // カード生成（YouTube に飛ばない・内部再生のみ）
-  list += list60.map(v => `
-    <div class="card" onclick="location.href='/watch?v=${v.id}'" style="cursor:pointer;">
-      <img class="thumb" src="${v.thumb}" style="pointer-events:none;">
-      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-    </div>
-  `).join("");
-
-  list += `
-        </div>
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `;
 
   // HTML 出力
   let list = `
