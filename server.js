@@ -15,6 +15,7 @@ app.use(cookieParser());
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
 /* サイドバー全体 */
+const CSS = `
 .sidebar {
   position: fixed;
   top: 0;
@@ -80,6 +81,7 @@ app.use(cookieParser());
 .sidebar.open .sidebar-text {
   opacity: 1;
 }
+`;
 
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
@@ -87,7 +89,10 @@ app.use(cookieParser());
 const SIDEBAR_HTML = `
 <div class="sidebar" id="sidebar">
 
-  <div class="toggle-btn" id="toggle-btn">
+#toggle-btn .sidebar-icon {
+  margin-left: 20px; /* ← ここを増やすと右へ動く */
+}
+<div class="toggle-btn" id="toggle-btn">
     <span class="sidebar-icon">☰</span>
   </div>
 
@@ -113,6 +118,7 @@ const SIDEBAR_HTML = `
 
 </div>
 `;
+
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
