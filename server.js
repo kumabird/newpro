@@ -157,14 +157,25 @@ const CSS = `
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
 // --------------------------------------
-const SIDEBAR_HTML = `
-<div id="sidebar" class="sidebar">
-  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
-  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
-  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
-</div>
-`;
+<a href="/">
+  <span class="material-symbols-outlined">home</span>
+  <span class="sidebar-text">ホーム</span>
+</a>
+
+<a href="/channel-search">
+  <span class="material-symbols-outlined">subscriptions</span>
+  <span class="sidebar-text">チャンネル検索</span>
+</a>
+
+<a href="/history">
+  <span class="material-symbols-outlined">history</span>
+  <span class="sidebar-text">履歴</span>
+</a>
+
+<a href="/admin">
+  <span class="material-symbols-outlined">settings</span>
+  <span class="sidebar-text">管理者</span>
+</a>
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
