@@ -394,12 +394,32 @@ app.get("/channel-search/result", async (req, res) => {
 
   const html = await fetch(url).then(r => r.text());
 
-  const matches = [...html.matchAll(/"channelId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  // ytInitialData を抽出
+  const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
+  if (!jsonText) return res.send("データを取得できませんでした");
 
-  const channels = matches.slice(0, 60).map(m => ({
-    id: m[1],
-    title: m[2]
-  }));
+  const data = JSON.parse(jsonText[1]);
+
+  // channelRenderer をすべて抽出
+  const channels = [];
+  function scan(obj) {
+    if (typeof obj !== "object" || obj === null) return;
+
+    if (obj.channelRenderer) {
+      const c = obj.channelRenderer;
+      channels.push({
+        id: c.channelId,
+        title: c.title?.simpleText || c.title?.runs?.[0]?.text || "No Title",
+        icon: c.thumbnail?.thumbnails?.[0]?.url || ""
+      });
+    }
+
+    for (const key in obj) scan(obj[key]);
+  }
+  scan(data);
+
+  // 最大 60 件
+  const list60 = channels.slice(0, 60);
 
   let list = `
     <html>
@@ -413,10 +433,10 @@ app.get("/channel-search/result", async (req, res) => {
         <div class="card-grid">
   `;
 
-  list += channels.map(c => `
+  list += list60.map(c => `
     <div class="card">
       <a href="https://www.youtube.com/channel/${c.id}" target="_blank">
-        <img class="thumb" src="https://yt3.googleusercontent.com/ytc/${c.id}=s900-c-k-c0x00ffffff-no-rj">
+        <img class="thumb" src="${c.icon}">
         <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
       </a>
     </div>
@@ -434,6 +454,8 @@ app.get("/channel-search/result", async (req, res) => {
 
   res.send(list);
 });
+
+
 // --------------------------------------
 // 動画再生
 // --------------------------------------
