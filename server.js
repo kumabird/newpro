@@ -159,6 +159,7 @@ const CSS = `
 // --------------------------------------
 const SIDEBAR_HTML = `
 <div class="sidebar" id="sidebar">
+
   <div class="toggle-btn" id="toggle-btn">
     <span class="material-symbols-outlined">menu</span>
   </div>
@@ -182,8 +183,10 @@ const SIDEBAR_HTML = `
     <span class="material-symbols-outlined">settings</span>
     <span class="sidebar-text">管理者</span>
   </a>
+
 </div>
 `;
+
 
 
 // --------------------------------------
