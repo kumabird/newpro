@@ -515,12 +515,11 @@ app.get("/channel-search/result", async (req, res) => {
         <div class="card-grid">
   `;
 
+  // ★★★ ここを修正 ★★★
   list += list60.map(c => `
-    <div class="card">
-      <a href="https://www.youtube.com/channel/${c.id}" target="_blank">
-        <img class="thumb" src="${c.icon}">
-        <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
-      </a>
+    <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
+      <img class="thumb" src="${c.icon}" style="pointer-events:none;">
+      <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
     </div>
   `).join("");
 
@@ -536,6 +535,7 @@ app.get("/channel-search/result", async (req, res) => {
 
   res.send(list);
 });
+
 
 
 // --------------------------------------
