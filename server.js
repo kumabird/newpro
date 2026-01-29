@@ -363,7 +363,7 @@ app.get("/search", async (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル動画一覧（内部ページ）
+// チャンネル動画一覧（60件）
 // --------------------------------------
 app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
@@ -372,69 +372,61 @@ app.get("/channel-videos", async (req, res) => {
   const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
-  // チャンネルの動画一覧ページを取得
-  const url = `https://www.youtube.com/channel/${id}/videos`;
+  const url = `https://www.youtube.com/channel/${id}/videos?gl=JP&hl=ja`;
   const html = await fetch(url).then(r => r.text());
 
-  // ytInitialData を抽出
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
   const data = JSON.parse(jsonText[1]);
 
-  // 動画一覧を抽出（2026年対応）
-const videos = [];
+  const videos = [];
 
-function scan(obj) {
-  if (typeof obj !== "object" || obj === null) return;
+  // 2026年のYouTube構造に対応
+  function scan(obj) {
+    if (typeof obj !== "object" || obj === null) return;
 
-  // 新しい YouTube の動画構造
-  if (obj.richItemRenderer?.content?.videoRenderer) {
-    const v = obj.richItemRenderer.content.videoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
-    });
+    // 新構造
+    if (obj.richItemRenderer?.content?.videoRenderer) {
+      const v = obj.richItemRenderer.content.videoRenderer;
+      videos.push({
+        id: v.videoId,
+        title: v.title?.runs?.[0]?.text || "No Title",
+        thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
+      });
+    }
+
+    // 旧構造（保険）
+    if (obj.gridVideoRenderer) {
+      const v = obj.gridVideoRenderer;
+      videos.push({
+        id: v.videoId,
+        title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
+        thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
+      });
+    }
+
+    for (const key in obj) scan(obj[key]);
   }
+  scan(data);
 
-  // 古い構造（保険）
-  if (obj.gridVideoRenderer) {
-    const v = obj.gridVideoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
-    });
-  }
-
-  for (const key in obj) scan(obj[key]);
-}
-
-scan(data);
-
-  // 最大 60 件
   const list60 = videos.slice(0, 60);
 
-  // チャンネル名
   const title =
     data.metadata?.channelMetadataRenderer?.title ||
     "チャンネル名取得不可";
 
-  // HTML 出力
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
-
       ${SIDEBAR_HTML}
-
       <div id="main-content" class="main-content">
         <h2>${title} の動画一覧</h2>
         <div class="card-grid">
   `;
 
-  // カード生成（YouTube に飛ばない・内部再生のみ）
+  // /watch に飛ばす → 履歴が残る
   list += list60.map(v => `
     <div class="card" onclick="location.href='/watch?v=${v.id}'" style="cursor:pointer;">
       <img class="thumb" src="${v.thumb}" style="pointer-events:none;">
@@ -445,9 +437,7 @@ scan(data);
   list += `
         </div>
       </div>
-
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `;
@@ -495,17 +485,17 @@ app.get("/channel-search/result", async (req, res) => {
   if (!user) return res.redirect("/login");
 
   const q = req.query.q;
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
+
+  // 日本優先検索
+  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&gl=JP&hl=ja`;
 
   const html = await fetch(url).then(r => r.text());
 
-  // ytInitialData を抽出
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
   const data = JSON.parse(jsonText[1]);
 
-  // channelRenderer をすべて抽出
   const channels = [];
   function scan(obj) {
     if (typeof obj !== "object" || obj === null) return;
@@ -523,22 +513,19 @@ app.get("/channel-search/result", async (req, res) => {
   }
   scan(data);
 
-  // 最大 60 件
   const list60 = channels.slice(0, 60);
 
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
-
       ${SIDEBAR_HTML}
-
       <div id="main-content" class="main-content">
         <h2>チャンネル検索結果: ${q}</h2>
         <div class="card-grid">
   `;
 
-  // ★★★ ここを修正 ★★★
+  // YouTubeに飛ばない内部リンク
   list += list60.map(c => `
     <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
       <img class="thumb" src="${c.icon}" style="pointer-events:none;">
@@ -549,15 +536,14 @@ app.get("/channel-search/result", async (req, res) => {
   list += `
         </div>
       </div>
-
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `;
 
   res.send(list);
 });
+
 
 
 
