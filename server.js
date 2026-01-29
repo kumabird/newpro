@@ -371,24 +371,36 @@ app.get("/channel-videos", async (req, res) => {
 
   const data = JSON.parse(jsonText[1]);
 
-  // 動画一覧を抽出
-  const videos = [];
-  function scan(obj) {
-    if (typeof obj !== "object" || obj === null) return;
+  // 動画一覧を抽出（2026年対応）
+const videos = [];
 
-    // gridVideoRenderer が動画
-    if (obj.gridVideoRenderer) {
-      const v = obj.gridVideoRenderer;
-      videos.push({
-        id: v.videoId,
-        title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
-        thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
-      });
-    }
+function scan(obj) {
+  if (typeof obj !== "object" || obj === null) return;
 
-    for (const key in obj) scan(obj[key]);
+  // 新しい YouTube の動画構造
+  if (obj.richItemRenderer?.content?.videoRenderer) {
+    const v = obj.richItemRenderer.content.videoRenderer;
+    videos.push({
+      id: v.videoId,
+      title: v.title?.runs?.[0]?.text || "No Title",
+      thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
+    });
   }
-  scan(data);
+
+  // 古い構造（保険）
+  if (obj.gridVideoRenderer) {
+    const v = obj.gridVideoRenderer;
+    videos.push({
+      id: v.videoId,
+      title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
+      thumb: v.thumbnail?.thumbnails?.[0]?.url || ""
+    });
+  }
+
+  for (const key in obj) scan(obj[key]);
+}
+
+scan(data);
 
   // 最大 60 件
   const list60 = videos.slice(0, 60);
