@@ -185,6 +185,66 @@ sidebar.addEventListener("mouseleave", () => {
 });
 </script>
 `;
+
+<html>
+<head>
+  <style>
+    .search-box {
+      margin: 20px;
+      padding: 20px;
+      background: #f5f5f5;
+      border-radius: 10px;
+      width: 400px;
+    }
+    select, input {
+      padding: 8px;
+      margin-top: 10px;
+      width: 100%;
+      font-size: 16px;
+    }
+    button {
+      margin-top: 15px;
+      padding: 10px;
+      width: 100%;
+      background: #007bff;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+
+  <div class="search-box">
+    <h3>動画検索</h3>
+    <form action="/search" method="get">
+      <input type="text" name="q" placeholder="検索ワードを入力">
+      <select name="region">
+        <option value="jp">日本のみ</option>
+        <option value="global">全世界</option>
+      </select>
+      <button type="submit">動画を検索</button>
+    </form>
+  </div>
+
+  <div class="search-box">
+    <h3>チャンネル検索</h3>
+    <form action="/channel-search/result" method="get">
+      <input type="text" name="q" placeholder="検索ワードを入力">
+      <select name="region">
+        <option value="jp">日本のみ</option>
+        <option value="global">全世界</option>
+      </select>
+      <button type="submit">チャンネルを検索</button>
+    </form>
+  </div>
+
+</body>
+</html>
+
+
 // --------------------------------------
 // 固定ユーザー管理
 // --------------------------------------
