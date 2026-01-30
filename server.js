@@ -334,7 +334,10 @@ app.get("/", (req, res) => {
 // --------------------------------------
 // 動画検索（60件）
 // --------------------------------------
-app.get("/search", async (req, res) => {
+app.post("/search", async (req, res) => {
+  const q = req.body.q;
+  const region = req.body.region;
+
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
