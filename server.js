@@ -522,7 +522,7 @@ app.get("/channel-search", (req, res) => {
         <div style="max-width:800px;margin:0 auto;">
           <form action="/channel-search/result" method="get">
             <input type="text" name="q" placeholder="チャンネル名を入力">
-            <select name="region">
+            <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
               <option value="global">全世界</option>
             </select>
@@ -538,6 +538,7 @@ app.get("/channel-search", (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // チャンネル検索結果（60件）
