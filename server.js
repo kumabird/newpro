@@ -165,6 +165,56 @@ const SIDEBAR_HTML = `
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
 </div>
 `;
+// --------------------------------------
+// ホーム（検索 UI つき）
+// --------------------------------------
+app.get("/", (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+
+        <h2>検索メニュー</h2>
+
+        <div class="center-box">
+          <h3>動画検索</h3>
+          <form action="/search" method="get">
+            <input type="text" name="q" placeholder="検索ワードを入力">
+            <select name="region">
+              <option value="jp">日本のみ</option>
+              <option value="global">全世界</option>
+            </select>
+            <button type="submit">動画を検索</button>
+          </form>
+        </div>
+
+        <div class="center-box">
+          <h3>チャンネル検索</h3>
+          <form action="/channel-search/result" method="get">
+            <input type="text" name="q" placeholder="検索ワードを入力">
+            <select name="region">
+              <option value="jp">日本のみ</option>
+              <option value="global">全世界</option>
+            </select>
+            <button type="submit">チャンネルを検索</button>
+          </form>
+        </div>
+
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `);
+});
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
@@ -185,64 +235,6 @@ sidebar.addEventListener("mouseleave", () => {
 });
 </script>
 `;
-
-<html>
-<head>
-  <style>
-    .search-box {
-      margin: 20px;
-      padding: 20px;
-      background: #f5f5f5;
-      border-radius: 10px;
-      width: 400px;
-    }
-    select, input {
-      padding: 8px;
-      margin-top: 10px;
-      width: 100%;
-      font-size: 16px;
-    }
-    button {
-      margin-top: 15px;
-      padding: 10px;
-      width: 100%;
-      background: #007bff;
-      color: white;
-      border: none;
-      border-radius: 6px;
-      font-size: 16px;
-      cursor: pointer;
-    }
-  </style>
-</head>
-<body>
-
-  <div class="search-box">
-    <h3>動画検索</h3>
-    <form action="/search" method="get">
-      <input type="text" name="q" placeholder="検索ワードを入力">
-      <select name="region">
-        <option value="jp">日本のみ</option>
-        <option value="global">全世界</option>
-      </select>
-      <button type="submit">動画を検索</button>
-    </form>
-  </div>
-
-  <div class="search-box">
-    <h3>チャンネル検索</h3>
-    <form action="/channel-search/result" method="get">
-      <input type="text" name="q" placeholder="検索ワードを入力">
-      <select name="region">
-        <option value="jp">日本のみ</option>
-        <option value="global">全世界</option>
-      </select>
-      <button type="submit">チャンネルを検索</button>
-    </form>
-  </div>
-
-</body>
-</html>
 
 
 // --------------------------------------
