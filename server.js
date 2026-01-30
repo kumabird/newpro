@@ -362,7 +362,7 @@ app.get("/channel-videos", async (req, res) => {
   if (!id) return res.send("チャンネルIDがありません");
 
   // チャンネルの動画一覧ページを取得
-  const url = `https://www.youtube.com/channel/${id}/videos`;
+  const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
   const html = await fetch(url).then(r => r.text());
 
   // ytInitialData を抽出（複数パターン対応）
