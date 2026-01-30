@@ -166,7 +166,7 @@ const SIDEBAR_HTML = `
 </div>
 `;
 // --------------------------------------
-// ホーム（動画検索 + チャンネル検索 UI 統一版）
+// ホーム（動画検索のみ）
 // --------------------------------------
 app.get("/", (req, res) => {
   const user = req.cookies.user;
@@ -181,11 +181,9 @@ app.get("/", (req, res) => {
 
       <div id="main-content" class="main-content">
 
-        <h2>検索メニュー</h2>
+        <h2>動画検索</h2>
 
-        <!-- 動画検索 -->
         <div class="center-box">
-          <h3>動画検索</h3>
           <form action="/search" method="get">
             <input type="text" name="q" placeholder="検索ワードを入力">
             <select name="region">
@@ -193,19 +191,6 @@ app.get("/", (req, res) => {
               <option value="global">全世界</option>
             </select>
             <button type="submit">動画を検索</button>
-          </form>
-        </div>
-
-        <!-- チャンネル検索 -->
-        <div class="center-box">
-          <h3>チャンネル検索</h3>
-          <form action="/channel-search/result" method="get">
-            <input type="text" name="q" placeholder="チャンネル名を入力">
-            <select name="region">
-              <option value="jp">日本のみ</option>
-              <option value="global">全世界</option>
-            </select>
-            <button type="submit">チャンネルを検索</button>
           </form>
         </div>
 
@@ -217,7 +202,6 @@ app.get("/", (req, res) => {
     </html>
   `);
 });
-
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
