@@ -627,29 +627,13 @@ app.get("/channel-search/result", async (req, res) => {
 // --------------------------------------
 // 動画再生
 // --------------------------------------
-app.post("/watch", async (req, res) => {
+app.post("/watch", (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
   const embedUrl = `https://www.youtube.com/embed/${id}`;
-  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
+  const watchUrl = `https://www.youtube.com/watch?v=${id}`;
 
-  let embeddable = true;
-
-  // ★ 埋め込み可能かチェック（承認制・年齢制限もここで判定される）
-  try {
-    const check = await fetch(oembedUrl);
-    if (!check.ok) embeddable = false; // 404 → 埋め込み禁止 or 承認制
-  } catch {
-    embeddable = false;
-  }
-
-  // ★ 埋め込み禁止 or 承認制 → YouTube 本体へ
-  if (!embeddable) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
-  }
-
-  // ★ 埋め込み可能 → iframe 再生
   res.send(`
     <html>
     <head>${CSS}</head>
@@ -660,9 +644,30 @@ app.post("/watch", async (req, res) => {
       <div id="main-content" class="main-content">
         <h2>動画再生</h2>
         <center>
-          <iframe width="560" height="315"
+
+          <iframe id="player" width="560" height="315"
             src="${embedUrl}"
-            frameborder="0" allowfullscreen></iframe>
+            frameborder="0" allowfullscreen
+            onerror="location.href='${watchUrl}'">
+          </iframe>
+
+          <script>
+            // ★ iframe が読み込み失敗したら YouTube 本体へ
+            document.getElementById("player").addEventListener("load", function() {
+              const iframe = this;
+              // YouTube がエラー画面を返す場合、iframe 内のURLが変わる
+              try {
+                const url = iframe.contentWindow.location.href;
+                if (!url.includes('embed')) {
+                  location.href = '${watchUrl}';
+                }
+              } catch (e) {
+                // クロスドメインで読めない場合も埋め込み失敗扱い
+                location.href = '${watchUrl}';
+              }
+            });
+          </script>
+
           <br><br>
           <a href="/">ホーム</a>
         </center>
@@ -674,7 +679,6 @@ app.post("/watch", async (req, res) => {
     </html>
   `);
 });
-
 
 // --------------------------------------
 // 履歴ページ（ユーザー用）
