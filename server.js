@@ -534,7 +534,7 @@ app.get("/channel-search", (req, res) => {
         <h2>チャンネル検索</h2>
 
         <div class="center-box">
-          <form action="/channel-search/search" method="get">
+          <form action="/channel-search/result" method="get">
             <input type="text" name="q" placeholder="チャンネル名を入力">
             <select name="region">
               <option value="jp">日本のみ</option>
@@ -557,22 +557,31 @@ app.get("/channel-search", (req, res) => {
 // --------------------------------------
 // チャンネル検索結果（60件）
 // --------------------------------------
+// --------------------------------------
+// チャンネル検索結果（60件）
+// --------------------------------------
 app.get("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
   const q = req.query.q;
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
+  const region = req.query.region || "jp";
+
+  // ★ 地域で URL 切替
+  let url;
+  if (region === "global") {
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
+  } else {
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&hl=ja&gl=JP`;
+  }
 
   const html = await fetch(url).then(r => r.text());
 
-  // ytInitialData を抽出
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
   const data = JSON.parse(jsonText[1]);
 
-  // channelRenderer をすべて抽出
   const channels = [];
   function scan(obj) {
     if (typeof obj !== "object" || obj === null) return;
@@ -590,10 +599,9 @@ app.get("/channel-search/result", async (req, res) => {
   }
   scan(data);
 
-  // 最大 60 件
   const list60 = channels.slice(0, 60);
 
-  let list = `
+  res.send(`
     <html>
     <head>${CSS}</head>
     <body>
@@ -601,19 +609,14 @@ app.get("/channel-search/result", async (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>チャンネル検索結果: ${q}</h2>
+        <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
-  `;
-
-  // ★★★ ここを修正 ★★★
-  list += list60.map(c => `
-    <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
-      <img class="thumb" src="${c.icon}" style="pointer-events:none;">
-      <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
-    </div>
-  `).join("");
-
-  list += `
+          ${list60.map(c => `
+            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
+              <img class="thumb" src="${c.icon}">
+              <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
+            </div>
+          `).join("")}
         </div>
       </div>
 
@@ -621,11 +624,8 @@ app.get("/channel-search/result", async (req, res) => {
 
     </body>
     </html>
-  `;
-
-  res.send(list);
+  `);
 });
-
 
 
 // --------------------------------------
