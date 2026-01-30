@@ -106,14 +106,6 @@ const CSS = `
     border-radius: 10px;
   }
 
-  .history-card {
-    background: white;
-    padding: 12px;
-    margin: 10px 0;
-    border-radius: 10px;
-    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
-  }
-
   .center-box {
     max-width: 380px;
     margin: 80px auto;
@@ -144,15 +136,24 @@ const CSS = `
     background: #2d89c6;
   }
 
-  .danger {
-    background: #e74c3c;
+  /* ★ 地域選択 UI 統一デザイン ★ */
+  .region-select {
+    width: 100%;
+    padding: 12px 14px;
+    font-size: 16px;
+    border-radius: 8px;
+    border: 1px solid #ccc;
+    margin-bottom: 15px;
+    background: white;
+    cursor: pointer;
+  }
+  .region-select:hover {
+    border-color: #3498db;
   }
 
-  .danger:hover {
-    background: #c0392b;
-  }
 </style>
 `;
+
 
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
@@ -186,7 +187,7 @@ app.get("/", (req, res) => {
         <div style="max-width:800px;margin:0 auto;">
           <form action="/search" method="get">
             <input type="text" name="q" placeholder="検索ワードを入力">
-            <select name="region">
+            <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
               <option value="global">全世界</option>
             </select>
@@ -202,7 +203,6 @@ app.get("/", (req, res) => {
     </html>
   `);
 });
-
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
