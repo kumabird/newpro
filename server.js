@@ -301,7 +301,18 @@ app.get("/search", async (req, res) => {
   const q = req.query.q;
   if (!q) return res.send("検索ワードがありません");
 
-  const url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
+  // ★ 地域選択（jp = 日本のみ / global = 全世界）
+  const region = req.query.region || "jp";
+
+  // ★ 地域ごとに URL を切り替え
+  let url;
+  if (region === "global") {
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  } else {
+    // 日本向け
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
+  }
+
   const html = await fetch(url).then(r => r.text());
 
   // 動画抽出
@@ -325,7 +336,7 @@ app.get("/search", async (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>動画検索結果: ${q}</h2>
+        <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
   `;
 
