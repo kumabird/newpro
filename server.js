@@ -355,11 +355,7 @@ app.post("/search", async (req, res) => {
   const html = await fetch(url).then(r => r.text());
 
   // 動画抽出
-  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
-
-\[\{"text":"(.*?)"\}\]
-
-/gs)];
+  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
   const videos = videoMatches.slice(0, 60).map(m => ({
     type: "video",
     id: m[1],
