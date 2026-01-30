@@ -366,7 +366,7 @@ app.get("/channel-videos", async (req, res) => {
   const html = await fetch(url).then(r => r.text());
 
   // ytInitialData を抽出（複数パターン対応）
-  let jsonText =\s*=\s*(\{.*?\});/) ||
+  let jsonText =
     html.match(/var ytInitialData = (\{.*?\});/) ||
     html.match(/window
 \["ytInitialData"\]\s*=\s*(\{.*?\});/);
