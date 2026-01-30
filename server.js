@@ -500,10 +500,8 @@ app.get("/channel-videos", async (req, res) => {
   res.send(list);
 });
 
-
-
 // --------------------------------------
-// チャンネル検索（UI + 日本/全世界切替）
+// チャンネル検索（UI）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
@@ -539,7 +537,6 @@ app.get("/channel-search", (req, res) => {
     </html>
   `);
 });
-
 
 // --------------------------------------
 // チャンネル検索結果（60件）
