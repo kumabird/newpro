@@ -166,7 +166,7 @@ const SIDEBAR_HTML = `
 </div>
 `;
 // --------------------------------------
-// ホーム（動画検索のみ）
+// ホーム（動画検索のみ・横幅広 UI）
 // --------------------------------------
 app.get("/", (req, res) => {
   const user = req.cookies.user;
@@ -183,7 +183,7 @@ app.get("/", (req, res) => {
 
         <h2>動画検索</h2>
 
-        <div class="center-box">
+        <div style="max-width:800px;margin:0 auto;">
           <form action="/search" method="get">
             <input type="text" name="q" placeholder="検索ワードを入力">
             <select name="region">
@@ -202,6 +202,7 @@ app.get("/", (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
