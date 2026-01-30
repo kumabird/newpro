@@ -516,7 +516,7 @@ app.get("/channel-videos", async (req, res) => {
 
 
 // --------------------------------------
-// チャンネル検索ページ（入力フォーム）
+// チャンネル検索（UI + 日本/全世界切替）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
@@ -530,13 +530,20 @@ app.get("/channel-search", (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
+
         <h2>チャンネル検索</h2>
-        <center>
-          <form action="/channel-search/result">
-            <input type="text" name="q" placeholder="チャンネル名" required style="max-width:400px;">
-            <button style="width:200px;">検索</button>
+
+        <div class="center-box">
+          <form action="/channel-search/search" method="get">
+            <input type="text" name="q" placeholder="チャンネル名を入力">
+            <select name="region">
+              <option value="jp">日本のみ</option>
+              <option value="global">全世界</option>
+            </select>
+            <button type="submit">検索</button>
           </form>
-        </center>
+        </div>
+
       </div>
 
       ${SIDEBAR_JS}
@@ -545,6 +552,7 @@ app.get("/channel-search", (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // チャンネル検索結果（60件）
