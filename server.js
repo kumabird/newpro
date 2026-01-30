@@ -185,7 +185,7 @@ app.get("/", (req, res) => {
         <h2>動画検索</h2>
 
         <div style="max-width:800px;margin:0 auto;">
-          <form action="/search" method="get">
+          <form action="/search" method="post">
             <input type="text" name="q" placeholder="検索ワードを入力">
             <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
