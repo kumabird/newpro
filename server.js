@@ -613,8 +613,8 @@ app.get("/channel-search/result", async (req, res) => {
 // --------------------------------------
 // 動画再生
 // --------------------------------------
-app.get("/watch", (req, res) => {
-  const id = req.query.v;
+app.post("/watch", (req, res) => {
+  const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
   res.send(`
@@ -641,6 +641,7 @@ app.get("/watch", (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // 履歴ページ（ユーザー用）
