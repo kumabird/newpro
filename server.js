@@ -627,12 +627,29 @@ app.get("/channel-search/result", async (req, res) => {
 // --------------------------------------
 // 動画再生
 // --------------------------------------
-app.post("/watch", (req, res) => {
+app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
-  const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+  const embedUrl = `https://www.youtube.com/embed/${id}`;
+  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
 
+  let embeddable = true;
+
+  // ★ 埋め込み可能かチェック（承認制・年齢制限もここで判定される）
+  try {
+    const check = await fetch(oembedUrl);
+    if (!check.ok) embeddable = false; // 404 → 埋め込み禁止 or 承認制
+  } catch {
+    embeddable = false;
+  }
+
+  // ★ 埋め込み禁止 or 承認制 → YouTube 本体へ
+  if (!embeddable) {
+    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+  }
+
+  // ★ 埋め込み可能 → iframe 再生
   res.send(`
     <html>
     <head>${CSS}</head>
@@ -642,15 +659,13 @@ app.post("/watch", (req, res) => {
 
       <div id="main-content" class="main-content">
         <h2>動画再生</h2>
-
-        <iframe
-          src="${watchUrl}"
-          width="100%"
-          height="600"
-          style="border:none;"
-          allowfullscreen>
-        </iframe>
-
+        <center>
+          <iframe width="560" height="315"
+            src="${embedUrl}"
+            frameborder="0" allowfullscreen></iframe>
+          <br><br>
+          <a href="/">ホーム</a>
+        </center>
       </div>
 
       ${SIDEBAR_JS}
@@ -659,7 +674,6 @@ app.post("/watch", (req, res) => {
     </html>
   `);
 });
-
 
 // --------------------------------------
 // 履歴ページ（ユーザー用）
