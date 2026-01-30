@@ -631,7 +631,6 @@ app.post("/watch", (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
-  const embedUrl = `https://www.youtube.com/embed/${id}`;
   const watchUrl = `https://www.youtube.com/watch?v=${id}`;
 
   res.send(`
@@ -643,34 +642,15 @@ app.post("/watch", (req, res) => {
 
       <div id="main-content" class="main-content">
         <h2>動画再生</h2>
-        <center>
 
-          <iframe id="player" width="560" height="315"
-            src="${embedUrl}"
-            frameborder="0" allowfullscreen
-            onerror="location.href='${watchUrl}'">
-          </iframe>
+        <iframe
+          src="${watchUrl}"
+          width="100%"
+          height="600"
+          style="border:none;"
+          allowfullscreen>
+        </iframe>
 
-          <script>
-            // ★ iframe が読み込み失敗したら YouTube 本体へ
-            document.getElementById("player").addEventListener("load", function() {
-              const iframe = this;
-              // YouTube がエラー画面を返す場合、iframe 内のURLが変わる
-              try {
-                const url = iframe.contentWindow.location.href;
-                if (!url.includes('embed')) {
-                  location.href = '${watchUrl}';
-                }
-              } catch (e) {
-                // クロスドメインで読めない場合も埋め込み失敗扱い
-                location.href = '${watchUrl}';
-              }
-            });
-          </script>
-
-          <br><br>
-          <a href="/">ホーム</a>
-        </center>
       </div>
 
       ${SIDEBAR_JS}
@@ -679,6 +659,7 @@ app.post("/watch", (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // 履歴ページ（ユーザー用）
