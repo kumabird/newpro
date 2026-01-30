@@ -335,38 +335,38 @@ app.get("/", (req, res) => {
 // 動画検索（60件）
 // --------------------------------------
 app.post("/search", async (req, res) => {
-  const q = req.body.q;
-  const region = req.body.region;
-
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const q = req.query.q;
-  if (!q) return res.send("検索ワードがありません");
+  // ★ POST で受け取る（履歴に残らない）
+  const q = req.body.q;
+  const region = req.body.region || "jp";
 
-  // ★ 地域選択（jp = 日本のみ / global = 全世界）
-  const region = req.query.region || "jp";
+  if (!q) return res.send("検索ワードがありません");
 
   // ★ 地域ごとに URL を切り替え
   let url;
   if (region === "global") {
     url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
   } else {
-    // 日本向け
     url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   }
 
   const html = await fetch(url).then(r => r.text());
 
   // 動画抽出
-  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
   const videos = videoMatches.slice(0, 60).map(m => ({
     type: "video",
     id: m[1],
     title: m[2]
   }));
 
-  // 履歴保存（動画が1件以上あれば）
+  // 履歴保存
   if (videos.length > 0) {
     saveHistory(user, q, videos[0].id, videos[0].title);
   }
