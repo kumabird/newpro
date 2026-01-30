@@ -334,6 +334,9 @@ app.get("/", (req, res) => {
 // --------------------------------------
 // 動画検索（60件）
 // --------------------------------------
+// --------------------------------------
+// 動画検索（60件）
+// --------------------------------------
 app.post("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
@@ -354,10 +357,14 @@ app.post("/search", async (req, res) => {
 
   const html = await fetch(url).then(r => r.text());
 
-  // 動画抽出
-  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+  // ★ 正規表現は必ず1行（改行禁止）
+  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":
+
+\[\{"text":"(.*?)"\}\]
+
+/gs)];
+
   const videos = videoMatches.slice(0, 60).map(m => ({
-    type: "video",
     id: m[1],
     title: m[2]
   }));
@@ -367,6 +374,7 @@ app.post("/search", async (req, res) => {
     saveHistory(user, q, videos[0].id, videos[0].title);
   }
 
+  // ★ HTML 出力
   let list = `
     <html>
     <head>${CSS}</head>
@@ -379,21 +387,17 @@ app.post("/search", async (req, res) => {
         <div class="card-grid">
   `;
 
+  // ★ 動画カード（POST 方式・履歴に残らない）
   list += videos.map(v => `
-    <div class="card">
-      <form action="/watch" method="post" style="display:inline;">
-  <input type="hidden" name="id" value="${v.id}">
-  <button style="all:unset;cursor:pointer;">
-    <div class="card">
-      <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-    </div>
-  </button>
-</form>
-        <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-      </a>
-    </div>
+    <form action="/watch" method="post" style="display:inline;">
+      <input type="hidden" name="id" value="${v.id}">
+      <button style="all:unset;cursor:pointer;">
+        <div class="card">
+          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+          <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+        </div>
+      </button>
+    </form>
   `).join("");
 
   list += `
