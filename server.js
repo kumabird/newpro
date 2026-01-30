@@ -502,7 +502,7 @@ app.get("/channel-videos", async (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル検索（UI）
+// チャンネル検索（横幅広 UI）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
@@ -519,7 +519,7 @@ app.get("/channel-search", (req, res) => {
 
         <h2>チャンネル検索</h2>
 
-        <div class="center-box">
+        <div style="max-width:800px;margin:0 auto;">
           <form action="/channel-search/result" method="get">
             <input type="text" name="q" placeholder="チャンネル名を入力">
             <select name="region">
@@ -539,9 +539,6 @@ app.get("/channel-search", (req, res) => {
   `);
 });
 
-// --------------------------------------
-// チャンネル検索結果（60件）
-// --------------------------------------
 // --------------------------------------
 // チャンネル検索結果（60件）
 // --------------------------------------
