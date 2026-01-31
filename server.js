@@ -450,7 +450,11 @@ function getTitle(v) {
   if (!obj || typeof obj !== "object") return;
 
   // gridVideoRenderer（チャンネル動画ページ）
-  if (obj.gridVideoRenderer && obj.gridVideoRenderer.videoId) {
+  if (
+  obj.gridVideoRenderer &&
+  obj.gridVideoRenderer.videoId &&
+  obj.gridVideoRenderer.lengthText
+) {
   const v = obj.gridVideoRenderer;
   videos.push({
     id: v.videoId,
@@ -458,9 +462,12 @@ function getTitle(v) {
     thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
   });
 }
-
   // videoRenderer（検索結果など）
-  if (obj.videoRenderer && obj.videoRenderer.videoId) {
+  if (
+  obj.videoRenderer &&
+  obj.videoRenderer.videoId &&
+  obj.videoRenderer.lengthText // ← これがあるものだけが本物の動画
+) {
   const v = obj.videoRenderer;
   videos.push({
     id: v.videoId,
