@@ -513,14 +513,6 @@ function getTitle(v) {
   </div>
 `).join("");
 
-  </button>
-</form>
-        <img class="thumb" src="${v.thumb}">
-        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-      </a>
-    </div>
-  `).join("");
-
   list += `
         </div>
       </div>
