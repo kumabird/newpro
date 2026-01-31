@@ -433,6 +433,16 @@ app.get("/channel-videos", async (req, res) => {
 
   const data = JSON.parse(jsonText[1]);
 
+function getTitle(v) {
+  if (v.title?.simpleText) return v.title.simpleText;
+
+  if (Array.isArray(v.title?.runs)) {
+    return v.title.runs.map(r => r.text).join("") || "No Title";
+  }
+
+  return "No Title";
+}
+  
   // 動画一覧を抽出
   const videos = [];
 
