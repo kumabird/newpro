@@ -437,30 +437,30 @@ app.get("/channel-videos", async (req, res) => {
   const videos = [];
 
   function scan(obj) {
-    if (!obj || typeof obj !== "object") return;
+  if (!obj || typeof obj !== "object") return;
 
-    // gridVideoRenderer（チャンネル動画ページ）
-    if (obj.gridVideoRenderer) {
-      const v = obj.gridVideoRenderer;
-      videos.push({
-        id: v.videoId,
-        title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
-        thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-      });
-    }
-
-    // videoRenderer（検索結果など）
-    if (obj.videoRenderer) {
-      const v = obj.videoRenderer;
-      videos.push({
-        id: v.videoId,
-        title: v.title?.runs?.[0]?.text || "No Title",
-        thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-      });
-    }
-
-    for (const key in obj) scan(obj[key]);
+  // gridVideoRenderer（チャンネル動画ページ）
+  if (obj.gridVideoRenderer && obj.gridVideoRenderer.videoId) {
+    const v = obj.gridVideoRenderer;
+    videos.push({
+      id: v.videoId,
+      title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
+      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+    });
   }
+
+  // videoRenderer（検索結果など）
+  if (obj.videoRenderer && obj.videoRenderer.videoId) {
+    const v = obj.videoRenderer;
+    videos.push({
+      id: v.videoId,
+      title: v.title?.runs?.[0]?.text || "No Title",
+      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+    });
+  }
+
+  for (const key in obj) scan(obj[key]);
+}
 
   scan(data);
 
