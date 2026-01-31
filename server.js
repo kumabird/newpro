@@ -178,6 +178,27 @@ app.get("/", (req, res) => {
     <head>${CSS}</head>
     <body>
 
+<button id="logoutBtn" style="
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  padding: 10px 15px;
+  background: #e74c3c;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+">
+  ログアウト
+</button>
+
+<script>
+  document.getElementById("logoutBtn").addEventListener("click", () => {
+    window.location.href = "/logout";
+  });
+</script>
+
+
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
