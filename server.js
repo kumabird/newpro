@@ -451,13 +451,13 @@ function getTitle(v) {
 
   // gridVideoRenderer（チャンネル動画ページ）
   if (obj.gridVideoRenderer && obj.gridVideoRenderer.videoId) {
-    const v = obj.gridVideoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.simpleText || v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-    });
-  }
+  const v = obj.gridVideoRenderer;
+  videos.push({
+    id: v.videoId,
+    title: getTitle(v),
+    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+  });
+}
 
   // videoRenderer（検索結果など）
   if (obj.videoRenderer && obj.videoRenderer.videoId) {
