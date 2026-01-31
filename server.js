@@ -396,28 +396,7 @@ app.post("/search", async (req, res) => {
     <html>
     <head>${CSS}</head>
     <body>
-
-      ${SIDEBAR_HTML}
-
-      <button id="logoutBtn" style="
-  position: fixed;
-  top: 20px;
-  right: 20px;
-  padding: 10px 15px;
-  background: #e74c3c;
-  color: white;
-  border: none;
-  border-radius: 5px;
-  cursor: pointer;
-">
-  ログアウト
-</button>
-
-<script>
-  document.getElementById("logoutBtn").addEventListener("click", () => {
-    window.location.href = "/logout";
-  });
-</script>
+      ${SIDEBAR_HTML}  
 
       <div id="main-content" class="main-content">
         <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
