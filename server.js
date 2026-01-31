@@ -164,8 +164,10 @@ const SIDEBAR_HTML = `
   <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
+  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
 </div>
 `;
+
 // --------------------------------------
 // ホーム（動画検索のみ・横幅広 UI）
 // --------------------------------------
