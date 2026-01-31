@@ -502,14 +502,17 @@ function getTitle(v) {
   `;
 
   list += list60.map(v => `
-    <div class="card">
-      <form action="/watch" method="post" style="display:inline;">
-  <input type="hidden" name="id" value="${v.id}">
-  <button style="all:unset;cursor:pointer;">
-    <div class="card">
-      <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-    </div>
+  <div class="card">
+    <form action="/watch" method="post" style="display:inline;">
+      <input type="hidden" name="id" value="${v.id}">
+      <button style="all:unset;cursor:pointer;">
+        <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+      </button>
+    </form>
+  </div>
+`).join("");
+
   </button>
 </form>
         <img class="thumb" src="${v.thumb}">
