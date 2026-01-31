@@ -461,14 +461,13 @@ function getTitle(v) {
 
   // videoRenderer（検索結果など）
   if (obj.videoRenderer && obj.videoRenderer.videoId) {
-    const v = obj.videoRenderer;
-    videos.push({
-      id: v.videoId,
-      title: v.title?.runs?.[0]?.text || "No Title",
-      thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-    });
-  }
-
+  const v = obj.videoRenderer;
+  videos.push({
+    id: v.videoId,
+    title: getTitle(v),
+    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+  });
+}
   for (const key in obj) scan(obj[key]);
 }
 
