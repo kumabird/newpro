@@ -449,25 +449,8 @@ function getTitle(v) {
   function scan(obj) {
   if (!obj || typeof obj !== "object") return;
 
-  // gridVideoRenderer（チャンネル動画ページ）
-  if (
-  obj.gridVideoRenderer &&
-  obj.gridVideoRenderer.videoId &&
-  obj.gridVideoRenderer.lengthText
-) {
-  const v = obj.gridVideoRenderer;
-  videos.push({
-    id: v.videoId,
-    title: getTitle(v),
-    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-  });
-}
-  // videoRenderer（検索結果など）
-  if (
-  obj.videoRenderer &&
-  obj.videoRenderer.videoId &&
-  obj.videoRenderer.lengthText // ← これがあるものだけが本物の動画
-) {
+  // videoRenderer
+  if (obj.videoRenderer && isRealVideo(obj.videoRenderer)) {
   const v = obj.videoRenderer;
   videos.push({
     id: v.videoId,
@@ -475,6 +458,16 @@ function getTitle(v) {
     thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
   });
 }
+// gridvideorenderer
+if (obj.gridVideoRenderer && isRealVideo(obj.gridVideoRenderer)) {
+  const v = obj.gridVideoRenderer;
+  videos.push({
+    id: v.videoId,
+    title: getTitle(v),
+    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+  });
+}
+
   for (const key in obj) scan(obj[key]);
 }
 
