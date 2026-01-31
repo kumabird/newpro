@@ -445,34 +445,28 @@ function getTitle(v) {
   
   // 動画一覧を抽出
   const videos = [];
+  const grid =
+  data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[1]?.tabRenderer?.content
+    ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]
+    ?.gridRenderer?.items;
 
-  function scan(obj) {
-  if (!obj || typeof obj !== "object") return;
+if (!grid) return res.send("動画一覧が取得できません");
 
-  // videoRenderer
-  if (obj.videoRenderer && isRealVideo(obj.videoRenderer)) {
-  const v = obj.videoRenderer;
-  videos.push({
-    id: v.videoId,
-    title: getTitle(v),
-    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+const videos = grid
+  .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
+  .map(v => {
+    const g = v.gridVideoRenderer;
+    return {
+      id: g.videoId,
+      title: g.title?.simpleText ||
+             g.title?.runs?.map(r => r.text).join("") ||
+             "No Title",
+      thumb: g.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+    };
   });
-}
-// gridvideorenderer
-if (obj.gridVideoRenderer && isRealVideo(obj.gridVideoRenderer)) {
-  const v = obj.gridVideoRenderer;
-  videos.push({
-    id: v.videoId,
-    title: getTitle(v),
-    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-  });
-}
 
   for (const key in obj) scan(obj[key]);
-}
-
-  scan(data);
-
+  }
   // 最大 60 件
   const list60 = videos.slice(0, 60);
 
