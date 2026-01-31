@@ -444,15 +444,7 @@ function getTitle(v) {
 }
   
   // 動画一覧を抽出
-  const videos = [];
-  const grid =
-  data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[1]?.tabRenderer?.content
-    ?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer?.contents?.[0]
-    ?.gridRenderer?.items;
-
-if (!grid) return res.send("動画一覧が取得できません");
-
-const videos = grid
+  const videos = grid
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
   .map(v => {
     const g = v.gridVideoRenderer;
