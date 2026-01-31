@@ -456,9 +456,6 @@ function getTitle(v) {
       thumb: g.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
     };
   });
-
-  for (const key in obj) scan(obj[key]);
-  }
   // 最大 60 件
   const list60 = videos.slice(0, 60);
 
