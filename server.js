@@ -475,8 +475,6 @@ const grid = findGridItems(data) || [];
     thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
   }));
 
-  // 動画一覧を抽出
-  const videos = grid
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
   .map(v => {
     const g = v.gridVideoRenderer;
