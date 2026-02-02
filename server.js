@@ -244,33 +244,22 @@ function loadUsers() {
 
 // --------------------------------------
 // 履歴保存（ユーザー用 + 管理者用）
+// PostgreSQL 版
 // --------------------------------------
-function saveHistory(user, keyword, videoId, title) {
-  const userFile = `history_user_${user}.json`;
-  const adminFile = `history_admin_${user}.json`;
+async function saveHistory(user, keyword, videoId, title) {
+  // ユーザー用
+  await pool.query(
+    `INSERT INTO history (user_name, keyword, video_id, title)
+     VALUES ($1, $2, $3, $4)`,
+    [user, keyword, videoId, title]
+  );
 
-  let userData = [];
-  let adminData = [];
-
-  if (fs.existsSync(userFile)) {
-    userData = JSON.parse(fs.readFileSync(userFile, "utf8"));
-  }
-  if (fs.existsSync(adminFile)) {
-    adminData = JSON.parse(fs.readFileSync(adminFile, "utf8"));
-  }
-
-  const entry = {
-    keyword,
-    videoId,
-    title,
-    time: new Date().toISOString()
-  };
-
-  userData.unshift(entry);
-  adminData.unshift(entry);
-
-  fs.writeFileSync(userFile, JSON.stringify(userData, null, 2));
-  fs.writeFileSync(adminFile, JSON.stringify(adminData, null, 2));
+  // 管理者用（admin という名前で保存）
+  await pool.query(
+    `INSERT INTO history (user_name, keyword, video_id, title)
+     VALUES ($1, $2, $3, $4)`,
+    ["admin_" + user, keyword, videoId, title]
+  );
 }
 
 // --------------------------------------
