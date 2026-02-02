@@ -762,8 +762,7 @@ app.get("/history/delete-one", (req, res) => {
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
 app.get("/admin", (req, res) => {
-  app.get("/admin", (req, res) => {
-  const user = req.cookies.user;   // ← ログイン中のユーザー名
+  const user = req.cookies.user;   // ログイン中のユーザー名
   const pass = req.query.pass;
 
   // ① ログインしていない
@@ -800,8 +799,78 @@ app.get("/admin", (req, res) => {
     `);
   }
 
-  // ④ ここから先は管理者ページ本体（hinata + 正しいパスワード）
-  ...
+  // ④ ここから先が管理者ページ本体（元の処理）
+  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
+
+  let allHistoryHTML = "";
+  let deleteButtonsHTML = "";
+
+  for (const file of files) {
+    const userName = file.replace("history_admin_", "").replace(".json", "");
+    let data = JSON.parse(fs.readFileSync(file, "utf8"));
+
+    data.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    allHistoryHTML += `<h3>${userName}</h3>`;
+    allHistoryHTML += data.map(item => `
+      <div class="history-card">
+        ${item.time}<br>
+        <strong>${item.keyword}</strong><br>
+        <a href="/watch?v=${item.videoId}">
+          ${item.title}
+        </a>
+      </div>
+    `).join("");
+
+    deleteButtonsHTML += `
+      <form method="POST" action="/admin/delete-user">
+        <input type="hidden" name="user" value="${userName}">
+        <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+        <button class="danger" style="width:200px;">${userName} の履歴を削除</button>
+      </form>
+      <br>
+    `;
+  }
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+
+      ${SIDEBAR_HTML}
+
+      <div id="main-content" class="main-content">
+        <h2>管理者ページ</h2>
+
+        <div class="tabs">
+          <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
+          <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+        </div>
+
+        <div class="tab-content active" id="content-all">
+          ${allHistoryHTML}
+        </div>
+
+        <div class="tab-content" id="content-delete">
+          ${deleteButtonsHTML}
+        </div>
+
+        <script>
+          function openTab(name) {
+            document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+            document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
+
+            document.getElementById("tab-" + name).classList.add("active");
+            document.getElementById("content-" + name).classList.add("active");
+          }
+        </script>
+      </div>
+
+      ${SIDEBAR_JS}
+
+    </body>
+    </html>
+  `);
 });
 
   const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
