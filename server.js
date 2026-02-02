@@ -474,7 +474,6 @@ const grid = findGridItems(data) || [];
       "No Title",
     thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
   }));
-
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
   .map(v => {
     const g = v.gridVideoRenderer;
