@@ -2,6 +2,13 @@ import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
 import cookieParser from "cookie-parser";
+import pkg from "pg";
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
 
 const app = express();
 app.disable("x-powered-by");
