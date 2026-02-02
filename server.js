@@ -463,6 +463,18 @@ function findGridItems(obj) {
 
 const grid = findGridItems(data) || [];
 
+  const videos = grid
+  .map(v => v.gridVideoRenderer || v.richItemRenderer?.content?.videoRenderer)
+  .filter(v => v && v.videoId)
+  .map(v => ({
+    id: v.videoId,
+    title:
+      v.title?.simpleText ||
+      v.title?.runs?.map(r => r.text).join("") ||
+      "No Title",
+    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+  }));
+
   // 動画一覧を抽出
   const videos = grid
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
