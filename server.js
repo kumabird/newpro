@@ -443,11 +443,26 @@ function getTitle(v) {
   return "No Title";
 }
   
-const grid =
-  data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[1]?.tabRenderer
-    ?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer
-    ?.contents?.[0]?.gridRenderer?.items || [];
-  
+function findGridItems(obj) {
+  if (!obj || typeof obj !== "object") return null;
+
+  // gridRenderer.items
+  if (obj.gridRenderer?.items) return obj.gridRenderer.items;
+
+  // richGridRenderer.contents
+  if (obj.richGridRenderer?.contents) return obj.richGridRenderer.contents;
+
+  // 再帰的に探索
+  for (const key in obj) {
+    const found = findGridItems(obj[key]);
+    if (found) return found;
+  }
+
+  return null;
+}
+
+const grid = findGridItems(data) || [];
+
   // 動画一覧を抽出
   const videos = grid
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
