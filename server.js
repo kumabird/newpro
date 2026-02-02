@@ -262,6 +262,16 @@ async function saveHistory(user, keyword, videoId, title) {
   );
 }
 
+async function loadHistory(user) {
+  const result = await pool.query(
+    `SELECT * FROM history
+     WHERE user_name = $1
+     ORDER BY time DESC`,
+    [user]
+  );
+  return result.rows;
+}
+
 // --------------------------------------
 // ログイン画面
 // --------------------------------------
