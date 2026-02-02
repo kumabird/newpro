@@ -443,6 +443,11 @@ function getTitle(v) {
   return "No Title";
 }
   
+const grid =
+  data.contents?.twoColumnBrowseResultsRenderer?.tabs?.[1]?.tabRenderer
+    ?.content?.sectionListRenderer?.contents?.[0]?.itemSectionRenderer
+    ?.contents?.[0]?.gridRenderer?.items || [];
+  
   // 動画一覧を抽出
   const videos = grid
   .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
