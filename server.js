@@ -762,8 +762,19 @@ app.get("/history/delete-one", (req, res) => {
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
 app.get("/admin", (req, res) => {
+  app.get("/admin", (req, res) => {
+  const user = req.cookies.user;   // ← ログイン中のユーザー名
   const pass = req.query.pass;
 
+  // ① ログインしていない
+  if (!user) return res.redirect("/login");
+
+  // ② ユーザー名が hinata 以外
+  if (user !== "hinata") {
+    return res.send("あなたには管理者ページへのアクセス権がありません");
+  }
+
+  // ③ パスワードが違う
   if (pass !== ADMIN_PASSWORD) {
     return res.send(`
       <html>
@@ -788,6 +799,10 @@ app.get("/admin", (req, res) => {
       </html>
     `);
   }
+
+  // ④ ここから先は管理者ページ本体（hinata + 正しいパスワード）
+  ...
+});
 
   const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
 
