@@ -783,9 +783,12 @@ app.get("/history/delete-one", (req, res) => {
 // --------------------------------------
 // 管理者ページ（本物の履歴）
 // --------------------------------------
+// --------------------------------------
+// 管理者ページ（Post物の履歴 / PostgreSQL版）
+// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
-app.get("/admin", (req, res) => {
+app.get("/admin", async (req, res) => {
   const user = req.cookies.user;   // ログイン中のユーザー名
   const pass = req.query.pass;
 
@@ -823,24 +826,34 @@ app.get("/admin", (req, res) => {
     `);
   }
 
-  // ④ ここから先が管理者ページ本体（元の処理）
-  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
+  // ④ PostgreSQL から管理者用履歴を取得
+  const result = await pool.query(
+    `SELECT * FROM history
+     WHERE user_name LIKE 'admin_%'
+     ORDER BY time DESC`
+  );
 
+  // ユーザーごとにグループ化
+  const grouped = {};
+  for (const row of result.rows) {
+    const userName = row.user_name.replace("admin_", "");
+    if (!grouped[userName]) grouped[userName] = [];
+    grouped[userName].push(row);
+  }
+
+  // HTML生成
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
-  for (const file of files) {
-    const userName = file.replace("history_admin_", "").replace(".json", "");
-    let data = JSON.parse(fs.readFileSync(file, "utf8"));
-
-    data.sort((a, b) => new Date(b.time) - new Date(a.time));
+  for (const userName of Object.keys(grouped)) {
+    const data = grouped[userName];
 
     allHistoryHTML += `<h3>${userName}</h3>`;
     allHistoryHTML += data.map(item => `
       <div class="history-card">
         ${item.time}<br>
         <strong>${item.keyword}</strong><br>
-        <a href="/watch?v=${item.videoId}">
+        <a href="/watch?v=${item.video_id}">
           ${item.title}
         </a>
       </div>
@@ -856,6 +869,7 @@ app.get("/admin", (req, res) => {
     `;
   }
 
+  // ⑤ 管理者ページを表示
   res.send(`
     <html>
     <head>${CSS}</head>
@@ -896,6 +910,7 @@ app.get("/admin", (req, res) => {
     </html>
   `);
 });
+
 // --------------------------------------
 // ログアウト
 // --------------------------------------
