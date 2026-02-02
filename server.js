@@ -871,7 +871,6 @@ app.get("/admin", (req, res) => {
     </body>
     </html>
   `);
-});
 
   const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
 
