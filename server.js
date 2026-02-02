@@ -872,8 +872,6 @@ app.get("/admin", (req, res) => {
     </html>
   `);
 
-  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
-
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
