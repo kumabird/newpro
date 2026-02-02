@@ -415,6 +415,28 @@ app.post("/search", async (req, res) => {
 });
 
 // --------------------------------------
+// 管理者：特定ユーザーの履歴削除（PostgreSQL版）
+// --------------------------------------
+app.post("/admin/delete-user", async (req, res) => {
+  const user = req.body.user;   // 削除対象ユーザー
+  const pass = req.body.pass;   // 管理者パスワード
+
+  // パスワード確認
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send("パスワードが違います");
+  }
+
+  // admin_ユーザー名 の履歴を削除
+  await pool.query(
+    `DELETE FROM history WHERE user_name = $1`,
+    ["admin_" + user]
+  );
+
+  // 削除後に管理者ページへ戻る
+  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+// --------------------------------------
 // チャンネル動画一覧（内部ページ）
 // --------------------------------------
 app.get("/channel-videos", async (req, res) => {
