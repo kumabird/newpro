@@ -944,22 +944,6 @@ app.get("/admin", (req, res) => {
 });
 
 // --------------------------------------
-// 管理者：ユーザー履歴削除（本物）
-// --------------------------------------
-app.post("/admin/delete-user", (req, res) => {
-  const { user, pass } = req.body;
-
-  if (pass !== ADMIN_PASSWORD) {
-    return res.send("管理者パスワードが違います");
-  }
-
-  const file = `history_admin_${user}.json`;
-
-  if (fs.existsSync(file)) fs.unlinkSync(file);
-
-  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
-});
-// --------------------------------------
 // ログアウト
 // --------------------------------------
 app.get("/logout", (req, res) => {
