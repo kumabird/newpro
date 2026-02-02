@@ -463,7 +463,8 @@ function findGridItems(obj) {
 
 const grid = findGridItems(data) || [];
 
-  const videos = grid
+// ★★★ videos はここで 1 回だけ生成する（これが正しい）★★★
+const videos = grid
   .map(v => v.gridVideoRenderer || v.richItemRenderer?.content?.videoRenderer)
   .filter(v => v && v.videoId)
   .map(v => ({
@@ -474,62 +475,53 @@ const grid = findGridItems(data) || [];
       "No Title",
     thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
   }));
-  .filter(v => v.gridVideoRenderer && v.gridVideoRenderer.videoId)
-  .map(v => {
-    const g = v.gridVideoRenderer;
-    return {
-      id: g.videoId,
-      title: g.title?.simpleText ||
-             g.title?.runs?.map(r => r.text).join("") ||
-             "No Title",
-      thumb: g.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-    };
-  });
-  // 最大 60 件
-  const list60 = videos.slice(0, 60);
 
-  // チャンネル名
-  const title =
-    data.metadata?.channelMetadataRenderer?.title ||
-    "チャンネル名取得不可";
+// 最大 60 件
+const list60 = videos.slice(0, 60);
 
-  // HTML 出力
-  let list = `
-    <html>
-    <head>${CSS}</head>
-    <body>
+// チャンネル名
+const title =
+  data.metadata?.channelMetadataRenderer?.title ||
+  "チャンネル名取得不可";
 
-      ${SIDEBAR_HTML}
+// HTML 出力
+let list = `
+  <html>
+  <head>${CSS}</head>
+  <body>
 
-      <div id="main-content" class="main-content">
-        <h2>${title} の動画一覧</h2>
-        <div class="card-grid">
-  `;
+    ${SIDEBAR_HTML}
 
-  list += list60.map(v => `
-  <div class="card">
-    <form action="/watch" method="post" style="display:inline;">
-      <input type="hidden" name="id" value="${v.id}">
-      <button style="all:unset;cursor:pointer;">
-        <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-        <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-      </button>
-    </form>
-  </div>
+    <div id="main-content" class="main-content">
+      <h2>${title} の動画一覧</h2>
+      <div class="card-grid">
+`;
+
+list += list60.map(v => `
+<div class="card">
+  <form action="/watch" method="post" style="display:inline;">
+    <input type="hidden" name="id" value="${v.id}">
+    <button style="all:unset;cursor:pointer;">
+      <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+    </button>
+  </form>
+</div>
 `).join("");
 
-  list += `
-        </div>
+list += `
       </div>
+    </div>
 
-      ${SIDEBAR_JS}
+    ${SIDEBAR_JS}
 
-    </body>
-    </html>
-  `;
+  </body>
+  </html>
+`;
 
-  res.send(list);
+res.send(list);
 });
+
 // --------------------------------------
 // チャンネル検索（横幅広 UI）
 // --------------------------------------
