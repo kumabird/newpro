@@ -978,7 +978,7 @@ app.get("/admin", async (req, res) => {
           padding:10px 20px;
           border-radius:6px;
           cursor:pointer;
-          width:200px;
+          width:300px;
         ">${userName} の履歴を全削除</button>
       </form>
       <br>
