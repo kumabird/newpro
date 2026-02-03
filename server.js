@@ -742,58 +742,40 @@ app.get("/watch", (req, res) => {
 // --------------------------------------
 // 履歴ページ（ユーザー用）
 // --------------------------------------
-app.get("/history", (req, res) => {
+app.get("/history", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const file = `history_user_${user}.json`;
+  const result = await pool.query(
+    "SELECT * FROM history WHERE user_name = $1 ORDER BY time DESC",
+    [user]
+  );
 
-  let data = [];
-  if (fs.existsSync(file)) {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
-  }
-
-  data.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-  let html = `
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-        <h2>${user} さんの検索履歴</h2>
-
-        <form action="/history/delete" method="POST">
-          <button class="danger" style="width:200px;">履歴をすべて削除</button>
-        </form>
-        <br>
-  `;
-
-  html += data.map((item, index) => `
+  const html = result.rows.map(item => `
     <div class="history-card">
       ${item.time}<br>
       <strong>${item.keyword}</strong><br>
-      <a href="/watch?v=${item.videoId}">
+      <a href="/watch?v=${item.video_id}">
         ${item.title}
       </a>
-      <br><br>
-      <a href="/history/delete-one?index=${index}" style="color:red;">この履歴を削除</a>
     </div>
   `).join("");
 
-  html += `
-        <br><center><a href="/">ホームへ戻る</a></center>
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <h2>あなたの履歴</h2>
+        ${html}
       </div>
-
       ${SIDEBAR_JS}
-
     </body>
     </html>
-  `;
-    res.send(html);
+  `);
 });
+
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
