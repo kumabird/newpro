@@ -855,6 +855,9 @@ app.post("/history/delete", async (req, res) => {
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
 // --------------------------------------
+// --------------------------------------
+// 管理者ページ（Post物の履歴 / PostgreSQL版）
+// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
 // 日付整形
@@ -925,32 +928,60 @@ app.get("/admin", async (req, res) => {
   for (const userName of Object.keys(grouped)) {
     const data = grouped[userName];
 
-    // ▼ 個人履歴と同じ UI に統一
     allHistoryHTML += `<h3 style="margin-top:30px;">${userName}</h3>`;
-    allHistoryHTML += data.map(item => `
-      <div class="history-card">
-        <div class="history-date">${formatDate(item.time)}</div>
-        <div class="history-keyword"><strong>${item.keyword}</strong></div>
-        <a class="history-title" href="/watch?v=${item.video_id}">
-          ${item.title}
-        </a>
 
-        <!-- ▼ 個別削除ボタン（個人履歴と同じ位置） -->
-        <form method="POST" action="/admin/delete-one" class="delete-form">
+    // ▼ /history と完全一致の UI
+    allHistoryHTML += data.map(item => `
+      <div class="history-card" style="
+        display:flex;
+        justify-content:space-between;
+        align-items:center;
+        padding:10px;
+        border:1px solid #ccc;
+        margin-bottom:10px;
+        border-radius:6px;
+      ">
+        <div>
+          <div style="color:#888; font-size:14px;">
+            ${formatDate(item.time)}
+          </div>
+          <strong>${item.keyword}</strong><br>
+          <a href="/watch?v=${item.video_id}">
+            ${item.title}
+          </a>
+        </div>
+
+        <form method="POST" action="/admin/delete-one">
           <input type="hidden" name="id" value="${item.id}">
           <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-          <button class="delete-button">削除</button>
+          <button class="danger" style="
+            background:#e74c3c;
+            color:white;
+            border:none;
+            padding:6px 12px;
+            border-radius:4px;
+            cursor:pointer;
+          ">削除</button>
         </form>
       </div>
     `).join("");
 
-    // ▼ 全削除ボタン（タブ「ユーザー削除」に表示）
+    // ▼ 全削除ボタン
     deleteButtonsHTML += `
       <form method="POST" action="/admin/delete-user" class="delete-user-form">
         <input type="hidden" name="user" value="${userName}">
         <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-        <button class="danger" style="width:200px;">${userName} の履歴を全削除</button>
+        <button class="danger" style="
+          background:#c0392b;
+          color:white;
+          border:none;
+          padding:10px 20px;
+          border-radius:6px;
+          cursor:pointer;
+          width:200px;
+        ">${userName} の履歴を全削除</button>
       </form>
+      <br>
     `;
   }
 
@@ -995,6 +1026,7 @@ app.get("/admin", async (req, res) => {
   `);
 });
 
+// ▼ 個別削除
 app.post("/admin/delete-one", async (req, res) => {
   const { id, pass } = req.body;
 
