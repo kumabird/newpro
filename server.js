@@ -771,7 +771,7 @@ app.get("/history", async (req, res) => {
         </a>
       </div>
 
-      <form method="POST" action="/history/delete">
+      <form method="POST" action="/history/delete-one">
         <input type="hidden" name="id" value="${item.id}">
         <button class="danger" style="
           background:#e74c3c;
