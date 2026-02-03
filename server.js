@@ -972,13 +972,13 @@ app.get("/admin", async (req, res) => {
         <input type="hidden" name="user" value="${userName}">
         <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
         <button class="danger" style="
-          background:#c0392b;
-          color:white;
-          border:none;
-          padding:10px 20px;
-          border-radius:6px;
-          cursor:pointer;
-          width:300px;
+  background:#c0392b;
+  color:white;
+  border:none;
+  padding:10px 20px;
+  border-radius:6px;
+  cursor:pointer;
+  white-space:nowrap;  /* ← 改行禁止 */
         ">${userName} の履歴を全削除</button>
       </form>
       <br>
