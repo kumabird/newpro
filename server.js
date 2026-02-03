@@ -830,8 +830,9 @@ app.get("/history/delete-one", (req, res) => {
 
   res.redirect("/history");
 });
+
 // --------------------------------------
-// 管理者ページ（本物の履歴）
+// 管理者ページ（Post物の履歴 / PostgreSQL版）
 // --------------------------------------
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
@@ -901,7 +902,7 @@ app.get("/admin", async (req, res) => {
     allHistoryHTML += `<h3>${userName}</h3>`;
     allHistoryHTML += data.map(item => `
       <div class="history-card">
-        ${item.time}<br>
+        ${formatDate(item.time)}<br>
         <strong>${item.keyword}</strong><br>
         <a href="/watch?v=${item.video_id}">
           ${item.title}
@@ -944,6 +945,20 @@ app.get("/admin", async (req, res) => {
         </div>
 
         <script>
+          // ★ 視聴日時を日本時間で整形する関数
+          function formatDate(dateString) {
+            const date = new Date(dateString);
+            const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+            const y = jst.getFullYear();
+            const m = String(jst.getMonth() + 1).padStart(2, "0");
+            const d = String(jst.getDate()).padStart(2, "0");
+            const h = String(jst.getHours()).padStart(2, "0");
+            const min = String(jst.getMinutes()).padStart(2, "0");
+
+            return \`\${y}/\${m}/\${d} \${h}:\${min}\`;
+          }
+
           function openTab(name) {
             document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
             document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
@@ -960,6 +975,7 @@ app.get("/admin", async (req, res) => {
     </html>
   `);
 });
+
 
 // --------------------------------------
 // ログアウト
