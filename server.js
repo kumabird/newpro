@@ -711,6 +711,34 @@ app.post("/watch", async (req, res) => {
   `);
 });
 
+app.get("/watch", (req, res) => {
+  const videoId = req.query.v;
+
+  if (!videoId) {
+    return res.send("動画IDが指定されていません");
+  }
+
+  res.send(`
+    <html>
+      <head>
+        <title>YouTube Viewer</title>
+        <style>
+          body { background: #111; color: white; text-align: center; }
+          iframe { width: 90%; height: 70vh; margin-top: 20px; }
+        </style>
+      </head>
+      <body>
+        <h1>YouTube Viewer</h1>
+        <iframe 
+          src="https://www.youtube.com/embed/${videoId}" 
+          frameborder="0" 
+          allowfullscreen>
+        </iframe>
+      </body>
+    </html>
+  `);
+});
+
 // --------------------------------------
 // 履歴ページ（ユーザー用）
 // --------------------------------------
