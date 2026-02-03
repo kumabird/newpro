@@ -834,24 +834,31 @@ app.get("/history/delete-one", (req, res) => {
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
 // --------------------------------------
-// --------------------------------------
-// 管理者ページ（Post物の履歴 / PostgreSQL版）
-// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
+// ★ Node.js（サーバー側）で日時を整形する関数
+function formatDate(dateString) {
+  const date = new Date(dateString);
+  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
+
+  const y = jst.getFullYear();
+  const m = String(jst.getMonth() + 1).padStart(2, "0");
+  const d = String(jst.getDate()).padStart(2, "0");
+  const h = String(jst.getHours()).padStart(2, "0");
+  const min = String(jst.getMinutes()).padStart(2, "0");
+
+  return `${y}/${m}/${d} ${h}:${min}`;
+}
+
 app.get("/admin", async (req, res) => {
-  const user = req.cookies.user;   // ログイン中のユーザー名
+  const user = req.cookies.user;
   const pass = req.query.pass;
 
-  // ① ログインしていない
   if (!user) return res.redirect("/login");
-
-  // ② ユーザー名が hinata 以外
   if (user !== "hinata") {
     return res.send("あなたには管理者ページへのアクセス権がありません");
   }
 
-  // ③ パスワードが違う
   if (pass !== ADMIN_PASSWORD) {
     return res.send(`
       <html>
@@ -877,14 +884,13 @@ app.get("/admin", async (req, res) => {
     `);
   }
 
-  // ④ PostgreSQL から管理者用履歴を取得
+  // 履歴取得
   const result = await pool.query(
     `SELECT * FROM history
      WHERE user_name LIKE 'admin_%'
      ORDER BY time DESC`
   );
 
-  // ユーザーごとにグループ化
   const grouped = {};
   for (const row of result.rows) {
     const userName = row.user_name.replace("admin_", "");
@@ -892,7 +898,6 @@ app.get("/admin", async (req, res) => {
     grouped[userName].push(row);
   }
 
-  // HTML生成
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
@@ -920,7 +925,6 @@ app.get("/admin", async (req, res) => {
     `;
   }
 
-  // ⑤ 管理者ページを表示
   res.send(`
     <html>
     <head>${CSS}</head>
@@ -945,20 +949,6 @@ app.get("/admin", async (req, res) => {
         </div>
 
         <script>
-          // ★ 視聴日時を日本時間で整形する関数
-          function formatDate(dateString) {
-            const date = new Date(dateString);
-            const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-
-            const y = jst.getFullYear();
-            const m = String(jst.getMonth() + 1).padStart(2, "0");
-            const d = String(jst.getDate()).padStart(2, "0");
-            const h = String(jst.getHours()).padStart(2, "0");
-            const min = String(jst.getMinutes()).padStart(2, "0");
-
-            return \`\${y}/\${m}/\${d} \${h}:\${min}\`;
-          }
-
           function openTab(name) {
             document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
             document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
@@ -975,6 +965,7 @@ app.get("/admin", async (req, res) => {
     </html>
   `);
 });
+
 
 
 // --------------------------------------
