@@ -752,16 +752,35 @@ app.get("/history", async (req, res) => {
   );
 
   const html = result.rows.map(item => `
-    <div class="history-card">
-      ${item.time}<br>
-      <strong>${item.keyword}</strong><br>
-      <a href="/watch?v=${item.video_id}">
-        ${item.title}
-      </a>
+    <div class="history-card" style="
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:10px;
+      border:1px solid #ccc;
+      margin-bottom:10px;
+      border-radius:6px;
+    ">
+      <div>
+        <div style="color:#888; font-size:14px;">
+          ${formatDate(item.time)}
+        </div>
+        <strong>${item.keyword}</strong><br>
+        <a href="/watch?v=${item.video_id}">
+          ${item.title}
+        </a>
+      </div>
 
-      <form method="POST" action="/history/delete" style="margin-top:5px;">
+      <form method="POST" action="/history/delete">
         <input type="hidden" name="id" value="${item.id}">
-        <button class="danger">削除</button>
+        <button class="danger" style="
+          background:#e74c3c;
+          color:white;
+          border:none;
+          padding:6px 12px;
+          border-radius:4px;
+          cursor:pointer;
+        ">削除</button>
       </form>
     </div>
   `).join("");
@@ -770,16 +789,34 @@ app.get("/history", async (req, res) => {
     <html>
     <head>${CSS}</head>
     <body>
+
       ${SIDEBAR_HTML}
+
       <div id="main-content" class="main-content">
         <h2>あなたの履歴</h2>
+
+        <!-- すべて削除ボタン -->
+        <form method="POST" action="/history/delete-all" style="margin-bottom:20px;">
+          <button class="danger" style="
+            background:#c0392b;
+            color:white;
+            border:none;
+            padding:10px 20px;
+            border-radius:6px;
+            cursor:pointer;
+          ">すべて削除</button>
+        </form>
+
         ${html}
       </div>
+
       ${SIDEBAR_JS}
+
     </body>
     </html>
   `);
 });
+
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
