@@ -855,12 +855,9 @@ app.post("/history/delete", async (req, res) => {
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
 // --------------------------------------
-// --------------------------------------
-// 管理者ページ（Post物の履歴 / PostgreSQL版）
-// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
-// ★ Node.js（サーバー側）で日時を整形する関数
+// 日付整形
 function formatDate(dateString) {
   const date = new Date(dateString);
   const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
@@ -928,31 +925,32 @@ app.get("/admin", async (req, res) => {
   for (const userName of Object.keys(grouped)) {
     const data = grouped[userName];
 
-    allHistoryHTML += `<h3>${userName}</h3>`;
+    // ▼ 個人履歴と同じ UI に統一
+    allHistoryHTML += `<h3 style="margin-top:30px;">${userName}</h3>`;
     allHistoryHTML += data.map(item => `
       <div class="history-card">
-        ${formatDate(item.time)}<br>
-        <strong>${item.keyword}</strong><br>
-        <a href="/watch?v=${item.video_id}">
+        <div class="history-date">${formatDate(item.time)}</div>
+        <div class="history-keyword"><strong>${item.keyword}</strong></div>
+        <a class="history-title" href="/watch?v=${item.video_id}">
           ${item.title}
         </a>
 
-        <!-- ★ 個別削除ボタン -->
-        <form method="POST" action="/admin/delete-one" style="margin-top:8px;">
+        <!-- ▼ 個別削除ボタン（個人履歴と同じ位置） -->
+        <form method="POST" action="/admin/delete-one" class="delete-form">
           <input type="hidden" name="id" value="${item.id}">
           <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-          <button class="danger-small">この履歴を削除</button>
+          <button class="delete-button">削除</button>
         </form>
       </div>
     `).join("");
 
+    // ▼ 全削除ボタン（タブ「ユーザー削除」に表示）
     deleteButtonsHTML += `
-      <form method="POST" action="/admin/delete-user">
+      <form method="POST" action="/admin/delete-user" class="delete-user-form">
         <input type="hidden" name="user" value="${userName}">
         <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-        <button class="danger" style="width:200px;">${userName} の履歴を削除</button>
+        <button class="danger" style="width:200px;">${userName} の履歴を全削除</button>
       </form>
-      <br>
     `;
   }
 
@@ -997,7 +995,6 @@ app.get("/admin", async (req, res) => {
   `);
 });
 
-// ★ 管理者：履歴1件だけ削除
 app.post("/admin/delete-one", async (req, res) => {
   const { id, pass } = req.body;
 
