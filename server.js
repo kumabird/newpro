@@ -758,6 +758,11 @@ app.get("/history", async (req, res) => {
       <a href="/watch?v=${item.video_id}">
         ${item.title}
       </a>
+
+      <form method="POST" action="/history/delete" style="margin-top:5px;">
+        <input type="hidden" name="id" value="${item.id}">
+        <button class="danger">削除</button>
+      </form>
     </div>
   `).join("");
 
@@ -775,7 +780,6 @@ app.get("/history", async (req, res) => {
     </html>
   `);
 });
-
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
