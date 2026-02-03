@@ -855,6 +855,9 @@ app.post("/history/delete", async (req, res) => {
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
 // --------------------------------------
+// --------------------------------------
+// 管理者ページ（Post物の履歴 / PostgreSQL版）
+// --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
 // ★ Node.js（サーバー側）で日時を整形する関数
@@ -933,6 +936,13 @@ app.get("/admin", async (req, res) => {
         <a href="/watch?v=${item.video_id}">
           ${item.title}
         </a>
+
+        <!-- ★ 個別削除ボタン -->
+        <form method="POST" action="/admin/delete-one" style="margin-top:8px;">
+          <input type="hidden" name="id" value="${item.id}">
+          <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+          <button class="danger-small">この履歴を削除</button>
+        </form>
       </div>
     `).join("");
 
@@ -987,7 +997,18 @@ app.get("/admin", async (req, res) => {
   `);
 });
 
+// ★ 管理者：履歴1件だけ削除
+app.post("/admin/delete-one", async (req, res) => {
+  const { id, pass } = req.body;
 
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send("管理者パスワードが違います");
+  }
+
+  await pool.query("DELETE FROM history WHERE id = $1", [id]);
+
+  res.redirect("/admin?pass=" + ADMIN_PASSWORD);
+});
 
 // --------------------------------------
 // ログアウト
