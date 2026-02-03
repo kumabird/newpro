@@ -820,13 +820,15 @@ app.get("/history", async (req, res) => {
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
-app.post("/history/delete", (req, res) => {
+app.post("/history/delete-all", async (req, res) => {
   const user = req.cookies.user;
+
   if (!user) return res.redirect("/login");
 
-  const file = `history_user_${user}.json`;
-
-  if (fs.existsSync(file)) fs.unlinkSync(file);
+  await pool.query(
+    "DELETE FROM history WHERE user_name = $1",
+    [user]
+  );
 
   res.redirect("/history");
 });
