@@ -771,7 +771,7 @@ app.get("/history", async (req, res) => {
         </a>
       </div>
 
-      <form method="POST" action="/history/delete-one">
+      <form method="POST" action="/history/delete">
         <input type="hidden" name="id" value="${item.id}">
         <button class="danger" style="
           background:#e74c3c;
@@ -836,7 +836,7 @@ app.post("/history/delete-all", async (req, res) => {
 // --------------------------------------
 // 履歴削除（ユーザー用・1件削除）
 // --------------------------------------
-app.get("/history/delete-one", (req, res) => {
+app.get("/history/delete", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
