@@ -817,6 +817,7 @@ app.get("/history", async (req, res) => {
   `);
 });
 
+
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
@@ -836,25 +837,20 @@ app.post("/history/delete-all", async (req, res) => {
 // --------------------------------------
 // 履歴削除（ユーザー用・1件削除）
 // --------------------------------------
-app.get("/history/delete", (req, res) => {
+app.post("/history/delete", async (req, res) => {
   const user = req.cookies.user;
+  const id = req.body.id;
+
   if (!user) return res.redirect("/login");
 
-  const index = parseInt(req.query.index);
-  const file = `history_user_${user}.json`;
-
-  let data = [];
-  if (fs.existsSync(file)) {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
-  }
-
-  if (!isNaN(index) && data[index]) {
-    data.splice(index, 1);
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  }
+  await pool.query(
+    "DELETE FROM history WHERE id = $1 AND user_name = $2",
+    [id, user]
+  );
 
   res.redirect("/history");
 });
+
 
 // --------------------------------------
 // 管理者ページ（Post物の履歴 / PostgreSQL版）
