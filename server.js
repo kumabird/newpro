@@ -207,37 +207,6 @@ app.get("/", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-
-        <h2>動画検索</h2>
-
-        <div style="max-width:800px;margin:0 auto;">
-          <form action="/search" method="post">
-            <input type="text" name="q" placeholder="検索ワードを入力">
-            <select name="region" class="region-select">
-              <option value="jp">日本のみ</option>
-              <option value="global">全世界</option>
-            </select>
-            <button type="submit">動画を検索</button>
-          </form>
-        </div>
-
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `);
-});
-
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
 // --------------------------------------
