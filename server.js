@@ -1097,10 +1097,3 @@ app.get("/logout", (req, res) => {
   res.clearCookie("user");
   res.redirect("/login");
 });
-
-// --------------------------------------
-// サーバー起動
-// --------------------------------------
-app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-});
