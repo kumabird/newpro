@@ -1,47 +1,77 @@
+// --- ES Modules で統一 ---
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
 import cookieParser from "cookie-parser";
+import { exec } from "child_process";
 import pkg from "pg";
 const { Pool } = pkg;
 
+// --- PostgreSQL 接続 ---
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
-const express = require("express");
-const bodyParser = require("body-parser");
-const { exec } = require("child_process");
 
-const app = express();
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-
-app.post("/watch", (req, res) => {
-    const id = req.body.id;
-
-    // wkm を動画ID付きで起動
-    exec(`wkm ${id}`, (err, stdout, stderr) => {
-        if (err) {
-            console.error(err);
-            return;
-        }
-        console.log(stdout);
-    });
-
-    // ブラウザ側には履歴に残らないページを返す
-    res.send("動画を再生中（履歴には残りません）");
-});
-
-app.listen(3000, () => console.log("server running"));
-
+// --- Express 初期化 ---
 const app = express();
 app.disable("x-powered-by");
 
 const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
+app.use(express.json());
 app.use(cookieParser());
+
+// --- 静的ファイル配信（必要なら） ---
+// app.use(express.static("public"));
+
+// --- /watch API ---
+app.post("/watch", (req, res) => {
+  const id = req.body.id;
+
+  exec(`wkm ${id}`, (err, stdout, stderr) => {
+    if (err) {
+      console.error(err);
+      return;
+    }
+    console.log(stdout);
+  });
+
+  res.send("動画を再生中（履歴には残りません）");
+});
+
+// --- 履歴保存 API ---
+app.post("/api/history", async (req, res) => {
+  const { action, detail } = req.body;
+
+  try {
+    await pool.query(
+      "INSERT INTO history (action, detail, created_at) VALUES ($1, $2, NOW())",
+      [action, detail]
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+// --- 履歴取得 API ---
+app.get("/api/history", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM history ORDER BY created_at DESC LIMIT 100"
+    );
+    res.json(result.rows);
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: "DB error" });
+  }
+});
+
+// --- サーバー起動 ---
+app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
