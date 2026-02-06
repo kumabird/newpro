@@ -23,9 +23,6 @@ app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(cookieParser());
 
-// --- 静的ファイル配信（必要なら） ---
-// app.use(express.static("public"));
-
 // --- /watch API ---
 app.post("/watch", (req, res) => {
   const id = req.body.id;
