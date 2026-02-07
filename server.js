@@ -21,18 +21,6 @@ const pool = new Pool({
   ssl: { rejectUnauthorized: false }
 });
 
-// 履歴保存関数
-async function saveHistory(user, query, videoId, title) {
-  try {
-    await pool.query(
-      "INSERT INTO history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
-      [user, query, videoId, title]
-    );
-  } catch (err) {
-    console.error("履歴保存エラー:", err);
-  }
-}
-
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
