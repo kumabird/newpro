@@ -822,24 +822,42 @@ app.get("/admin", (req, res) => {
     `);
   }
 
-  // ④ ここから先が管理者ページ本体（元の処理）
-  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
+app.post("/admin", async (req, res) => {
+  const pass = req.body.pass;
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send("パスワードが違います");
+  }
+
+  // ★★★ PostgreSQL から履歴を取得 ★★★
+  const result = await pool.query(`
+    SELECT user_id, query, video_id, title, created_at
+    FROM history
+    ORDER BY created_at DESC
+  `);
+
+  // ユーザーごとにグループ化
+  const historyByUser = {};
+  for (const row of result.rows) {
+    if (!historyByUser[row.user_id]) {
+      historyByUser[row.user_id] = [];
+    }
+    historyByUser[row.user_id].push(row);
+  }
 
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
-  for (const file of files) {
-    const userName = file.replace("history_admin_", "").replace(".json", "");
-    let data = JSON.parse(fs.readFileSync(file, "utf8"));
-
-    data.sort((a, b) => new Date(b.time) - new Date(a.time));
+  for (const userName in historyByUser) {
+    const data = historyByUser[userName];
 
     allHistoryHTML += `<h3>${userName}</h3>`;
     allHistoryHTML += data.map(item => `
       <div class="history-card">
-        ${item.time}<br>
-        <strong>${item.keyword}</strong><br>
-        <a href="/watch?v=${item.videoId}">
+        ${item.created_at}<br>
+        <strong>${item.query}</strong><br>
+
+        <!-- ★★★ POST /watch で開くリンク ★★★ -->
+        <a href="#" onclick="postWatch('${item.video_id}')">
           ${item.title}
         </a>
       </div>
@@ -885,6 +903,22 @@ app.get("/admin", (req, res) => {
 
             document.getElementById("tab-" + name).classList.add("active");
             document.getElementById("content-" + name).classList.add("active");
+          }
+
+          // ★★★ POST /watch を送る関数 ★★★
+          function postWatch(id) {
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = "/watch";
+
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "id";
+            input.value = id;
+
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
           }
         </script>
       </div>
