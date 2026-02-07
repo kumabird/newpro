@@ -689,20 +689,22 @@ app.post("/watch", async (req, res) => {
 });
 
 // --------------------------------------
-// 履歴ページ（ユーザー用）
+// 履歴ページ（ユーザー用） PostgreSQL 版
 // --------------------------------------
-app.get("/history", (req, res) => {
+app.get("/history", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const file = `history_user_${user}.json`;
+  // ★★★ PostgreSQL から履歴を取得 ★★★
+  const result = await pool.query(
+    `SELECT query, video_id, title, created_at
+     FROM history
+     WHERE user_id = $1
+     ORDER BY created_at DESC`,
+    [user]
+  );
 
-  let data = [];
-  if (fs.existsSync(file)) {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
-  }
-
-  data.sort((a, b) => new Date(b.time) - new Date(a.time));
+  const data = result.rows;
 
   let html = `
     <html>
@@ -720,13 +722,17 @@ app.get("/history", (req, res) => {
         <br>
   `;
 
+  // ★★★ 履歴一覧（POST /watch で開く） ★★★
   html += data.map((item, index) => `
     <div class="history-card">
-      ${item.time}<br>
-      <strong>${item.keyword}</strong><br>
-      <a href="/watch?v=${item.videoId}">
+      ${item.created_at}<br>
+      <strong>${item.query}</strong><br>
+
+      <!-- POST で /watch を開く -->
+      <a href="#" onclick="postWatch('${item.video_id}')">
         ${item.title}
       </a>
+
       <br><br>
       <a href="/history/delete-one?index=${index}" style="color:red;">この履歴を削除</a>
     </div>
@@ -738,10 +744,29 @@ app.get("/history", (req, res) => {
 
       ${SIDEBAR_JS}
 
+      <!-- ★★★ POST /watch を送る関数 ★★★ -->
+      <script>
+      function postWatch(id) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/watch";
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "id";
+        input.value = id;
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      }
+      </script>
+
     </body>
     </html>
   `;
-    res.send(html);
+
+  res.send(html);
 });
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
