@@ -398,13 +398,11 @@ app.post("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  // ★ POST で受け取る（履歴に残らない）
   const q = req.body.q;
   const region = req.body.region || "jp";
 
   if (!q) return res.send("検索ワードがありません");
 
-  // ★ 地域ごとに URL を切り替え
   let url;
   if (region === "global") {
     url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
@@ -414,7 +412,6 @@ app.post("/search", async (req, res) => {
 
   const html = await fetch(url).then(r => r.text());
 
-  // ★ 正規表現は必ず1行（改行禁止）
   const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const videos = videoMatches.slice(0, 60).map(m => ({
@@ -422,24 +419,26 @@ app.post("/search", async (req, res) => {
     title: m[2]
   }));
 
-  // 履歴保存
+  // 履歴保存（安全版）
   if (videos.length > 0) {
-    saveHistory(user, q, videos[0].id, videos[0].title);
+    try {
+      await saveHistory(user, q, videos[0].id, videos[0].title);
+    } catch (err) {
+      console.error("history save failed:", err);
+    }
   }
 
-  // ★ HTML 出力
+  // HTML 出力（ここはそのまま）
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
       ${SIDEBAR_HTML}  
-
       <div id="main-content" class="main-content">
         <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
   `;
 
-  // ★ 動画カード（POST 方式・履歴に残らない）
   list += videos.map(v => `
     <form action="/watch" method="post" style="display:inline;">
       <input type="hidden" name="id" value="${v.id}">
@@ -455,9 +454,7 @@ app.post("/search", async (req, res) => {
   list += `
         </div>
       </div>
-
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `;
