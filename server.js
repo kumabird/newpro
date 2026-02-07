@@ -12,6 +12,27 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 
+// PostgreSQL 接続
+import pkg from "pg";
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
+// 履歴保存関数
+async function saveHistory(user, query, videoId, title) {
+  try {
+    await pool.query(
+      "INSERT INTO history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
+      [user, query, videoId, title]
+    );
+  } catch (err) {
+    console.error("履歴保存エラー:", err);
+  }
+}
+
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
