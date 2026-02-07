@@ -695,7 +695,6 @@ app.get("/history", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  // ★★★ PostgreSQL から履歴を取得 ★★★
   const result = await pool.query(
     `SELECT query, video_id, title, created_at
      FROM history
@@ -722,13 +721,11 @@ app.get("/history", async (req, res) => {
         <br>
   `;
 
-  // ★★★ 履歴一覧（POST /watch で開く） ★★★
   html += data.map((item, index) => `
     <div class="history-card">
       ${item.created_at}<br>
       <strong>${item.query}</strong><br>
 
-      <!-- POST で /watch を開く -->
       <a href="#" onclick="postWatch('${item.video_id}')">
         ${item.title}
       </a>
@@ -744,7 +741,6 @@ app.get("/history", async (req, res) => {
 
       ${SIDEBAR_JS}
 
-      <!-- ★★★ POST /watch を送る関数 ★★★ -->
       <script>
       function postWatch(id) {
         const form = document.createElement("form");
@@ -764,7 +760,7 @@ app.get("/history", async (req, res) => {
 
     </body>
     </html>
-  `;
+  `;   // ★★★ ここが重要：バッククォートで閉じる ★★★
 
   res.send(html);
 });
