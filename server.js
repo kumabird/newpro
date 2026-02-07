@@ -366,11 +366,6 @@ app.post("/search", async (req, res) => {
     title: m[2]
   }));
 
-  // 履歴保存
-  if (videos.length > 0) {
-    saveHistory(user, q, videos[0].id, videos[0].title);
-  }
-
   // ★ HTML 出力
   let list = `
     <html>
