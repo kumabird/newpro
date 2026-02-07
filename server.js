@@ -1,74 +1,16 @@
-// --- ES Modules で統一 ---
+
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
 import cookieParser from "cookie-parser";
-import { exec } from "child_process";
-import pkg from "pg";
-const { Pool } = pkg;
 
-// --- PostgreSQL 接続 ---
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-// --- Express 初期化 ---
 const app = express();
 app.disable("x-powered-by");
 
 const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
-app.use(express.json());
 app.use(cookieParser());
-
-// --- /watch API ---
-app.post("/watch", (req, res) => {
-  const id = req.body.id;
-
-  exec(`wkm ${id}`, (err, stdout, stderr) => {
-    if (err) {
-      console.error(err);
-      return;
-    }
-    console.log(stdout);
-  });
-
-  res.send("動画を再生中（履歴には残りません）");
-});
-
-// --- 履歴保存 API ---
-app.post("/api/history", async (req, res) => {
-  const { action, detail } = req.body;
-
-  try {
-    await pool.query(
-      "INSERT INTO history (action, detail, created_at) VALUES ($1, $2, NOW())",
-      [action, detail]
-    );
-    res.json({ ok: true });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "DB error" });
-  }
-});
-
-// --- 履歴取得 API ---
-app.get("/api/history", async (req, res) => {
-  try {
-    const result = await pool.query(
-      "SELECT * FROM history ORDER BY created_at DESC LIMIT 100"
-    );
-    res.json(result.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: "DB error" });
-  }
-});
-
-// --- サーバー起動 ---
-app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
 
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
@@ -264,6 +206,7 @@ app.get("/", (req, res) => {
     </html>
   `);
 });
+
 // --------------------------------------
 // サイドバー JS（ホバーで開閉）
 // --------------------------------------
@@ -295,27 +238,33 @@ function loadUsers() {
 
 // --------------------------------------
 // 履歴保存（ユーザー用 + 管理者用）
-// PostgreSQL 版（安全版）
 // --------------------------------------
-async function saveHistory(user, keyword, videoId, title) {
-  try {
-    // ユーザー用
-    await pool.query(
-      `INSERT INTO history (user_name, keyword, video_id, title)
-       VALUES ($1, $2, $3, $4)`,
-      [user, keyword, videoId, title]
-    );
+function saveHistory(user, keyword, videoId, title) {
+  const userFile = `history_user_${user}.json`;
+  const adminFile = `history_admin_${user}.json`;
 
-    // 管理者用
-    await pool.query(
-      `INSERT INTO history (user_name, keyword, video_id, title)
-       VALUES ($1, $2, $3, $4)`,
-      ["admin_" + user, keyword, videoId, title]
-    );
+  let userData = [];
+  let adminData = [];
 
-  } catch (err) {
-    console.error("saveHistory error:", err);
+  if (fs.existsSync(userFile)) {
+    userData = JSON.parse(fs.readFileSync(userFile, "utf8"));
   }
+  if (fs.existsSync(adminFile)) {
+    adminData = JSON.parse(fs.readFileSync(adminFile, "utf8"));
+  }
+
+  const entry = {
+    keyword,
+    videoId,
+    title,
+    time: new Date().toISOString()
+  };
+
+  userData.unshift(entry);
+  adminData.unshift(entry);
+
+  fs.writeFileSync(userFile, JSON.stringify(userData, null, 2));
+  fs.writeFileSync(adminFile, JSON.stringify(adminData, null, 2));
 }
 
 // --------------------------------------
@@ -393,11 +342,13 @@ app.post("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
+  // ★ POST で受け取る（履歴に残らない）
   const q = req.body.q;
   const region = req.body.region || "jp";
 
   if (!q) return res.send("検索ワードがありません");
 
+  // ★ 地域ごとに URL を切り替え
   let url;
   if (region === "global") {
     url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
@@ -407,6 +358,7 @@ app.post("/search", async (req, res) => {
 
   const html = await fetch(url).then(r => r.text());
 
+  // ★ 正規表現は必ず1行（改行禁止）
   const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
 
   const videos = videoMatches.slice(0, 60).map(m => ({
@@ -414,26 +366,24 @@ app.post("/search", async (req, res) => {
     title: m[2]
   }));
 
-  // 履歴保存（安全版）
+  // 履歴保存
   if (videos.length > 0) {
-    try {
-      await saveHistory(user, q, videos[0].id, videos[0].title);
-    } catch (err) {
-      console.error("history save failed:", err);
-    }
+    saveHistory(user, q, videos[0].id, videos[0].title);
   }
 
-  // HTML 出力（ここはそのまま）
+  // ★ HTML 出力
   let list = `
     <html>
     <head>${CSS}</head>
     <body>
       ${SIDEBAR_HTML}  
+
       <div id="main-content" class="main-content">
         <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
   `;
 
+  // ★ 動画カード（POST 方式・履歴に残らない）
   list += videos.map(v => `
     <form action="/watch" method="post" style="display:inline;">
       <input type="hidden" name="id" value="${v.id}">
@@ -449,34 +399,14 @@ app.post("/search", async (req, res) => {
   list += `
         </div>
       </div>
+
       ${SIDEBAR_JS}
+
     </body>
     </html>
   `;
 
   res.send(list);
-});
-
-// --------------------------------------
-// 管理者：特定ユーザーの履歴削除（PostgreSQL版）
-// --------------------------------------
-app.post("/admin/delete-user", async (req, res) => {
-  const user = req.body.user;   // 削除対象ユーザー
-  const pass = req.body.pass;   // 管理者パスワード
-
-  // パスワード確認
-  if (pass !== ADMIN_PASSWORD) {
-    return res.send("パスワードが違います");
-  }
-
-  // admin_ユーザー名 の履歴を削除
-  await pool.query(
-    `DELETE FROM history WHERE user_name = $1`,
-    ["admin_" + user]
-  );
-
-  // 削除後に管理者ページへ戻る
-  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
 
 // --------------------------------------
@@ -754,81 +684,23 @@ app.post("/watch", async (req, res) => {
   `);
 });
 
-app.get("/watch", (req, res) => {
-  const videoId = req.query.v;
-
-  if (!videoId) {
-    return res.send("動画IDが指定されていません");
-  }
-
-  res.send(`
-    <html>
-      <head>
-        <title>YouTube Viewer</title>
-        <style>
-          body { background: #111; color: white; text-align: center; }
-          iframe { width: 90%; height: 70vh; margin-top: 20px; }
-        </style>
-      </head>
-      <body>
-        <h1>YouTube Viewer</h1>
-        <iframe 
-          src="https://www.youtube.com/embed/${videoId}" 
-          frameborder="0" 
-          allowfullscreen>
-        </iframe>
-      </body>
-    </html>
-  `);
-});
-
 // --------------------------------------
 // 履歴ページ（ユーザー用）
 // --------------------------------------
-app.get("/history", async (req, res) => {
+app.get("/history", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const result = await pool.query(
-    "SELECT * FROM history WHERE user_name = $1 ORDER BY time DESC",
-    [user]
-  );
+  const file = `history_user_${user}.json`;
 
-  const html = result.rows.map(item => `
-    <div class="history-card" style="
-      display:flex;
-      justify-content:space-between;
-      align-items:center;
-      padding:10px;
-      border:1px solid #ccc;
-      margin-bottom:10px;
-      border-radius:6px;
-    ">
-      <div>
-        <div style="color:#888; font-size:14px;">
-          ${formatDate(item.time)}
-        </div>
-        <strong>${item.keyword}</strong><br>
-        <a href="/watch?v=${item.video_id}">
-          ${item.title}
-        </a>
-      </div>
+  let data = [];
+  if (fs.existsSync(file)) {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  }
 
-      <form method="POST" action="/history/delete">
-        <input type="hidden" name="id" value="${item.id}">
-        <button class="danger" style="
-          background:#e74c3c;
-          color:white;
-          border:none;
-          padding:6px 12px;
-          border-radius:4px;
-          cursor:pointer;
-        ">削除</button>
-      </form>
-    </div>
-  `).join("");
+  data.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-  res.send(`
+  let html = `
     <html>
     <head>${CSS}</head>
     <body>
@@ -836,43 +708,47 @@ app.get("/history", async (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>あなたの履歴</h2>
+        <h2>${user} さんの検索履歴</h2>
 
-        <!-- すべて削除ボタン -->
-        <form method="POST" action="/history/delete-all" style="margin-bottom:20px;">
-          <button class="danger" style="
-            background:#c0392b;
-            color:white;
-            border:none;
-            padding:10px 20px;
-            border-radius:6px;
-            cursor:pointer;
-          ">すべて削除</button>
+        <form action="/history/delete" method="POST">
+          <button class="danger" style="width:200px;">履歴をすべて削除</button>
         </form>
+        <br>
+  `;
 
-        ${html}
+  html += data.map((item, index) => `
+    <div class="history-card">
+      ${item.time}<br>
+      <strong>${item.keyword}</strong><br>
+      <a href="/watch?v=${item.videoId}">
+        ${item.title}
+      </a>
+      <br><br>
+      <a href="/history/delete-one?index=${index}" style="color:red;">この履歴を削除</a>
+    </div>
+  `).join("");
+
+  html += `
+        <br><center><a href="/">ホームへ戻る</a></center>
       </div>
 
       ${SIDEBAR_JS}
 
     </body>
     </html>
-  `);
+  `;
+    res.send(html);
 });
-
-
 // --------------------------------------
 // 履歴削除（ユーザー用・全削除）
 // --------------------------------------
-app.post("/history/delete-all", async (req, res) => {
+app.post("/history/delete", (req, res) => {
   const user = req.cookies.user;
-
   if (!user) return res.redirect("/login");
 
-  await pool.query(
-    "DELETE FROM history WHERE user_name = $1",
-    [user]
-  );
+  const file = `history_user_${user}.json`;
+
+  if (fs.existsSync(file)) fs.unlinkSync(file);
 
   res.redirect("/history");
 });
@@ -880,52 +756,43 @@ app.post("/history/delete-all", async (req, res) => {
 // --------------------------------------
 // 履歴削除（ユーザー用・1件削除）
 // --------------------------------------
-app.post("/history/delete", async (req, res) => {
+app.get("/history/delete-one", (req, res) => {
   const user = req.cookies.user;
-  const id = req.body.id;
-
   if (!user) return res.redirect("/login");
 
-  await pool.query(
-    "DELETE FROM history WHERE id = $1 AND user_name = $2",
-    [id, user]
-  );
+  const index = parseInt(req.query.index);
+  const file = `history_user_${user}.json`;
+
+  let data = [];
+  if (fs.existsSync(file)) {
+    data = JSON.parse(fs.readFileSync(file, "utf8"));
+  }
+
+  if (!isNaN(index) && data[index]) {
+    data.splice(index, 1);
+    fs.writeFileSync(file, JSON.stringify(data, null, 2));
+  }
 
   res.redirect("/history");
 });
-
-
 // --------------------------------------
-// 管理者ページ（Post物の履歴 / PostgreSQL版）
-// --------------------------------------
-// --------------------------------------
-// 管理者ページ（Post物の履歴 / PostgreSQL版）
+// 管理者ページ（本物の履歴）
 // --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
-// 日付整形
-function formatDate(dateString) {
-  const date = new Date(dateString);
-  const jst = new Date(date.getTime() + 9 * 60 * 60 * 1000);
-
-  const y = jst.getFullYear();
-  const m = String(jst.getMonth() + 1).padStart(2, "0");
-  const d = String(jst.getDate()).padStart(2, "0");
-  const h = String(jst.getHours()).padStart(2, "0");
-  const min = String(jst.getMinutes()).padStart(2, "0");
-
-  return `${y}/${m}/${d} ${h}:${min}`;
-}
-
-app.get("/admin", async (req, res) => {
-  const user = req.cookies.user;
+app.get("/admin", (req, res) => {
+  const user = req.cookies.user;   // ログイン中のユーザー名
   const pass = req.query.pass;
 
+  // ① ログインしていない
   if (!user) return res.redirect("/login");
+
+  // ② ユーザー名が hinata 以外
   if (user !== "hinata") {
     return res.send("あなたには管理者ページへのアクセス権がありません");
   }
 
+  // ③ パスワードが違う
   if (pass !== ADMIN_PASSWORD) {
     return res.send(`
       <html>
@@ -951,78 +818,34 @@ app.get("/admin", async (req, res) => {
     `);
   }
 
-  // 履歴取得
-  const result = await pool.query(
-    `SELECT * FROM history
-     WHERE user_name LIKE 'admin_%'
-     ORDER BY time DESC`
-  );
-
-  const grouped = {};
-  for (const row of result.rows) {
-    const userName = row.user_name.replace("admin_", "");
-    if (!grouped[userName]) grouped[userName] = [];
-    grouped[userName].push(row);
-  }
+  // ④ ここから先が管理者ページ本体（元の処理）
+  const files = fs.readdirSync("./").filter(f => f.startsWith("history_admin_"));
 
   let allHistoryHTML = "";
   let deleteButtonsHTML = "";
 
-  for (const userName of Object.keys(grouped)) {
-    const data = grouped[userName];
+  for (const file of files) {
+    const userName = file.replace("history_admin_", "").replace(".json", "");
+    let data = JSON.parse(fs.readFileSync(file, "utf8"));
 
-    allHistoryHTML += `<h3 style="margin-top:30px;">${userName}</h3>`;
+    data.sort((a, b) => new Date(b.time) - new Date(a.time));
 
-    // ▼ /history と完全一致の UI
+    allHistoryHTML += `<h3>${userName}</h3>`;
     allHistoryHTML += data.map(item => `
-      <div class="history-card" style="
-        display:flex;
-        justify-content:space-between;
-        align-items:center;
-        padding:10px;
-        border:1px solid #ccc;
-        margin-bottom:10px;
-        border-radius:6px;
-      ">
-        <div>
-          <div style="color:#888; font-size:14px;">
-            ${formatDate(item.time)}
-          </div>
-          <strong>${item.keyword}</strong><br>
-          <a href="/watch?v=${item.video_id}">
-            ${item.title}
-          </a>
-        </div>
-
-        <form method="POST" action="/admin/delete-one">
-          <input type="hidden" name="id" value="${item.id}">
-          <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-          <button class="danger" style="
-            background:#e74c3c;
-            color:white;
-            border:none;
-            padding:6px 12px;
-            border-radius:4px;
-            cursor:pointer;
-          ">削除</button>
-        </form>
+      <div class="history-card">
+        ${item.time}<br>
+        <strong>${item.keyword}</strong><br>
+        <a href="/watch?v=${item.videoId}">
+          ${item.title}
+        </a>
       </div>
     `).join("");
 
-    // ▼ 全削除ボタン
     deleteButtonsHTML += `
-      <form method="POST" action="/admin/delete-user" class="delete-user-form">
+      <form method="POST" action="/admin/delete-user">
         <input type="hidden" name="user" value="${userName}">
         <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-        <button class="danger" style="
-  background:#c0392b;
-  color:white;
-  border:none;
-  padding:10px 20px;
-  border-radius:6px;
-  cursor:pointer;
-  white-space:nowrap;  /* ← 改行禁止 */
-        ">${userName} の履歴を全削除</button>
+        <button class="danger" style="width:200px;">${userName} の履歴を削除</button>
       </form>
       <br>
     `;
@@ -1068,24 +891,17 @@ app.get("/admin", async (req, res) => {
     </html>
   `);
 });
-
-// ▼ 個別削除
-app.post("/admin/delete-one", async (req, res) => {
-  const { id, pass } = req.body;
-
-  if (pass !== ADMIN_PASSWORD) {
-    return res.send("管理者パスワードが違います");
-  }
-
-  await pool.query("DELETE FROM history WHERE id = $1", [id]);
-
-  res.redirect("/admin?pass=" + ADMIN_PASSWORD);
-});
-
 // --------------------------------------
 // ログアウト
 // --------------------------------------
 app.get("/logout", (req, res) => {
   res.clearCookie("user");
   res.redirect("/login");
+});
+
+// --------------------------------------
+// サーバー起動
+// --------------------------------------
+app.listen(PORT, () => {
+  console.log("Server running on port " + PORT);
 });
