@@ -629,7 +629,7 @@ app.get("/channel-search/result", async (req, res) => {
 
 
 // --------------------------------------
-// 動画再生（タイトル取得＋履歴保存付き）
+// /watch : 動画再生 + タイトル取得 + 履歴保存
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
@@ -642,7 +642,7 @@ app.post("/watch", async (req, res) => {
   let embeddable = true;
   let title = "動画タイトル不明";
 
-  // ★ oEmbed でタイトル取得＋埋め込み可否チェック
+  // ★ oEmbed でタイトル取得 + 埋め込み可否チェック
   try {
     const check = await fetch(oembedUrl);
     if (!check.ok) {
@@ -660,9 +660,13 @@ app.post("/watch", async (req, res) => {
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
-  // ★ 履歴保存（検索ではなく「視聴した時」に保存）
+  // ★ 視聴した時だけ履歴保存
   if (user) {
-    saveHistory(user, "watch", id, title);
+    try {
+      await saveHistory(user, "watch", id, title);
+    } catch (err) {
+      console.error("履歴保存エラー:", err);
+    }
   }
 
   // ★ 埋め込み可能 → iframe 再生
