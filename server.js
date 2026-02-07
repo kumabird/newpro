@@ -644,11 +644,10 @@ app.post("/watch", async (req, res) => {
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
-  // ★★★ ここを追加 ★★★
+  // ★★★ 履歴保存（POST 版）★★★
   if (user) {
     await saveHistory(user, "watch", id, title);
   }
-  // ★★★★★★★★★★★★★★★★
 
   res.send(`
     <html>
@@ -666,10 +665,29 @@ app.post("/watch", async (req, res) => {
         </center>
       </div>
       ${SIDEBAR_JS}
+
+      <!-- ★★★ POST 送信用スクリプト ★★★ -->
+      <script>
+      function postWatch(id) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/watch";
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "id";
+        input.value = id;
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      }
+      </script>
     </body>
     </html>
   `);
 });
+
 // --------------------------------------
 // 履歴ページ（ユーザー用）
 // --------------------------------------
