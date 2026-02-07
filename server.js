@@ -295,32 +295,27 @@ function loadUsers() {
 
 // --------------------------------------
 // 履歴保存（ユーザー用 + 管理者用）
-// PostgreSQL 版
+// PostgreSQL 版（安全版）
 // --------------------------------------
 async function saveHistory(user, keyword, videoId, title) {
-  // ユーザー用
-  await pool.query(
-    `INSERT INTO history (user_name, keyword, video_id, title)
-     VALUES ($1, $2, $3, $4)`,
-    [user, keyword, videoId, title]
-  );
+  try {
+    // ユーザー用
+    await pool.query(
+      `INSERT INTO history (user_name, keyword, video_id, title)
+       VALUES ($1, $2, $3, $4)`,
+      [user, keyword, videoId, title]
+    );
 
-  // 管理者用（admin という名前で保存）
-  await pool.query(
-    `INSERT INTO history (user_name, keyword, video_id, title)
-     VALUES ($1, $2, $3, $4)`,
-    ["admin_" + user, keyword, videoId, title]
-  );
-}
+    // 管理者用
+    await pool.query(
+      `INSERT INTO history (user_name, keyword, video_id, title)
+       VALUES ($1, $2, $3, $4)`,
+      ["admin_" + user, keyword, videoId, title]
+    );
 
-async function loadHistory(user) {
-  const result = await pool.query(
-    `SELECT * FROM history
-     WHERE user_name = $1
-     ORDER BY time DESC`,
-    [user]
-  );
-  return result.rows;
+  } catch (err) {
+    console.error("saveHistory error:", err);
+  }
 }
 
 // --------------------------------------
