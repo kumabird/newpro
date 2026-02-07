@@ -628,9 +628,6 @@ app.get("/channel-search/result", async (req, res) => {
 });
 
 
-// --------------------------------------
-// /watch : 動画再生 + タイトル取得 + 履歴保存
-// --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
@@ -642,7 +639,6 @@ app.post("/watch", async (req, res) => {
   let embeddable = true;
   let title = "動画タイトル不明";
 
-  // ★ oEmbed でタイトル取得 + 埋め込み可否チェック
   try {
     const check = await fetch(oembedUrl);
     if (!check.ok) {
@@ -655,28 +651,21 @@ app.post("/watch", async (req, res) => {
     embeddable = false;
   }
 
-  // ★ 埋め込み禁止 → YouTube 本体へリダイレクト
   if (!embeddable) {
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
-  // ★ 視聴した時だけ履歴保存
+  // ★★★ ここを追加 ★★★
   if (user) {
-    try {
-      await saveHistory(user, "watch", id, title);
-    } catch (err) {
-      console.error("履歴保存エラー:", err);
-    }
+    await saveHistory(user, "watch", id, title);
   }
+  // ★★★★★★★★★★★★★★★★
 
-  // ★ 埋め込み可能 → iframe 再生
   res.send(`
     <html>
     <head>${CSS}</head>
     <body>
-
       ${SIDEBAR_HTML}
-
       <div id="main-content" class="main-content">
         <h2>${title}</h2>
         <center>
@@ -687,9 +676,7 @@ app.post("/watch", async (req, res) => {
           <a href="/">ホーム</a>
         </center>
       </div>
-
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `);
