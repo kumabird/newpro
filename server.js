@@ -968,6 +968,28 @@ app.post("/admin", async (req, res) => {
   `);
 });
 // --------------------------------------
+// POST /admin/delete-user（特定ユーザーの履歴削除）
+// --------------------------------------
+app.post("/admin/delete-user", async (req, res) => {
+  const pass = req.body.pass;
+  const user = req.body.user;
+
+  // パスワードチェック
+  if (pass !== ADMIN_PASSWORD) {
+    return res.send("パスワードが違います");
+  }
+
+  // 履歴削除
+  await pool.query(
+    `DELETE FROM history WHERE user_id = $1`,
+    [user]
+  );
+
+  // 管理者ページに戻る
+  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+// --------------------------------------
 // ログアウト
 // --------------------------------------
 app.get("/logout", (req, res) => {
