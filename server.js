@@ -805,8 +805,11 @@ app.get("/history/delete-one", (req, res) => {
 // --------------------------------------
 const ADMIN_PASSWORD = "jagdyufr5t62";
 
+// --------------------------------------
+// GET /admin（ログイン画面 or パスワード確認）
+// --------------------------------------
 app.get("/admin", (req, res) => {
-  const user = req.cookies.user;   // ログイン中のユーザー名
+  const user = req.cookies.user;
   const pass = req.query.pass;
 
   // ① ログインしていない
@@ -817,7 +820,7 @@ app.get("/admin", (req, res) => {
     return res.send("あなたには管理者ページへのアクセス権がありません");
   }
 
-  // ③ パスワードが違う
+  // ③ パスワードが違う → ログイン画面を表示
   if (pass !== ADMIN_PASSWORD) {
     return res.send(`
       <html>
@@ -843,6 +846,19 @@ app.get("/admin", (req, res) => {
     `);
   }
 
+  // ④ パスワードが正しい → POST /admin に飛ばすフォームを自動送信
+  res.send(`
+    <form id="f" method="POST" action="/admin">
+      <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+    </form>
+    <script>document.getElementById("f").submit();</script>
+  `);
+});
+
+
+// --------------------------------------
+// POST /admin（本物の履歴表示）
+// --------------------------------------
 app.post("/admin", async (req, res) => {
   const pass = req.body.pass;
   if (pass !== ADMIN_PASSWORD) {
@@ -894,6 +910,7 @@ app.post("/admin", async (req, res) => {
     `;
   }
 
+  // ★★★ 管理者ページ HTML ★★★
   res.send(`
     <html>
     <head>${CSS}</head>
