@@ -257,35 +257,15 @@ function loadUsers() {
   return JSON.parse(fs.readFileSync("users.json", "utf8"));
 }
 
-// --------------------------------------
-// 履歴保存（ユーザー用 + 管理者用）
-// --------------------------------------
-function saveHistory(user, keyword, videoId, title) {
-  const userFile = `history_user_${user}.json`;
-  const adminFile = `history_admin_${user}.json`;
-
-  let userData = [];
-  let adminData = [];
-
-  if (fs.existsSync(userFile)) {
-    userData = JSON.parse(fs.readFileSync(userFile, "utf8"));
+async function saveHistory(user, keyword, videoId, title) {
+  try {
+    await pool.query(
+      "INSERT INTO history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
+      [user, keyword, videoId, title]
+    );
+  } catch (err) {
+    console.error("履歴保存エラー:", err);
   }
-  if (fs.existsSync(adminFile)) {
-    adminData = JSON.parse(fs.readFileSync(adminFile, "utf8"));
-  }
-
-  const entry = {
-    keyword,
-    videoId,
-    title,
-    time: new Date().toISOString()
-  };
-
-  userData.unshift(entry);
-  adminData.unshift(entry);
-
-  fs.writeFileSync(userFile, JSON.stringify(userData, null, 2));
-  fs.writeFileSync(adminFile, JSON.stringify(adminData, null, 2));
 }
 
 // --------------------------------------
