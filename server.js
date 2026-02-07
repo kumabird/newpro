@@ -629,28 +629,40 @@ app.get("/channel-search/result", async (req, res) => {
 
 
 // --------------------------------------
-// 動画再生
+// 動画再生（タイトル取得＋履歴保存付き）
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
+  const user = req.cookies.user;
   const embedUrl = `https://www.youtube.com/embed/${id}`;
   const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
 
   let embeddable = true;
+  let title = "動画タイトル不明";
 
-  // ★ 埋め込み可能かチェック（承認制・年齢制限もここで判定される）
+  // ★ oEmbed でタイトル取得＋埋め込み可否チェック
   try {
     const check = await fetch(oembedUrl);
-    if (!check.ok) embeddable = false; // 404 → 埋め込み禁止 or 承認制
+    if (!check.ok) {
+      embeddable = false;
+    } else {
+      const data = await check.json();
+      title = data.title || title;
+    }
   } catch {
     embeddable = false;
   }
 
-  // ★ 埋め込み禁止 or 承認制 → YouTube 本体へ
+  // ★ 埋め込み禁止 → YouTube 本体へリダイレクト
   if (!embeddable) {
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+  }
+
+  // ★ 履歴保存（検索ではなく「視聴した時」に保存）
+  if (user) {
+    saveHistory(user, "watch", id, title);
   }
 
   // ★ 埋め込み可能 → iframe 再生
@@ -662,7 +674,7 @@ app.post("/watch", async (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>動画再生</h2>
+        <h2>${title}</h2>
         <center>
           <iframe width="560" height="315"
             src="${embedUrl}"
@@ -678,7 +690,6 @@ app.post("/watch", async (req, res) => {
     </html>
   `);
 });
-
 // --------------------------------------
 // 履歴ページ（ユーザー用）
 // --------------------------------------
