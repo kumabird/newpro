@@ -740,7 +740,7 @@ app.get("/history", async (req, res) => {
 
   html += data.map((item, index) => `
     <div class="history-card">
-      ${item.created_at}<br>
+      ${formatDateJP(item.created_at)}<br>
       <strong>${item.query}</strong><br>
 
       <a href="#" onclick="postWatch('${item.video_id}')">
