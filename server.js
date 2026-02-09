@@ -899,25 +899,25 @@ app.post("/admin", async (req, res) => {
   }
 
   let allHistoryHTML = "";
-let deleteButtonsHTML = "";
+  let deleteButtonsHTML = "";
 
-for (const userName in historyByUser) {
-  const data = historyByUser[userName];
+  // ★★★ ユーザーごとに HTML を生成 ★★★
+  for (const userName in historyByUser) {
+    const data = historyByUser[userName];
 
-  allHistoryHTML += `<h3>${userName}</h3>`;
-  allHistoryHTML += data.map(item => `
-    <div class="history-card">
-      ${formatDateJP(item.created_at)}<br>
-      <strong>${item.query}</strong><br>
+    allHistoryHTML += `<h3>${userName}</h3>`;
+    allHistoryHTML += data.map(item => `
+      <div class="history-card">
+        ${formatDateJP(item.created_at)}<br>
+        <strong>${item.query}</strong><br>
 
-      <!-- ★★★ POST /watch で開くリンク ★★★ -->
-      <a href="#" onclick="postWatch('${item.video_id}')">
-        ${item.title}
-      </a>
-    </div>
-  `).join("");
-}
+        <a href="#" onclick="postWatch('${item.video_id}')">
+          ${item.title}
+        </a>
+      </div>
+    `).join("");
 
+    // ★★★ 削除ボタンは for の中に置く ★★★
     deleteButtonsHTML += `
       <form method="POST" action="/admin/delete-user">
         <input type="hidden" name="user" value="${userName}">
@@ -961,7 +961,6 @@ for (const userName in historyByUser) {
             document.getElementById("content-" + name).classList.add("active");
           }
 
-          // ★★★ POST /watch を送る関数 ★★★
           function postWatch(id) {
             const form = document.createElement("form");
             form.method = "POST";
@@ -985,6 +984,7 @@ for (const userName in historyByUser) {
     </html>
   `);
 });
+
 // --------------------------------------
 // POST /admin/delete-user（特定ユーザーの履歴削除）
 // --------------------------------------
