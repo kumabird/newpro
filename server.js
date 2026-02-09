@@ -899,23 +899,24 @@ app.post("/admin", async (req, res) => {
   }
 
   let allHistoryHTML = "";
-  let deleteButtonsHTML = "";
+let deleteButtonsHTML = "";
 
-  for (const userName in historyByUser) {
-    const data = historyByUser[userName];
+for (const userName in historyByUser) {
+  const data = historyByUser[userName];
 
-    allHistoryHTML += `<h3>${userName}</h3>`;
-    allHistoryHTML += data.map(item => `
-      <div class="history-card">
-        ${item.created_at}<br>
-        <strong>${item.query}</strong><br>
+  allHistoryHTML += `<h3>${userName}</h3>`;
+  allHistoryHTML += data.map(item => `
+    <div class="history-card">
+      ${formatDateJP(item.created_at)}<br>
+      <strong>${item.query}</strong><br>
 
-        <!-- ★★★ POST /watch で開くリンク ★★★ -->
-        <a href="#" onclick="postWatch('${item.video_id}')">
-          ${item.title}
-        </a>
-      </div>
-    `).join("");
+      <!-- ★★★ POST /watch で開くリンク ★★★ -->
+      <a href="#" onclick="postWatch('${item.video_id}')">
+        ${item.title}
+      </a>
+    </div>
+  `).join("");
+}
 
     deleteButtonsHTML += `
       <form method="POST" action="/admin/delete-user">
