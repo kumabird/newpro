@@ -256,6 +256,23 @@ async function saveHistory(user, keyword, videoId, title) {
   }
 }
 
+function formatDateJP(date) {
+  const d = new Date(date);
+
+  const year = d.getFullYear();
+  const month = d.getMonth() + 1;
+  const day = d.getDate();
+
+  const hours = String(d.getHours()).padStart(2, "0");
+  const minutes = String(d.getMinutes()).padStart(2, "0");
+  const seconds = String(d.getSeconds()).padStart(2, "0");
+
+  const weekdays = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
+  const weekday = weekdays[d.getDay()];
+
+  return `${year}/${month}/${day} ${hours}:${minutes}:${seconds} (${weekday})`;
+}
+
 // --------------------------------------
 // ログイン画面
 // --------------------------------------
