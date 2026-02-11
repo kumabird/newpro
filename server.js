@@ -643,12 +643,26 @@ app.post("/watch", (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
-  const iframes = Array.from({ length: 27 }, () => `
-    <iframe width="300" height="170"
-      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1"
-      frameborder="0"
+  const visible = `
+    <iframe width="560" height="315"
+      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=0"
       allow="autoplay"
-      loading="eager">
+      allowfullscreen>
+    </iframe>
+  `;
+
+  const hidden = Array.from({ length: 26 }, () => `
+    <iframe
+      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1"
+      allow="autoplay"
+      style="
+        position:fixed;
+        width:300px;
+        height:170px;
+        left:-5000px;
+        top:-5000px;
+        opacity:0.01;
+      ">
     </iframe>
   `).join("");
 
@@ -660,19 +674,11 @@ app.post("/watch", (req, res) => {
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>動画再生（27本同時）</h2>
-
-        <div style="
-          display: grid;
-          grid-template-columns: repeat(3, 1fr);
-          gap: 10px;
-        ">
-          ${iframes}
-        </div>
-
-        <br><br>
-        <a href="/">ホーム</a>
+        <h2>動画再生</h2>
+        <center>${visible}</center>
       </div>
+
+      ${hidden}
 
       ${SIDEBAR_JS}
 
@@ -680,8 +686,6 @@ app.post("/watch", (req, res) => {
     </html>
   `);
 });
-
-
 // --------------------------------------
 // 履歴ページ（ユーザー用） PostgreSQL 版
 // --------------------------------------
