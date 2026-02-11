@@ -648,76 +648,49 @@ app.get("/channel-search/result", async (req, res) => {
 });
 
 
-app.post("/watch", async (req, res) => {
+// ★ 動画再生（27本同時）
+app.post("/watch", (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
-  const user = req.cookies.user;
-  const embedUrl = `https://www.youtube.com/embed/${id}`;
-  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
-
-  let embeddable = true;
-  let title = "動画タイトル不明";
-
-  try {
-    const check = await fetch(oembedUrl);
-    if (!check.ok) {
-      embeddable = false;
-    } else {
-      const data = await check.json();
-      title = data.title || title;
-    }
-  } catch {
-    embeddable = false;
-  }
-
-  if (!embeddable) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
-  }
-
-  // ★★★ 履歴保存（POST 版）★★★
-  if (user) {
-    await saveHistory(user, "watch", id, title);
-  }
+  const iframes = Array.from({ length: 27 }, () => `
+    <iframe width="300" height="170"
+      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1"
+      frameborder="0"
+      allow="autoplay"
+      loading="eager">
+    </iframe>
+  `).join("");
 
   res.send(`
     <html>
     <head>${CSS}</head>
     <body>
+
       ${SIDEBAR_HTML}
+
       <div id="main-content" class="main-content">
-        <h2>${title}</h2>
-        <center>
-          <iframe width="560" height="315"
-            src="${embedUrl}"
-            frameborder="0" allowfullscreen></iframe>
-          <br><br>
-          <a href="/">ホーム</a>
-        </center>
+        <h2>動画再生（27本同時）</h2>
+
+        <div style="
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 10px;
+        ">
+          ${iframes}
+        </div>
+
+        <br><br>
+        <a href="/">ホーム</a>
       </div>
+
       ${SIDEBAR_JS}
 
-      <!-- ★★★ POST 送信用スクリプト ★★★ -->
-      <script>
-      function postWatch(id) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/watch";
-
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "id";
-        input.value = id;
-
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-      }
-      </script>
     </body>
     </html>
   `);
 });
+
 
 // --------------------------------------
 // 履歴ページ（ユーザー用） PostgreSQL 版
