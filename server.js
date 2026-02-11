@@ -11,16 +11,6 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
-
-// PostgreSQL 接続
-import pkg from "pg";
-const { Pool } = pkg;
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
