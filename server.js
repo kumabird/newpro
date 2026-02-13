@@ -11,6 +11,16 @@ const PORT = process.env.PORT || 3000;
 
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
+
+// PostgreSQL 接続
+import pkg from "pg";
+const { Pool } = pkg;
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  ssl: { rejectUnauthorized: false }
+});
+
 // --------------------------------------
 // 共通CSS（YouTube風サイドバー対応）
 // --------------------------------------
@@ -330,79 +340,64 @@ app.get("/", (req, res) => {
     </html>
   `);
 });
+
 // --------------------------------------
-// ★ ドッキリ動画検索（3%超レア追加版）
+// 動画検索（60件）
 // --------------------------------------
-app.post("/search", (req, res) => {
+app.post("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
+  // ★ POST で受け取る（履歴に残らない）
   const q = req.body.q;
+  const region = req.body.region || "jp";
+
   if (!q) return res.send("検索ワードがありません");
 
-  const titlePatterns = [
-    "議員という大きな、ク、カテゴリーに比べたらア、政務調査費、報告ノォォー",
-    "少子化問題、高齢ェェエエ者ッハアアアァアーー！！",
-    "そういう問題ッヒョオッホーーー！！",
-    "ウーハッフッハーン！！ずっと投票してきたんですわ！",
-    "立候補して！文字通り！アハハーンッ！",
-    "この世の中を！ウグッブーン！！",
-    "ご指摘と受け止めデーーヒィッフウ！！"
-  ];
-
-  // ★ 確率制御
-  const rand = Math.random();
-
-  let videoId;
-  let specialTitle = null;
-
-  if (rand < 0.03) {
-    // ★ 3% 超レア動画
-    videoId = "Nkg4J9AbIBM";
-    specialTitle = "！！！？？？？？？";
-  }
-  else if (rand < 0.13) {
-    // ★ 10%
-    videoId = "wBf47hGMch0";
-    specialTitle = "何やってるんですか勉強してください";
-  }
-  else {
-    // ★ 87%
-    videoId = "NfZsV6z48wE";
+  // ★ 地域ごとに URL を切り替え
+  let url;
+  if (region === "global") {
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+  } else {
+    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
   }
 
-  const getTitle = () =>
-    specialTitle ||
-    titlePatterns[Math.floor(Math.random() * titlePatterns.length)];
+  const html = await fetch(url).then(r => r.text());
 
-  let html = `
+  // ★ 正規表現は必ず1行（改行禁止）
+  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+
+  const videos = videoMatches.slice(0, 60).map(m => ({
+    id: m[1],
+    title: m[2]
+  }));
+
+  // ★ HTML 出力
+  let list = `
     <html>
     <head>${CSS}</head>
     <body>
-
-      ${SIDEBAR_HTML}
+      ${SIDEBAR_HTML}  
 
       <div id="main-content" class="main-content">
-        <h2>動画検索結果: ${q}</h2>
-
+        <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
   `;
 
-  html += Array.from({ length: 51 }).map(() => `
+  // ★ 動画カード（POST 方式・履歴に残らない）
+  list += videos.map(v => `
     <form action="/watch" method="post" style="display:inline;">
-      <input type="hidden" name="id" value="${videoId}">
+      <input type="hidden" name="id" value="${v.id}">
       <button style="all:unset;cursor:pointer;">
         <div class="card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${videoId}/hqdefault.jpg">
-          <div style="margin-top:10px;font-weight:bold;">
-            ${getTitle()}
-          </div>
+          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+          <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
         </div>
       </button>
     </form>
   `).join("");
 
-  html += `
+  list += `
         </div>
       </div>
 
@@ -412,8 +407,9 @@ app.post("/search", (req, res) => {
     </html>
   `;
 
-  res.send(html);
+  res.send(list);
 });
+
 // --------------------------------------
 // チャンネル動画一覧（内部ページ）
 // --------------------------------------
@@ -638,54 +634,77 @@ app.get("/channel-search/result", async (req, res) => {
 });
 
 
-// ★ 動画再生（27本同時）
-app.post("/watch", (req, res) => {
+app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
 
-  const visible = `
-    <iframe width="560" height="315"
-      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=0"
-      allow="autoplay"
-      allowfullscreen>
-    </iframe>
-  `;
+  const user = req.cookies.user;
+  const embedUrl = `https://www.youtube.com/embed/${id}`;
+  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
 
-  const hidden = Array.from({ length: 26 }, () => `
-    <iframe
-      src="https://www.youtube.com/embed/${id}?autoplay=1&mute=1"
-      allow="autoplay"
-      style="
-        position:fixed;
-        width:300px;
-        height:170px;
-        left:-5000px;
-        top:-5000px;
-        opacity:0.01;
-      ">
-    </iframe>
-  `).join("");
+  let embeddable = true;
+  let title = "動画タイトル不明";
+
+  try {
+    const check = await fetch(oembedUrl);
+    if (!check.ok) {
+      embeddable = false;
+    } else {
+      const data = await check.json();
+      title = data.title || title;
+    }
+  } catch {
+    embeddable = false;
+  }
+
+  if (!embeddable) {
+    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+  }
+
+  // ★★★ 履歴保存（POST 版）★★★
+  if (user) {
+    await saveHistory(user, "watch", id, title);
+  }
 
   res.send(`
     <html>
     <head>${CSS}</head>
     <body>
-
       ${SIDEBAR_HTML}
-
       <div id="main-content" class="main-content">
-        <h2>動画再生</h2>
-        <center>${visible}</center>
+        <h2>${title}</h2>
+        <center>
+          <iframe width="560" height="315"
+            src="${embedUrl}"
+            frameborder="0" allowfullscreen></iframe>
+          <br><br>
+          <a href="/">ホーム</a>
+        </center>
       </div>
-
-      ${hidden}
-
       ${SIDEBAR_JS}
 
+      <!-- ★★★ POST 送信用スクリプト ★★★ -->
+      <script>
+      function postWatch(id) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/watch";
+
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "id";
+        input.value = id;
+
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      }
+      </script>
     </body>
     </html>
   `);
 });
+
 // --------------------------------------
 // 履歴ページ（ユーザー用） PostgreSQL 版
 // --------------------------------------
