@@ -175,6 +175,7 @@ const SIDEBAR_HTML = `
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
   <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
+  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
 </div>
 `;
 
