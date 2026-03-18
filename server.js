@@ -1407,7 +1407,7 @@ app.get("/channel-search/result", async (req, res) => {
 });
 
 // --------------------------------------
-// 動画視聴（エラーハンドリング追加）
+// 動画視聴（関連動画とYouTube埋め込みの改善版）
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   try {
@@ -1418,12 +1418,16 @@ app.post("/watch", async (req, res) => {
 
     const user = req.cookies.user;
     
-    // ショート動画かどうかを判定
-    const isShort = id.length === 11 && req.body.isShort === 'true';
-    
     // 動画ページをスクレイピングして詳細情報を取得
     const watchUrl = `https://www.youtube.com/watch?v=${id}`;
-    const watchHtml = await fetch(watchUrl).then(r => r.text());
+    const response = await fetch(watchUrl);
+    
+    if (!response.ok) {
+      console.error(`YouTube returned ${response.status} for video ${id}`);
+      return res.send(renderError("エラー", "動画情報の取得に失敗しました"));
+    }
+    
+    const watchHtml = await response.text();
     
     // タイトル、チャンネル、関連動画を抽出
     let title = "動画タイトル";
@@ -1431,44 +1435,71 @@ app.post("/watch", async (req, res) => {
     let channelId = "";
     let relatedVideos = [];
     
-    // タイトル抽出
-    const titleMatch = watchHtml.match(/"title":"([^"]+)"/);
-    if (titleMatch) {
-      title = titleMatch[1].replace(/\\u0026/g, '&');
+    // ytInitialDataを抽出
+    let ytData = null;
+    const ytDataMatch = watchHtml.match(/var ytInitialData = ({.*?});<\/script>/s) ||
+                       watchHtml.match(/ytInitialData"\]\s*=\s*({.*?});/s) ||
+                       watchHtml.match(/window\["ytInitialData"\]\s*=\s*({.*?});/s);
+    
+    if (ytDataMatch) {
+      try {
+        ytData = JSON.parse(ytDataMatch[1]);
+        
+        // タイトル抽出（ytInitialDataから）
+        const videoDetails = ytData?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer;
+        if (videoDetails?.title?.runs?.[0]?.text) {
+          title = videoDetails.title.runs[0].text;
+        }
+        
+        // チャンネル情報抽出（ytInitialDataから）
+        const videoSecondary = ytData?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[1]?.videoSecondaryInfoRenderer;
+        if (videoSecondary?.owner?.videoOwnerRenderer) {
+          const owner = videoSecondary.owner.videoOwnerRenderer;
+          channelName = owner.title?.runs?.[0]?.text || "";
+          channelId = owner.navigationEndpoint?.browseEndpoint?.browseId || "";
+        }
+        
+        // 関連動画抽出（ytInitialDataから）
+        const secondaryResults = ytData?.contents?.twoColumnWatchNextResults?.secondaryResults?.secondaryResults?.results || [];
+        
+        for (const item of secondaryResults) {
+          const videoRenderer = item.compactVideoRenderer;
+          if (videoRenderer?.videoId) {
+            const videoId = videoRenderer.videoId;
+            const videoTitle = videoRenderer.title?.simpleText || 
+                             videoRenderer.title?.runs?.map(r => r.text).join("") || 
+                             "タイトル不明";
+            const viewCount = videoRenderer.viewCountText?.simpleText || 
+                            videoRenderer.viewCountText?.runs?.map(r => r.text).join("") || 
+                            "";
+            
+            // 現在の動画は除外
+            if (videoId !== id) {
+              relatedVideos.push({
+                id: videoId,
+                title: videoTitle,
+                views: viewCount
+              });
+            }
+          }
+        }
+        
+        // 最大20件に制限
+        relatedVideos = relatedVideos.slice(0, 20);
+        
+        console.log(`Found ${relatedVideos.length} related videos for ${id}`);
+        
+      } catch (parseError) {
+        console.error("Error parsing ytInitialData:", parseError);
+      }
     }
     
-    // チャンネル情報抽出
-    const channelMatch = watchHtml.match(/"author":"([^"]+)".*?"channelId":"([^"]+)"/s);
-    if (channelMatch) {
-      channelName = channelMatch[1];
-      channelId = channelMatch[2];
-    }
-    
-    // 関連動画抽出（最大20件）
-    const relatedMatches = [...watchHtml.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"\}\].*?"viewCountText":\{"simpleText":"([^"]+)"\}/gs)];
-    
-    relatedVideos = relatedMatches
-      .slice(0, 20)
-      .map(m => ({
-        id: m[1],
-        title: m[2].replace(/\\u0026/g, '&'),
-        views: m[3]
-      }))
-      .filter(v => v.id !== id); // 現在の動画を除外
-
-    // 埋め込み可能かチェック
-    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
-    let embeddable = true;
-    
-    try {
-      const check = await fetch(oembedUrl);
-      if (!check.ok) embeddable = false;
-    } catch {
-      embeddable = false;
-    }
-
-    if (!embeddable) {
-      return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    // フォールバック：ytInitialDataが取得できなかった場合
+    if (!title || title === "動画タイトル") {
+      const titleMatch = watchHtml.match(/<title>([^<]+)<\/title>/);
+      if (titleMatch) {
+        title = titleMatch[1].replace(" - YouTube", "").trim();
+      }
     }
 
     // 履歴保存
@@ -1722,7 +1753,7 @@ app.post("/watch", async (req, res) => {
               
               <!-- 関連動画リスト -->
               <div class="related-videos">
-                <div class="related-title">関連動画</div>
+                <div class="related-title">関連動画 (${relatedVideos.length}件)</div>
                 ${relatedVideos.length > 0 ? relatedVideos.map(v => `
                   <form action="/watch" method="post" style="margin:0;">
                     <input type="hidden" name="id" value="${escapeHtml(v.id)}">
@@ -2057,7 +2088,7 @@ app.post("/admin", async (req, res) => {
 });
 
 // --------------------------------------
-// 管理者：ユーザー削除
+// 管理者:ユーザー削除
 // --------------------------------------
 app.post("/admin/delete-user", async (req, res) => {
   const pass = req.body.pass;
