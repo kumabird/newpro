@@ -261,7 +261,7 @@ const CSS = `
     border-left: 11px solid transparent;
     border-right: 11px solid transparent;
     border-bottom: 10px solid currentColor;
-    top: 3px;
+    top: 2px;
   }
 
   /* チャンネルアイコン - TV画面 */
@@ -285,14 +285,14 @@ const CSS = `
     top: 11px;
   }
 
-  /* 音楽アイコン - 音符（棒を右上に） */
+  /* 音楽アイコン - 音符（棒を右上、少し左に） */
   .icon-music::before {
     content: '';
     position: absolute;
     width: 2.5px;
     height: 16px;
     background: currentColor;
-    right: 8px;
+    right: 10px;
     top: 3px;
     border-radius: 1.5px;
   }
@@ -304,7 +304,7 @@ const CSS = `
     height: 6px;
     border: 2.5px solid currentColor;
     border-radius: 50%;
-    right: 10px;
+    right: 12px;
     bottom: 6px;
     background: transparent;
   }
@@ -1417,20 +1417,52 @@ app.post("/watch", async (req, res) => {
     }
 
     const user = req.cookies.user;
-    const embedUrl = `https://www.youtube.com/embed/${id}`;
+    
+    // ショート動画かどうかを判定
+    const isShort = id.length === 11 && req.body.isShort === 'true';
+    
+    // 動画ページをスクレイピングして詳細情報を取得
+    const watchUrl = `https://www.youtube.com/watch?v=${id}`;
+    const watchHtml = await fetch(watchUrl).then(r => r.text());
+    
+    // タイトル、チャンネル、関連動画を抽出
+    let title = "動画タイトル";
+    let channelName = "";
+    let channelId = "";
+    let relatedVideos = [];
+    
+    // タイトル抽出
+    const titleMatch = watchHtml.match(/"title":"([^"]+)"/);
+    if (titleMatch) {
+      title = titleMatch[1].replace(/\\u0026/g, '&');
+    }
+    
+    // チャンネル情報抽出
+    const channelMatch = watchHtml.match(/"author":"([^"]+)".*?"channelId":"([^"]+)"/s);
+    if (channelMatch) {
+      channelName = channelMatch[1];
+      channelId = channelMatch[2];
+    }
+    
+    // 関連動画抽出（最大20件）
+    const relatedMatches = [...watchHtml.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})".*?"title":\{"runs":\[\{"text":"([^"]+)"\}\].*?"viewCountText":\{"simpleText":"([^"]+)"\}/gs)];
+    
+    relatedVideos = relatedMatches
+      .slice(0, 20)
+      .map(m => ({
+        id: m[1],
+        title: m[2].replace(/\\u0026/g, '&'),
+        views: m[3]
+      }))
+      .filter(v => v.id !== id); // 現在の動画を除外
+
+    // 埋め込み可能かチェック
     const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
-
     let embeddable = true;
-    let title = "動画タイトル不明";
-
+    
     try {
       const check = await fetch(oembedUrl);
-      if (!check.ok) {
-        embeddable = false;
-      } else {
-        const data = await check.json();
-        title = data.title || title;
-      }
+      if (!check.ok) embeddable = false;
     } catch {
       embeddable = false;
     }
@@ -1444,6 +1476,9 @@ app.post("/watch", async (req, res) => {
       await saveHistory(user, "watch", id, title);
     }
 
+    // 埋め込みURL（自動再生、関連動画非表示）
+    const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`;
+
     res.send(`
       <html lang="ja">
       <head>
@@ -1452,40 +1487,206 @@ app.post("/watch", async (req, res) => {
         <title>${escapeHtml(title)}</title>
         ${CSS}
         <style>
-          .video-container {
-            max-width: 900px;
+          .watch-layout {
+            display: grid;
+            grid-template-columns: 1fr 380px;
+            gap: 25px;
+            max-width: 1600px;
             margin: 0 auto;
-            background: white;
-            padding: 30px;
-            border-radius: 16px;
-            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
           }
-          .video-wrapper {
+          
+          .video-main {
+            min-width: 0;
+          }
+          
+          .video-player {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 40px rgba(0, 119, 182, 0.15);
+            border: 1px solid rgba(144, 224, 239, 0.3);
+          }
+          
+          .player-wrapper {
             position: relative;
             padding-bottom: 56.25%;
             height: 0;
-            overflow: hidden;
-            border-radius: 12px;
+            background: #000;
           }
-          .video-wrapper iframe {
+          
+          .player-wrapper iframe {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
           }
-          .video-title {
-            margin-top: 20px;
-            font-size: 24px;
-            font-weight: 600;
-            color: #333;
+          
+          .video-info {
+            padding: 25px;
           }
-          @media (max-width: 768px) {
-            .video-container {
-              padding: 20px 15px;
+          
+          .video-title-watch {
+            font-size: 22px;
+            font-weight: 600;
+            color: #1e3a5f;
+            margin-bottom: 15px;
+            line-height: 1.4;
+          }
+          
+          .channel-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 15px;
+            background: rgba(0, 180, 216, 0.08);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            text-decoration: none;
+            color: inherit;
+          }
+          
+          .channel-info:hover {
+            background: rgba(0, 180, 216, 0.15);
+            transform: translateX(5px);
+          }
+          
+          .channel-avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            font-size: 20px;
+          }
+          
+          .channel-name {
+            font-weight: 600;
+            font-size: 16px;
+            color: #00b4d8;
+          }
+          
+          .related-videos {
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border-radius: 20px;
+            padding: 20px;
+            box-shadow: 0 10px 40px rgba(0, 119, 182, 0.15);
+            border: 1px solid rgba(144, 224, 239, 0.3);
+            max-height: calc(100vh - 120px);
+            overflow-y: auto;
+            position: sticky;
+            top: 20px;
+          }
+          
+          .related-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 18px;
+            color: #1e3a5f;
+            padding-bottom: 12px;
+            border-bottom: 2px solid rgba(0, 180, 216, 0.2);
+          }
+          
+          .related-video-item {
+            display: flex;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 12px;
+            background: rgba(255, 255, 255, 0.5);
+          }
+          
+          .related-video-item:hover {
+            background: rgba(0, 180, 216, 0.1);
+            transform: translateX(5px);
+          }
+          
+          .related-thumb {
+            width: 140px;
+            min-width: 140px;
+            height: 80px;
+            border-radius: 8px;
+            object-fit: cover;
+          }
+          
+          .related-info {
+            flex: 1;
+            min-width: 0;
+          }
+          
+          .related-video-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #1e3a5f;
+            line-height: 1.3;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            margin-bottom: 6px;
+          }
+          
+          .related-views {
+            font-size: 12px;
+            color: #6b7280;
+          }
+          
+          /* カスタムスクロールバー */
+          .related-videos::-webkit-scrollbar {
+            width: 8px;
+          }
+          
+          .related-videos::-webkit-scrollbar-track {
+            background: rgba(0, 180, 216, 0.05);
+            border-radius: 10px;
+          }
+          
+          .related-videos::-webkit-scrollbar-thumb {
+            background: rgba(0, 180, 216, 0.3);
+            border-radius: 10px;
+          }
+          
+          .related-videos::-webkit-scrollbar-thumb:hover {
+            background: rgba(0, 180, 216, 0.5);
+          }
+          
+          @media (max-width: 1200px) {
+            .watch-layout {
+              grid-template-columns: 1fr;
             }
-            .video-title {
-              font-size: 20px;
+            
+            .related-videos {
+              max-height: 600px;
+              position: static;
+            }
+          }
+          
+          @media (max-width: 768px) {
+            .video-info {
+              padding: 18px;
+            }
+            
+            .video-title-watch {
+              font-size: 18px;
+            }
+            
+            .related-videos {
+              padding: 15px;
+            }
+            
+            .related-thumb {
+              width: 110px;
+              min-width: 110px;
+              height: 62px;
             }
           }
         </style>
@@ -1494,15 +1695,52 @@ app.post("/watch", async (req, res) => {
         ${SIDEBAR_HTML}
         <div id="main-content" class="main-content">
           <div class="container">
-            <div class="video-container">
-              <div class="video-wrapper">
-                <iframe
-                  src="${embedUrl}"
-                  frameborder="0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowfullscreen></iframe>
+            <div class="watch-layout">
+              
+              <!-- メインプレーヤー -->
+              <div class="video-main">
+                <div class="video-player">
+                  <div class="player-wrapper">
+                    <iframe
+                      src="${embedUrl}"
+                      frameborder="0"
+                      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                      allowfullscreen
+                      referrerpolicy="strict-origin-when-cross-origin"></iframe>
+                  </div>
+                  <div class="video-info">
+                    <div class="video-title-watch">${escapeHtml(title)}</div>
+                    ${channelId ? `
+                      <a href="/channel-videos?id=${escapeHtml(channelId)}" class="channel-info">
+                        <div class="channel-avatar">${escapeHtml(channelName.charAt(0).toUpperCase())}</div>
+                        <div class="channel-name">${escapeHtml(channelName)}</div>
+                      </a>
+                    ` : ''}
+                  </div>
+                </div>
               </div>
-              <div class="video-title">${escapeHtml(title)}</div>
+              
+              <!-- 関連動画リスト -->
+              <div class="related-videos">
+                <div class="related-title">関連動画</div>
+                ${relatedVideos.length > 0 ? relatedVideos.map(v => `
+                  <form action="/watch" method="post" style="margin:0;">
+                    <input type="hidden" name="id" value="${escapeHtml(v.id)}">
+                    <button type="submit" style="all:unset;display:block;width:100%;">
+                      <div class="related-video-item">
+                        <img class="related-thumb" 
+                             src="https://i.ytimg.com/vi/${escapeHtml(v.id)}/hqdefault.jpg" 
+                             alt="${escapeHtml(v.title)}">
+                        <div class="related-info">
+                          <div class="related-video-title">${escapeHtml(v.title)}</div>
+                          <div class="related-views">${escapeHtml(v.views)}</div>
+                        </div>
+                      </div>
+                    </button>
+                  </form>
+                `).join('') : '<p style="text-align:center;color:#999;padding:20px;">関連動画が見つかりませんでした</p>'}
+              </div>
+              
             </div>
           </div>
         </div>
