@@ -292,7 +292,7 @@ const CSS = `
     width: 2.5px;
     height: 16px;
     background: currentColor;
-    right: 11px;
+    right: 13px;
     top: 3px;
     border-radius: 1.5px;
   }
