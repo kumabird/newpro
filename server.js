@@ -250,7 +250,7 @@ const CSS = `
     height: 14px;
     border: 2.5px solid currentColor;
     border-top: none;
-    bottom: 6px;
+    bottom: 4px;
   }
 
   .icon-home::after {
@@ -261,7 +261,7 @@ const CSS = `
     border-left: 11px solid transparent;
     border-right: 11px solid transparent;
     border-bottom: 10px solid currentColor;
-    top: 5px;
+    top: 3px;
   }
 
   /* チャンネルアイコン - TV画面 */
@@ -285,15 +285,15 @@ const CSS = `
     top: 11px;
   }
 
-  /* 音楽アイコン - 音符 */
+  /* 音楽アイコン - 音符（棒を右上に） */
   .icon-music::before {
     content: '';
     position: absolute;
     width: 2.5px;
     height: 16px;
     background: currentColor;
-    left: 15px;
-    top: 4px;
+    right: 8px;
+    top: 3px;
     border-radius: 1.5px;
   }
 
@@ -304,8 +304,8 @@ const CSS = `
     height: 6px;
     border: 2.5px solid currentColor;
     border-radius: 50%;
-    left: 11px;
-    bottom: 5px;
+    right: 10px;
+    bottom: 6px;
     background: transparent;
   }
 
