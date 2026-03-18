@@ -973,6 +973,132 @@ function renderError(title, message, backLink = "/") {
 }
 
 // --------------------------------------
+// シンプルなプレーヤー（関連動画なし）
+// --------------------------------------
+function renderSimplePlayer(res, videoId, user, title, channelName, channelId) {
+  const embedUrl = `https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1`;
+  
+  return res.send(`
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${escapeHtml(title)}</title>
+      ${CSS}
+      <style>
+        .simple-player {
+          max-width: 1200px;
+          margin: 0 auto;
+        }
+        
+        .video-player {
+          background: rgba(255, 255, 255, 0.98);
+          backdrop-filter: blur(12px);
+          border-radius: 20px;
+          overflow: hidden;
+          box-shadow: 0 10px 40px rgba(0, 119, 182, 0.15);
+          border: 1px solid rgba(144, 224, 239, 0.3);
+        }
+        
+        .player-wrapper {
+          position: relative;
+          padding-bottom: 56.25%;
+          height: 0;
+          background: #000;
+        }
+        
+        .player-wrapper iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+        
+        .video-info {
+          padding: 25px;
+        }
+        
+        .video-title-watch {
+          font-size: 22px;
+          font-weight: 600;
+          color: #1e3a5f;
+          margin-bottom: 15px;
+          line-height: 1.4;
+        }
+        
+        .channel-info {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          padding: 15px;
+          background: rgba(0, 180, 216, 0.08);
+          border-radius: 12px;
+          cursor: pointer;
+          transition: all 0.3s ease;
+          text-decoration: none;
+          color: inherit;
+        }
+        
+        .channel-info:hover {
+          background: rgba(0, 180, 216, 0.15);
+          transform: translateX(5px);
+        }
+        
+        .channel-avatar {
+          width: 48px;
+          height: 48px;
+          border-radius: 50%;
+          background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: white;
+          font-weight: bold;
+          font-size: 20px;
+        }
+        
+        .channel-name {
+          font-weight: 600;
+          font-size: 16px;
+          color: #00b4d8;
+        }
+      </style>
+    </head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <div class="container">
+          <div class="simple-player">
+            <div class="video-player">
+              <div class="player-wrapper">
+                <iframe
+                  src="${embedUrl}"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                  allowfullscreen
+                  referrerpolicy="strict-origin-when-cross-origin"></iframe>
+              </div>
+              <div class="video-info">
+                <div class="video-title-watch">${escapeHtml(title)}</div>
+                ${channelId ? `
+                  <a href="/channel-videos?id=${escapeHtml(channelId)}" class="channel-info">
+                    <div class="channel-avatar">${escapeHtml(channelName.charAt(0).toUpperCase())}</div>
+                    <div class="channel-name">${escapeHtml(channelName)}</div>
+                  </a>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      ${SIDEBAR_JS}
+    </body>
+    </html>
+  `);
+}
+
+// --------------------------------------
 // ログイン画面
 // --------------------------------------
 app.get("/login", (req, res) => {
@@ -1083,7 +1209,13 @@ app.post("/search", async (req, res) => {
     }
 
     // YouTube取得
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+      }
+    });
     if (!response.ok) {
       throw new Error(`YouTube API returned ${response.status}`);
     }
@@ -1166,7 +1298,13 @@ app.get("/channel-videos", async (req, res) => {
     }
 
     const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+      }
+    });
     
     if (!response.ok) {
       throw new Error(`YouTube returned ${response.status}`);
@@ -1331,7 +1469,13 @@ app.get("/channel-search/result", async (req, res) => {
       url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&hl=ja&gl=JP`;
     }
 
-    const response = await fetch(url);
+    const response = await fetch(url, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+        'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8'
+      }
+    });
     if (!response.ok) {
       throw new Error(`YouTube returned ${response.status}`);
     }
@@ -1418,22 +1562,62 @@ app.post("/watch", async (req, res) => {
 
     const user = req.cookies.user;
     
+    console.log(`[WATCH] Attempting to fetch video: ${id}`);
+    
     // 動画ページをスクレイピングして詳細情報を取得
     const watchUrl = `https://www.youtube.com/watch?v=${id}`;
-    const response = await fetch(watchUrl);
+    
+    // 適切なヘッダーを設定
+    const headers = {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+      'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+      'Accept-Language': 'ja,en-US;q=0.9,en;q=0.8',
+      'Accept-Encoding': 'gzip, deflate, br',
+      'Connection': 'keep-alive',
+      'Upgrade-Insecure-Requests': '1'
+    };
+    
+    const response = await fetch(watchUrl, { headers });
+    
+    console.log(`[WATCH] Response status: ${response.status}`);
     
     if (!response.ok) {
-      console.error(`YouTube returned ${response.status} for video ${id}`);
-      return res.send(renderError("エラー", "動画情報の取得に失敗しました"));
+      console.error(`[WATCH ERROR] YouTube returned ${response.status} for video ${id}`);
+      console.error(`[WATCH ERROR] Status Text: ${response.statusText}`);
+      
+      // ステータスコードが403や429の場合は、関連動画なしで再生を試みる
+      if (response.status === 403 || response.status === 429) {
+        console.log(`[WATCH] Attempting to play video without metadata due to ${response.status}`);
+        return renderSimplePlayer(res, id, user, "動画を再生中...", "", "");
+      }
+      
+      return res.send(renderError("エラー", `動画情報の取得に失敗しました (ステータス: ${response.status})`));
     }
     
     const watchHtml = await response.text();
+    console.log(`[WATCH] HTML received, length: ${watchHtml.length} bytes`);
     
     // タイトル、チャンネル、関連動画を抽出
     let title = "動画タイトル";
     let channelName = "";
     let channelId = "";
     let relatedVideos = [];
+    
+    // まずmetaタグからタイトルを取得（最も確実）
+    const metaTitleMatch = watchHtml.match(/<meta name="title" content="([^"]+)">/);
+    if (metaTitleMatch) {
+      title = metaTitleMatch[1].replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;/g, "'");
+      console.log(`[WATCH] Title from meta tag: ${title}`);
+    }
+    
+    // titleタグからも試す
+    if (!metaTitleMatch) {
+      const titleTagMatch = watchHtml.match(/<title>([^<]+)<\/title>/);
+      if (titleTagMatch) {
+        title = titleTagMatch[1].replace(" - YouTube", "").trim();
+        console.log(`[WATCH] Title from title tag: ${title}`);
+      }
+    }
     
     // ytInitialDataを抽出
     let ytData = null;
@@ -1444,11 +1628,13 @@ app.post("/watch", async (req, res) => {
     if (ytDataMatch) {
       try {
         ytData = JSON.parse(ytDataMatch[1]);
+        console.log(`[WATCH] ytInitialData parsed successfully`);
         
-        // タイトル抽出（ytInitialDataから）
+        // タイトル抽出（ytInitialDataから - より正確）
         const videoDetails = ytData?.contents?.twoColumnWatchNextResults?.results?.results?.contents?.[0]?.videoPrimaryInfoRenderer;
         if (videoDetails?.title?.runs?.[0]?.text) {
           title = videoDetails.title.runs[0].text;
+          console.log(`[WATCH] Title from ytInitialData: ${title}`);
         }
         
         // チャンネル情報抽出（ytInitialDataから）
@@ -1457,6 +1643,7 @@ app.post("/watch", async (req, res) => {
           const owner = videoSecondary.owner.videoOwnerRenderer;
           channelName = owner.title?.runs?.[0]?.text || "";
           channelId = owner.navigationEndpoint?.browseEndpoint?.browseId || "";
+          console.log(`[WATCH] Channel: ${channelName} (${channelId})`);
         }
         
         // 関連動画抽出（ytInitialDataから）
@@ -1487,28 +1674,32 @@ app.post("/watch", async (req, res) => {
         // 最大20件に制限
         relatedVideos = relatedVideos.slice(0, 20);
         
-        console.log(`Found ${relatedVideos.length} related videos for ${id}`);
+        console.log(`[WATCH] Found ${relatedVideos.length} related videos for ${id}`);
         
       } catch (parseError) {
-        console.error("Error parsing ytInitialData:", parseError);
+        console.error("[WATCH ERROR] Error parsing ytInitialData:", parseError.message);
       }
-    }
-    
-    // フォールバック：ytInitialDataが取得できなかった場合
-    if (!title || title === "動画タイトル") {
-      const titleMatch = watchHtml.match(/<title>([^<]+)<\/title>/);
-      if (titleMatch) {
-        title = titleMatch[1].replace(" - YouTube", "").trim();
-      }
+    } else {
+      console.warn("[WATCH WARNING] ytInitialData not found in HTML");
     }
 
     // 履歴保存
     if (user) {
-      await saveHistory(user, "watch", id, title);
+      try {
+        await saveHistory(user, "watch", id, title);
+        console.log(`[WATCH] History saved for user: ${user}`);
+      } catch (historyError) {
+        console.error("[WATCH ERROR] Failed to save history:", historyError.message);
+      }
     }
 
     // 埋め込みURL（自動再生、関連動画非表示）
     const embedUrl = `https://www.youtube.com/embed/${id}?autoplay=1&rel=0&modestbranding=1`;
+    
+    console.log(`[WATCH] Rendering player for video: ${id}`);
+    console.log(`[WATCH] Title: ${title}`);
+    console.log(`[WATCH] Channel: ${channelName || 'N/A'}`);
+    console.log(`[WATCH] Related videos: ${relatedVideos.length}`);
 
     res.send(`
       <html lang="ja">
@@ -1781,8 +1972,19 @@ app.post("/watch", async (req, res) => {
     `);
 
   } catch (error) {
-    console.error("Watch error:", error);
-    res.send(renderError("エラー", "動画の読み込み中にエラーが発生しました"));
+    console.error("[WATCH ERROR] Critical error in /watch:", error);
+    console.error("[WATCH ERROR] Error name:", error.name);
+    console.error("[WATCH ERROR] Error message:", error.message);
+    console.error("[WATCH ERROR] Stack trace:", error.stack);
+    
+    // fetchエラーの場合は、関連動画なしで再生を試みる
+    if (error.name === 'FetchError' || error.message.includes('fetch')) {
+      console.log("[WATCH] Fetch failed, attempting simple player");
+      const videoId = req.body.id;
+      return renderSimplePlayer(res, videoId, req.cookies.user, `動画 ${videoId}`, "", "");
+    }
+    
+    res.send(renderError("エラー", `動画の読み込み中にエラーが発生しました: ${error.message}`));
   }
 });
 
