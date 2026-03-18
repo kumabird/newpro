@@ -261,7 +261,7 @@ const CSS = `
     border-left: 11px solid transparent;
     border-right: 11px solid transparent;
     border-bottom: 10px solid currentColor;
-    top: 2px;
+    top: 1px;
   }
 
   /* チャンネルアイコン - TV画面 */
@@ -285,14 +285,14 @@ const CSS = `
     top: 11px;
   }
 
-  /* 音楽アイコン - 音符（棒を右上、少し左に） */
+  /* 音楽アイコン - 音符（棒をさらに左に） */
   .icon-music::before {
     content: '';
     position: absolute;
     width: 2.5px;
     height: 16px;
     background: currentColor;
-    right: 10px;
+    right: 11px;
     top: 3px;
     border-radius: 1.5px;
   }
@@ -304,7 +304,7 @@ const CSS = `
     height: 6px;
     border: 2.5px solid currentColor;
     border-radius: 50%;
-    right: 12px;
+    right: 13px;
     bottom: 6px;
     background: transparent;
   }
