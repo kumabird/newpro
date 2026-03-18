@@ -219,7 +219,19 @@ const CSS = `
     transform: translateX(6px);
   }
 
-  /* カスタムアイコン（絵文字の代わり） */
+  /* サイドバーテキスト - 閉じている時は完全に非表示 */
+  .sidebar-text {
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+  }
+
+  .sidebar.open .sidebar-text {
+    opacity: 1;
+    visibility: visible;
+  }
+
+  /* カスタムアイコン（シンプル版） */
   .icon {
     width: 28px;
     height: 28px;
@@ -228,129 +240,73 @@ const CSS = `
     align-items: center;
     justify-content: center;
     position: relative;
+    font-style: normal;
   }
 
   /* ホームアイコン */
-  .icon-home::before {
-    content: '';
-    width: 20px;
-    height: 18px;
-    border: 2.5px solid currentColor;
-    border-top: none;
-    position: relative;
-    top: 2px;
+  .icon-home {
+    font-size: 20px;
+    font-weight: bold;
   }
-
-  .icon-home::after {
-    content: '';
-    position: absolute;
-    width: 0;
-    height: 0;
-    border-left: 12px solid transparent;
-    border-right: 12px solid transparent;
-    border-bottom: 10px solid currentColor;
-    top: 2px;
+  
+  .icon-home::before {
+    content: '⌂';
+    display: block;
   }
 
   /* チャンネルアイコン（TV） */
-  .icon-channel::before {
-    content: '';
-    width: 22px;
-    height: 16px;
-    border: 2.5px solid currentColor;
-    border-radius: 3px;
+  .icon-channel {
+    font-size: 20px;
+    font-weight: bold;
   }
-
-  .icon-channel::after {
-    content: '';
-    position: absolute;
-    width: 4px;
-    height: 4px;
-    background: currentColor;
-    border-radius: 50%;
-    right: 8px;
-    top: 6px;
+  
+  .icon-channel::before {
+    content: '▭';
+    display: block;
   }
 
   /* 音楽アイコン */
-  .icon-music::before {
-    content: '';
-    width: 3px;
-    height: 18px;
-    background: currentColor;
-    position: absolute;
-    left: 16px;
-    top: 4px;
-    border-radius: 2px;
+  .icon-music {
+    font-size: 20px;
+    font-weight: bold;
   }
-
-  .icon-music::after {
-    content: '';
-    width: 7px;
-    height: 7px;
-    border: 2.5px solid currentColor;
-    border-radius: 50%;
-    position: absolute;
-    left: 12px;
-    bottom: 4px;
+  
+  .icon-music::before {
+    content: '♪';
+    display: block;
   }
 
   /* 履歴アイコン（時計） */
-  .icon-history::before {
-    content: '';
-    width: 20px;
-    height: 20px;
-    border: 2.5px solid currentColor;
-    border-radius: 50%;
+  .icon-history {
+    font-size: 20px;
+    font-weight: bold;
   }
-
-  .icon-history::after {
-    content: '';
-    width: 2px;
-    height: 8px;
-    background: currentColor;
-    position: absolute;
-    top: 6px;
-    left: 13px;
-    transform-origin: bottom center;
-    border-radius: 1px;
+  
+  .icon-history::before {
+    content: '◷';
+    display: block;
   }
 
   /* 設定アイコン（歯車） */
-  .icon-settings::before {
-    content: '';
-    width: 18px;
-    height: 18px;
-    border: 2.5px solid currentColor;
-    border-radius: 50%;
+  .icon-settings {
+    font-size: 20px;
+    font-weight: bold;
   }
-
-  .icon-settings::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    background: 
-      linear-gradient(currentColor, currentColor) no-repeat center/2.5px 8px,
-      linear-gradient(currentColor, currentColor) no-repeat center/8px 2.5px;
+  
+  .icon-settings::before {
+    content: '⚙';
+    display: block;
   }
 
   /* ログアウトアイコン（ドア） */
-  .icon-logout::before {
-    content: '';
-    width: 16px;
-    height: 20px;
-    border: 2.5px solid currentColor;
-    border-left: none;
-    border-radius: 0 3px 3px 0;
-  }
-
-  .icon-logout::after {
-    content: '→';
-    position: absolute;
-    font-size: 14px;
+  .icon-logout {
+    font-size: 20px;
     font-weight: bold;
-    left: 3px;
+  }
+  
+  .icon-logout::before {
+    content: '⎆';
+    display: block;
   }
 
   /* メインコンテンツ */
