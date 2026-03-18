@@ -66,7 +66,7 @@ function formatDateJP(date) {
 }
 
 // --------------------------------------
-// 美しい青系UI（スマホ対応）
+// 鮮やかな青×水色UI + 独自アイコン
 // --------------------------------------
 const CSS = `
 <style>
@@ -78,14 +78,14 @@ const CSS = `
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    background: linear-gradient(135deg, #00b4d8 0%, #0077b6 50%, #023e8a 100%);
     background-attachment: fixed;
     min-height: 100vh;
     color: #333;
     position: relative;
   }
 
-  /* 美しい背景アニメーション */
+  /* 美しい背景パターン */
   body::before {
     content: '';
     position: fixed;
@@ -94,48 +94,70 @@ const CSS = `
     width: 100%;
     height: 100%;
     background: 
-      radial-gradient(circle at 20% 50%, rgba(52, 152, 219, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 80% 80%, rgba(41, 128, 185, 0.1) 0%, transparent 50%),
-      radial-gradient(circle at 40% 20%, rgba(93, 173, 226, 0.05) 0%, transparent 50%);
+      radial-gradient(circle at 20% 50%, rgba(144, 224, 239, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(0, 180, 216, 0.15) 0%, transparent 50%),
+      radial-gradient(circle at 40% 20%, rgba(0, 119, 182, 0.1) 0%, transparent 50%);
     pointer-events: none;
     z-index: 0;
   }
 
   h2 {
-    margin-bottom: 25px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    margin-bottom: 30px;
+    background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
     text-align: center;
-    font-size: 32px;
+    font-size: 34px;
     font-weight: 700;
     letter-spacing: -0.5px;
   }
 
-  /* ハンバーガーメニューボタン */
+  /* ハンバーガーメニューボタン - カスタムアイコン */
   .menu-toggle {
     display: none;
     position: fixed;
-    top: 15px;
-    left: 15px;
+    top: 18px;
+    left: 18px;
     z-index: 2000;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(10px);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
     border: none;
-    border-radius: 12px;
-    width: 50px;
-    height: 50px;
+    border-radius: 14px;
+    width: 52px;
+    height: 52px;
     cursor: pointer;
-    box-shadow: 0 4px 20px rgba(52, 152, 219, 0.3);
-    font-size: 24px;
+    box-shadow: 0 6px 25px rgba(0, 180, 216, 0.35);
     transition: all 0.3s ease;
+    padding: 0;
   }
 
   .menu-toggle:hover {
     background: white;
-    transform: scale(1.05);
-    box-shadow: 0 6px 25px rgba(52, 152, 219, 0.4);
+    transform: scale(1.08);
+    box-shadow: 0 8px 30px rgba(0, 180, 216, 0.45);
+  }
+
+  /* ハンバーガーアイコン（3本線） */
+  .menu-toggle::before,
+  .menu-toggle::after {
+    content: '';
+    position: absolute;
+    left: 14px;
+    width: 24px;
+    height: 3px;
+    background: linear-gradient(90deg, #00b4d8 0%, #0077b6 100%);
+    border-radius: 2px;
+    transition: all 0.3s ease;
+  }
+
+  .menu-toggle::before {
+    top: 18px;
+    box-shadow: 0 8px 0 0 #00b4d8;
+  }
+
+  .menu-toggle::after {
+    top: 31px;
   }
 
   /* サイドバー - ガラスモーフィズム */
@@ -143,34 +165,35 @@ const CSS = `
     position: fixed;
     top: 0;
     left: 0;
-    width: 75px;
+    width: 80px;
     height: 100%;
-    background: rgba(255, 255, 255, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
-    border-right: 1px solid rgba(52, 152, 219, 0.1);
-    padding-top: 25px;
+    background: rgba(255, 255, 255, 0.97);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border-right: 1px solid rgba(0, 180, 216, 0.15);
+    padding-top: 30px;
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     z-index: 1000;
-    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.08);
+    box-shadow: 5px 0 35px rgba(0, 119, 182, 0.12);
   }
 
   .sidebar.open {
-    width: 260px;
+    width: 270px;
   }
 
   .sidebar a {
     display: flex;
     align-items: center;
-    gap: 18px;
-    padding: 18px 22px;
+    gap: 20px;
+    padding: 20px 24px;
     font-size: 16px;
-    color: #2c3e50;
+    font-weight: 500;
+    color: #1e3a5f;
     text-decoration: none;
     white-space: nowrap;
     transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    border-left: 3px solid transparent;
+    border-left: 4px solid transparent;
     position: relative;
     overflow: hidden;
   }
@@ -182,7 +205,7 @@ const CSS = `
     top: 0;
     height: 100%;
     width: 0;
-    background: linear-gradient(90deg, rgba(52, 152, 219, 0.1) 0%, transparent 100%);
+    background: linear-gradient(90deg, rgba(0, 180, 216, 0.12) 0%, transparent 100%);
     transition: width 0.3s ease;
   }
 
@@ -191,21 +214,149 @@ const CSS = `
   }
 
   .sidebar a:hover {
-    color: #3498db;
-    border-left-color: #3498db;
-    transform: translateX(5px);
+    color: #00b4d8;
+    border-left-color: #00b4d8;
+    transform: translateX(6px);
   }
 
-  .sidebar-icon {
-    font-size: 24px;
-    min-width: 32px;
-    text-align: center;
+  /* カスタムアイコン（絵文字の代わり） */
+  .icon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+  }
+
+  /* ホームアイコン */
+  .icon-home::before {
+    content: '';
+    width: 20px;
+    height: 18px;
+    border: 2.5px solid currentColor;
+    border-top: none;
+    position: relative;
+    top: 2px;
+  }
+
+  .icon-home::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 12px solid transparent;
+    border-right: 12px solid transparent;
+    border-bottom: 10px solid currentColor;
+    top: 2px;
+  }
+
+  /* チャンネルアイコン（TV） */
+  .icon-channel::before {
+    content: '';
+    width: 22px;
+    height: 16px;
+    border: 2.5px solid currentColor;
+    border-radius: 3px;
+  }
+
+  .icon-channel::after {
+    content: '';
+    position: absolute;
+    width: 4px;
+    height: 4px;
+    background: currentColor;
+    border-radius: 50%;
+    right: 8px;
+    top: 6px;
+  }
+
+  /* 音楽アイコン */
+  .icon-music::before {
+    content: '';
+    width: 3px;
+    height: 18px;
+    background: currentColor;
+    position: absolute;
+    left: 16px;
+    top: 4px;
+    border-radius: 2px;
+  }
+
+  .icon-music::after {
+    content: '';
+    width: 7px;
+    height: 7px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
+    position: absolute;
+    left: 12px;
+    bottom: 4px;
+  }
+
+  /* 履歴アイコン（時計） */
+  .icon-history::before {
+    content: '';
+    width: 20px;
+    height: 20px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
+  }
+
+  .icon-history::after {
+    content: '';
+    width: 2px;
+    height: 8px;
+    background: currentColor;
+    position: absolute;
+    top: 6px;
+    left: 13px;
+    transform-origin: bottom center;
+    border-radius: 1px;
+  }
+
+  /* 設定アイコン（歯車） */
+  .icon-settings::before {
+    content: '';
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
+  }
+
+  .icon-settings::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    background: 
+      linear-gradient(currentColor, currentColor) no-repeat center/2.5px 8px,
+      linear-gradient(currentColor, currentColor) no-repeat center/8px 2.5px;
+  }
+
+  /* ログアウトアイコン（ドア） */
+  .icon-logout::before {
+    content: '';
+    width: 16px;
+    height: 20px;
+    border: 2.5px solid currentColor;
+    border-left: none;
+    border-radius: 0 3px 3px 0;
+  }
+
+  .icon-logout::after {
+    content: '→';
+    position: absolute;
+    font-size: 14px;
+    font-weight: bold;
+    left: 3px;
   }
 
   /* メインコンテンツ */
   .main-content {
-    margin-left: 95px;
-    padding: 40px 25px;
+    margin-left: 100px;
+    padding: 45px 30px;
     transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 100vh;
     position: relative;
@@ -213,33 +364,33 @@ const CSS = `
   }
 
   .main-content.shift {
-    margin-left: 280px;
+    margin-left: 290px;
   }
 
   /* カードコンテナ */
   .container {
-    max-width: 1400px;
+    max-width: 1450px;
     margin: 0 auto;
   }
 
   /* カードグリッド */
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    gap: 28px;
-    padding: 25px 0;
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+    gap: 30px;
+    padding: 30px 0;
   }
 
   .card {
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(10px);
+    backdrop-filter: blur(12px);
     padding: 0;
-    border-radius: 20px;
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    border-radius: 22px;
+    box-shadow: 0 10px 40px rgba(0, 119, 182, 0.15);
     transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     cursor: pointer;
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    border: 1px solid rgba(144, 224, 239, 0.3);
     position: relative;
   }
 
@@ -249,8 +400,8 @@ const CSS = `
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
+    height: 5px;
+    background: linear-gradient(90deg, #00b4d8 0%, #0077b6 100%);
     transform: scaleX(0);
     transition: transform 0.4s ease;
   }
@@ -260,31 +411,31 @@ const CSS = `
   }
 
   .card:hover {
-    transform: translateY(-12px) scale(1.02);
-    box-shadow: 0 20px 60px rgba(52, 152, 219, 0.25);
+    transform: translateY(-14px) scale(1.02);
+    box-shadow: 0 25px 70px rgba(0, 180, 216, 0.3);
   }
 
   .card img.thumb {
     width: 100%;
-    height: 200px;
+    height: 210px;
     object-fit: cover;
     display: block;
     transition: transform 0.4s ease;
   }
 
   .card:hover img.thumb {
-    transform: scale(1.05);
+    transform: scale(1.06);
   }
 
   .card-content {
-    padding: 18px;
+    padding: 20px;
   }
 
   .card-title {
     font-weight: 600;
     font-size: 16px;
     line-height: 1.5;
-    color: #2c3e50;
+    color: #1e3a5f;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -293,30 +444,30 @@ const CSS = `
 
   /* 中央ボックス（ログインなど） */
   .center-box {
-    max-width: 460px;
-    margin: 100px auto;
+    max-width: 480px;
+    margin: 110px auto;
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
-    padding: 50px;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(25px);
+    padding: 55px;
+    border-radius: 26px;
+    box-shadow: 0 25px 70px rgba(0, 119, 182, 0.28);
+    border: 1px solid rgba(144, 224, 239, 0.3);
   }
 
   .center-box h2 {
-    margin-bottom: 35px;
+    margin-bottom: 40px;
   }
 
   /* 検索ボックス */
   .search-box {
-    max-width: 850px;
-    margin: 0 auto 50px;
+    max-width: 900px;
+    margin: 0 auto 55px;
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
-    padding: 40px;
-    border-radius: 24px;
-    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(25px);
+    padding: 45px;
+    border-radius: 26px;
+    box-shadow: 0 18px 60px rgba(0, 119, 182, 0.18);
+    border: 1px solid rgba(144, 224, 239, 0.3);
   }
 
   /* フォーム要素 */
@@ -325,37 +476,38 @@ const CSS = `
   select,
   .region-select {
     width: 100%;
-    padding: 16px 20px;
+    padding: 18px 22px;
     font-size: 16px;
-    border-radius: 12px;
-    border: 2px solid rgba(52, 152, 219, 0.2);
-    margin-bottom: 18px;
-    background: rgba(255, 255, 255, 0.9);
+    border-radius: 14px;
+    border: 2px solid rgba(0, 180, 216, 0.25);
+    margin-bottom: 20px;
+    background: rgba(255, 255, 255, 0.95);
     transition: all 0.3s ease;
     font-family: inherit;
+    color: #1e3a5f;
   }
 
   input:focus,
   select:focus {
     outline: none;
-    border-color: #3498db;
-    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.15);
+    border-color: #00b4d8;
+    box-shadow: 0 0 0 5px rgba(0, 180, 216, 0.18);
     background: white;
   }
 
   button {
     width: 100%;
-    padding: 16px 20px;
-    font-size: 17px;
+    padding: 18px 22px;
+    font-size: 18px;
     font-weight: 600;
-    border-radius: 12px;
+    border-radius: 14px;
     border: none;
     cursor: pointer;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
     color: white;
     transition: all 0.3s ease;
     font-family: inherit;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 180, 216, 0.35);
     position: relative;
     overflow: hidden;
   }
@@ -367,7 +519,7 @@ const CSS = `
     left: -100%;
     width: 100%;
     height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent);
     transition: left 0.5s ease;
   }
 
@@ -377,7 +529,7 @@ const CSS = `
 
   button:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 180, 216, 0.45);
   }
 
   button:active {
@@ -385,116 +537,125 @@ const CSS = `
   }
 
   button.danger {
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
-    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    box-shadow: 0 6px 20px rgba(255, 107, 107, 0.35);
   }
 
   button.danger:hover {
-    box-shadow: 0 8px 25px rgba(231, 76, 60, 0.4);
+    box-shadow: 0 10px 30px rgba(255, 107, 107, 0.45);
+  }
+
+  /* 検索アイコン付きボタン */
+  button[type="submit"]::after {
+    content: '→';
+    margin-left: 8px;
+    font-weight: bold;
+    font-size: 20px;
   }
 
   /* 履歴カード */
   .history-card {
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(10px);
-    padding: 25px;
-    margin-bottom: 18px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
-    border-left: 5px solid #3498db;
+    backdrop-filter: blur(12px);
+    padding: 28px;
+    margin-bottom: 20px;
+    border-radius: 18px;
+    box-shadow: 0 6px 25px rgba(0, 119, 182, 0.12);
+    border-left: 6px solid #00b4d8;
     transition: all 0.3s ease;
   }
 
   .history-card:hover {
-    transform: translateX(8px);
-    box-shadow: 0 6px 30px rgba(52, 152, 219, 0.2);
+    transform: translateX(10px);
+    box-shadow: 0 8px 35px rgba(0, 180, 216, 0.25);
   }
 
   .history-card strong {
-    color: #3498db;
-    font-size: 17px;
+    color: #00b4d8;
+    font-size: 18px;
   }
 
   .history-card a {
-    color: #2c3e50;
+    color: #1e3a5f;
     text-decoration: none;
     transition: color 0.2s ease;
   }
 
   .history-card a:hover {
-    color: #3498db;
+    color: #00b4d8;
     text-decoration: underline;
   }
 
   /* エラーページ */
   .error-container {
-    max-width: 650px;
-    margin: 120px auto;
+    max-width: 680px;
+    margin: 130px auto;
     text-align: center;
     background: rgba(255, 255, 255, 0.98);
-    backdrop-filter: blur(20px);
-    padding: 60px;
-    border-radius: 24px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
-    border: 1px solid rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(25px);
+    padding: 65px;
+    border-radius: 26px;
+    box-shadow: 0 25px 70px rgba(0, 119, 182, 0.22);
+    border: 1px solid rgba(144, 224, 239, 0.3);
   }
 
   .error-icon {
-    font-size: 90px;
-    margin-bottom: 25px;
-    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.1));
+    font-size: 100px;
+    margin-bottom: 28px;
+    filter: drop-shadow(0 5px 12px rgba(0,0,0,0.12));
   }
 
   .error-title {
-    font-size: 36px;
-    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    font-size: 38px;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
-    margin-bottom: 18px;
+    margin-bottom: 20px;
     font-weight: 700;
   }
 
   .error-message {
-    font-size: 18px;
-    color: #555;
-    margin-bottom: 35px;
+    font-size: 19px;
+    color: #4a5568;
+    margin-bottom: 38px;
     line-height: 1.7;
   }
 
   .error-link {
     display: inline-block;
-    padding: 14px 35px;
-    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    padding: 16px 40px;
+    background: linear-gradient(135deg, #00b4d8 0%, #0077b6 100%);
     color: white;
     text-decoration: none;
-    border-radius: 12px;
+    border-radius: 14px;
     font-weight: 600;
     transition: all 0.3s ease;
-    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    box-shadow: 0 6px 20px rgba(0, 180, 216, 0.35);
   }
 
   .error-link:hover {
     transform: translateY(-3px);
-    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
+    box-shadow: 0 10px 30px rgba(0, 180, 216, 0.45);
   }
 
   /* ローディング */
   .loading {
     text-align: center;
-    padding: 50px;
-    font-size: 19px;
-    color: #3498db;
+    padding: 55px;
+    font-size: 20px;
+    color: #00b4d8;
+    font-weight: 500;
   }
 
   .spinner {
-    border: 5px solid rgba(52, 152, 219, 0.1);
-    border-top: 5px solid #3498db;
+    border: 6px solid rgba(0, 180, 216, 0.12);
+    border-top: 6px solid #00b4d8;
     border-radius: 50%;
-    width: 60px;
-    height: 60px;
+    width: 65px;
+    height: 65px;
     animation: spin 1s linear infinite;
-    margin: 25px auto;
+    margin: 28px auto;
   }
 
   @keyframes spin {
@@ -505,30 +666,30 @@ const CSS = `
   /* タブ（管理者ページ用） */
   .tabs {
     display: flex;
-    gap: 12px;
-    margin-bottom: 35px;
-    border-bottom: 2px solid rgba(52, 152, 219, 0.2);
+    gap: 14px;
+    margin-bottom: 38px;
+    border-bottom: 2px solid rgba(0, 180, 216, 0.25);
   }
 
   .tab {
-    padding: 14px 28px;
+    padding: 16px 32px;
     cursor: pointer;
-    border-bottom: 3px solid transparent;
+    border-bottom: 4px solid transparent;
     transition: all 0.3s ease;
     font-weight: 600;
-    color: #7f8c8d;
-    border-radius: 8px 8px 0 0;
+    color: #6b7280;
+    border-radius: 10px 10px 0 0;
   }
 
   .tab:hover {
-    color: #3498db;
-    background: rgba(52, 152, 219, 0.05);
+    color: #00b4d8;
+    background: rgba(0, 180, 216, 0.08);
   }
 
   .tab.active {
-    color: #3498db;
-    border-bottom-color: #3498db;
-    background: rgba(52, 152, 219, 0.08);
+    color: #00b4d8;
+    border-bottom-color: #00b4d8;
+    background: rgba(0, 180, 216, 0.12);
   }
 
   .tab-content {
@@ -537,11 +698,11 @@ const CSS = `
 
   .tab-content.active {
     display: block;
-    animation: fadeIn 0.4s ease;
+    animation: fadeIn 0.5s ease;
   }
 
   @keyframes fadeIn {
-    from { opacity: 0; transform: translateY(10px); }
+    from { opacity: 0; transform: translateY(12px); }
     to { opacity: 1; transform: translateY(0); }
   }
 
@@ -554,18 +715,18 @@ const CSS = `
     .sidebar {
       width: 0;
       transform: translateX(-100%);
-      padding-top: 75px;
+      padding-top: 80px;
     }
 
     .sidebar.open {
-      width: 85%;
-      max-width: 300px;
+      width: 88%;
+      max-width: 320px;
       transform: translateX(0);
     }
 
     .main-content {
       margin-left: 0;
-      padding: 90px 18px 35px;
+      padding: 95px 20px 40px;
     }
 
     .main-content.shift {
@@ -574,60 +735,60 @@ const CSS = `
 
     .card-grid {
       grid-template-columns: 1fr;
-      gap: 20px;
+      gap: 22px;
     }
 
     .center-box {
-      margin: 50px 18px;
-      padding: 35px 25px;
+      margin: 55px 20px;
+      padding: 38px 28px;
     }
 
     .search-box {
-      padding: 25px;
-      margin-bottom: 35px;
+      padding: 28px;
+      margin-bottom: 38px;
     }
 
     h2 {
-      font-size: 26px;
+      font-size: 28px;
     }
 
     .error-container {
-      margin: 60px 18px;
-      padding: 40px 25px;
+      margin: 65px 20px;
+      padding: 45px 28px;
     }
 
     .error-icon {
-      font-size: 70px;
+      font-size: 75px;
     }
 
     .error-title {
-      font-size: 28px;
+      font-size: 30px;
     }
   }
 
   @media (min-width: 769px) and (max-width: 1024px) {
     .card-grid {
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
     }
   }
 
   /* ダークモード対応 */
   @media (prefers-color-scheme: dark) {
     body {
-      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #1e2a3a 100%);
+      background: linear-gradient(135deg, #023e8a 0%, #001845 50%, #000814 100%);
     }
 
     .sidebar {
-      background: rgba(30, 39, 58, 0.95);
-      border-right-color: rgba(52, 152, 219, 0.2);
+      background: rgba(20, 35, 60, 0.97);
+      border-right-color: rgba(0, 180, 216, 0.25);
     }
 
     .sidebar a {
-      color: #cbd5e0;
+      color: #b8d4e8;
     }
 
     .sidebar a:hover {
-      color: #5dade2;
+      color: #90e0ef;
     }
 
     .card,
@@ -635,16 +796,16 @@ const CSS = `
     .search-box,
     .history-card,
     .error-container {
-      background: rgba(30, 39, 58, 0.95);
-      border-color: rgba(52, 152, 219, 0.2);
+      background: rgba(20, 35, 60, 0.97);
+      border-color: rgba(0, 180, 216, 0.25);
     }
 
     .card-title {
-      color: #e8edf2;
+      color: #d4e6f1;
     }
 
     h2 {
-      background: linear-gradient(135deg, #5dade2 0%, #3498db 100%);
+      background: linear-gradient(135deg, #90e0ef 0%, #00b4d8 100%);
       -webkit-background-clip: text;
       -webkit-text-fill-color: transparent;
       background-clip: text;
@@ -652,42 +813,68 @@ const CSS = `
 
     input,
     select {
-      background: rgba(20, 29, 48, 0.7);
-      border-color: rgba(52, 152, 219, 0.3);
-      color: #e8edf2;
+      background: rgba(10, 25, 50, 0.8);
+      border-color: rgba(0, 180, 216, 0.35);
+      color: #d4e6f1;
     }
 
     input:focus,
     select:focus {
-      background: rgba(20, 29, 48, 0.9);
-      border-color: #5dade2;
+      background: rgba(10, 25, 50, 0.95);
+      border-color: #90e0ef;
     }
 
     .menu-toggle {
-      background: rgba(30, 39, 58, 0.95);
-      color: #e8edf2;
+      background: rgba(20, 35, 60, 0.97);
+    }
+
+    .menu-toggle::before,
+    .menu-toggle::after {
+      background: linear-gradient(90deg, #90e0ef 0%, #00b4d8 100%);
+    }
+
+    .menu-toggle::before {
+      box-shadow: 0 8px 0 0 #90e0ef;
     }
 
     .error-message,
     .history-card a {
-      color: #cbd5e0;
+      color: #b8d4e8;
     }
   }
 </style>
 `;
 
 // --------------------------------------
-// サイドバー HTML
+// サイドバー HTML（独自アイコン使用）
 // --------------------------------------
 const SIDEBAR_HTML = `
-<button class="menu-toggle" onclick="toggleSidebar()" aria-label="メニュー">☰</button>
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="メニュー"></button>
 <div id="sidebar" class="sidebar">
-  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
-  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
-  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
-  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
-  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
+  <a href="/">
+    <span class="icon icon-home"></span>
+    <span class="sidebar-text">ホーム</span>
+  </a>
+  <a href="/channel-search">
+    <span class="icon icon-channel"></span>
+    <span class="sidebar-text">チャンネル検索</span>
+  </a>
+  <a href="/music">
+    <span class="icon icon-music"></span>
+    <span class="sidebar-text">Music</span>
+  </a>
+  <a href="/history">
+    <span class="icon icon-history"></span>
+    <span class="sidebar-text">履歴</span>
+  </a>
+  <a href="/admin">
+    <span class="icon icon-settings"></span>
+    <span class="sidebar-text">管理者ページ</span>
+  </a>
+  <a href="/logout">
+    <span class="icon icon-logout"></span>
+    <span class="sidebar-text">ログアウト</span>
+  </a>
 </div>
 `;
 
@@ -743,7 +930,7 @@ function renderError(title, message, backLink = "/") {
     </head>
     <body>
       <div class="error-container">
-        <div class="error-icon">⚠️</div>
+        <div class="error-icon">!</div>
         <h1 class="error-title">${escapeHtml(title)}</h1>
         <p class="error-message">${escapeHtml(message)}</p>
         <a href="${backLink}" class="error-link">ホームに戻る</a>
@@ -828,7 +1015,7 @@ app.get("/", (req, res) => {
                 <option value="jp">日本のみ</option>
                 <option value="global">全世界</option>
               </select>
-              <button type="submit">🔍 動画を検索</button>
+              <button type="submit">動画を検索</button>
             </form>
           </div>
         </div>
@@ -897,7 +1084,7 @@ app.post("/search", async (req, res) => {
 
         <div id="main-content" class="main-content">
           <div class="container">
-            <h2>🔍 検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#888;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
+            <h2>検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#6b7280;font-weight:400;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
             <div class="card-grid">
     `;
 
@@ -1014,7 +1201,7 @@ app.get("/channel-videos", async (req, res) => {
 
         <div id="main-content" class="main-content">
           <div class="container">
-            <h2>📺 ${escapeHtml(channelTitle)}</h2>
+            <h2>${escapeHtml(channelTitle)}</h2>
             <div class="card-grid">
     `;
 
@@ -1078,7 +1265,7 @@ app.get("/channel-search", (req, res) => {
                 <option value="jp">日本のみ</option>
                 <option value="global">全世界</option>
               </select>
-              <button type="submit">📺 検索</button>
+              <button type="submit">検索</button>
             </form>
           </div>
         </div>
@@ -1162,7 +1349,7 @@ app.get("/channel-search/result", async (req, res) => {
 
         <div id="main-content" class="main-content">
           <div class="container">
-            <h2>📺 チャンネル検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#888;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
+            <h2>チャンネル検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#6b7280;font-weight:400;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
             <div class="card-grid">
               ${list60.map(c => `
                 <div class="card" onclick="location.href='/channel-videos?id=${escapeHtml(c.id)}'" style="cursor:pointer;">
@@ -1329,7 +1516,7 @@ app.get("/history", async (req, res) => {
 
         <div id="main-content" class="main-content">
           <div class="container">
-            <h2>🕘 ${escapeHtml(user)} さんの検索履歴</h2>
+            <h2>${escapeHtml(user)} さんの検索履歴</h2>
 
             ${data.length > 0 ? `
               <form action="/history/delete" method="POST" style="text-align:center;margin-bottom:30px;">
@@ -1546,7 +1733,7 @@ app.post("/admin", async (req, res) => {
 
         <div id="main-content" class="main-content">
           <div class="container">
-            <h2>⚙️ 管理者ページ</h2>
+            <h2>管理者ページ</h2>
 
             <div class="tabs">
               <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
@@ -1654,11 +1841,16 @@ app.use((err, req, res, next) => {
 // --------------------------------------
 app.listen(PORT, () => {
   console.log(`\n╔═══════════════════════════════════════╗`);
-  console.log(`║  🌊 サーバー起動成功                  ║`);
+  console.log(`║                                       ║`);
+  console.log(`║    サーバー起動成功                   ║`);
+  console.log(`║                                       ║`);
   console.log(`╠═══════════════════════════════════════╣`);
-  console.log(`║  🌐 ポート: ${PORT.toString().padEnd(24)}║`);
-  console.log(`║  📱 レスポンシブUI: 有効              ║`);
-  console.log(`║  🛡️  安全機能: 有効                    ║`);
-  console.log(`║  💎 美しい青系デザイン: 適用済み      ║`);
+  console.log(`║                                       ║`);
+  console.log(`║    ポート: ${PORT.toString().padEnd(28)}║`);
+  console.log(`║    レスポンシブUI: 有効               ║`);
+  console.log(`║    安全機能: 有効                     ║`);
+  console.log(`║    鮮やかな青×水色デザイン: 適用済み  ║`);
+  console.log(`║    独自UIアイコン: 適用済み           ║`);
+  console.log(`║                                       ║`);
   console.log(`╚═══════════════════════════════════════╝\n`);
 });
