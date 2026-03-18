@@ -1,4 +1,3 @@
-
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
@@ -22,225 +21,20 @@ const pool = new Pool({
 });
 
 // --------------------------------------
-// 共通CSS（YouTube風サイドバー対応）
+// ユーティリティ関数
 // --------------------------------------
-const CSS = `
-<style>
-  body {
-    font-family: "Segoe UI", sans-serif;
-    background: #f0f6ff;
-    margin: 0;
-    padding: 0;
-    color: #333;
-  }
 
-  h2 {
-    margin-bottom: 20px;
-    color: #2c3e50;
-    text-align: center;
-  }
+// HTMLエスケープ（XSS対策）
+function escapeHtml(text) {
+  if (!text) return '';
+  return String(text)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#x27;');
+}
 
-  /* サイドバー（閉じた状態） */
-  .sidebar {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 50px;
-    height: 100%;
-    background: white;
-    border-right: 1px solid #ddd;
-    padding-top: 60px;
-    transition: width 0.25s ease;
-    overflow: hidden;
-    z-index: 1000;
-  }
-
-  /* 開いた状態 */
-  .sidebar.open {
-    width: 220px;
-  }
-
-  .sidebar a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 12px 18px;
-    font-size: 17px;
-    color: #333;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .sidebar a:hover {
-    background: #eaf4ff;
-  }
-
-  .sidebar-icon {
-    font-size: 20px;
-  }
-
-  /* メインコンテンツ */
-  .main-content {
-    margin-left: 80px;
-    padding: 20px;
-    transition: margin-left 0.25s ease;
-  }
-
-  .main-content.shift {
-    margin-left: 240px;
-  }
-
-  /* カードレイアウト */
-  .card-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-    gap: 20px;
-    padding: 20px;
-  }
-
-  .card {
-    background: white;
-    padding: 15px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-  }
-
-  .card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 6px 16px rgba(0,0,0,0.15);
-  }
-
-  .thumb {
-    width: 100%;
-    border-radius: 10px;
-  }
-
-  .center-box {
-    max-width: 380px;
-    margin: 80px auto;
-    background: white;
-    padding: 30px;
-    border-radius: 12px;
-    box-shadow: 0 4px 16px rgba(0,0,0,0.15);
-  }
-
-  input, button {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 16px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    margin-bottom: 15px;
-  }
-
-  button {
-    background: #3498db;
-    color: white;
-    border: none;
-    cursor: pointer;
-    font-weight: bold;
-  }
-
-  button:hover {
-    background: #2d89c6;
-  }
-
-  /* ★ 地域選択 UI 統一デザイン ★ */
-  .region-select {
-    width: 100%;
-    padding: 12px 14px;
-    font-size: 16px;
-    border-radius: 8px;
-    border: 1px solid #ccc;
-    margin-bottom: 15px;
-    background: white;
-    cursor: pointer;
-  }
-  .region-select:hover {
-    border-color: #3498db;
-  }
-
-</style>
-`;
-
-
-// --------------------------------------
-// サイドバー HTML（全ページ共通）
-// --------------------------------------
-const SIDEBAR_HTML = `
-<div id="sidebar" class="sidebar">
-  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
-  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
-  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
-  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
-  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
-</div>
-`;
-
-// --------------------------------------
-// ホーム（動画検索のみ・横幅広 UI）
-// --------------------------------------
-app.get("/", (req, res) => {
-  const user = req.cookies.user;
-  if (!user) return res.redirect("/login");
-
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-
-        <h2>動画検索</h2>
-
-        <div style="max-width:800px;margin:0 auto;">
-          <form action="/search" method="post">
-            <input type="text" name="q" placeholder="検索ワードを入力">
-            <select name="region" class="region-select">
-              <option value="jp">日本のみ</option>
-              <option value="global">全世界</option>
-            </select>
-            <button type="submit">動画を検索</button>
-          </form>
-        </div>
-
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `);
-});
-
-// --------------------------------------
-// サイドバー JS（ホバーで開閉）
-// --------------------------------------
-const SIDEBAR_JS = `
-<script>
-const sidebar = document.getElementById("sidebar");
-const main = document.getElementById("main-content");
-
-sidebar.addEventListener("mouseenter", () => {
-  sidebar.classList.add("open");
-  main.classList.add("shift");
-});
-
-sidebar.addEventListener("mouseleave", () => {
-  sidebar.classList.remove("open");
-  main.classList.remove("shift");
-});
-</script>
-`;
-
-
-// --------------------------------------
-// 固定ユーザー管理
-// --------------------------------------
 function loadUsers() {
   if (!fs.existsSync("users.json")) return [];
   return JSON.parse(fs.readFileSync("users.json", "utf8"));
@@ -259,15 +53,12 @@ async function saveHistory(user, keyword, videoId, title) {
 
 function formatDateJP(date) {
   const d = new Date(date);
-
   const year = d.getFullYear();
   const month = d.getMonth() + 1;
   const day = d.getDate();
-
   const hours = String(d.getHours()).padStart(2, "0");
   const minutes = String(d.getMinutes()).padStart(2, "0");
   const seconds = String(d.getSeconds()).padStart(2, "0");
-
   const weekdays = ["日曜日", "月曜日", "火曜日", "水曜日", "木曜日", "金曜日", "土曜日"];
   const weekday = weekdays[d.getDay()];
 
@@ -275,596 +66,1274 @@ function formatDateJP(date) {
 }
 
 // --------------------------------------
+// 改善版CSS（スマホ対応 + UI向上）
+// --------------------------------------
+const CSS = `
+<style>
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    min-height: 100vh;
+    color: #333;
+  }
+
+  h2 {
+    margin-bottom: 20px;
+    color: #2c3e50;
+    text-align: center;
+    font-size: 28px;
+    font-weight: 600;
+  }
+
+  /* ハンバーガーメニューボタン（モバイル用） */
+  .menu-toggle {
+    display: none;
+    position: fixed;
+    top: 15px;
+    left: 15px;
+    z-index: 2000;
+    background: white;
+    border: none;
+    border-radius: 8px;
+    width: 45px;
+    height: 45px;
+    cursor: pointer;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    font-size: 24px;
+  }
+
+  /* サイドバー */
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 70px;
+    height: 100%;
+    background: white;
+    border-right: 1px solid #e0e0e0;
+    padding-top: 20px;
+    transition: width 0.3s ease, transform 0.3s ease;
+    overflow: hidden;
+    z-index: 1000;
+    box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+  }
+
+  .sidebar.open {
+    width: 240px;
+  }
+
+  .sidebar a {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 16px 20px;
+    font-size: 16px;
+    color: #555;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background 0.2s ease, color 0.2s ease;
+    border-left: 3px solid transparent;
+  }
+
+  .sidebar a:hover {
+    background: linear-gradient(90deg, #f0f4ff 0%, #ffffff 100%);
+    color: #667eea;
+    border-left-color: #667eea;
+  }
+
+  .sidebar-icon {
+    font-size: 22px;
+    min-width: 30px;
+    text-align: center;
+  }
+
+  /* メインコンテンツ */
+  .main-content {
+    margin-left: 90px;
+    padding: 30px 20px;
+    transition: margin-left 0.3s ease;
+    min-height: 100vh;
+  }
+
+  .main-content.shift {
+    margin-left: 260px;
+  }
+
+  /* カードコンテナ */
+  .container {
+    max-width: 1200px;
+    margin: 0 auto;
+  }
+
+  /* カードグリッド */
+  .card-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    gap: 24px;
+    padding: 20px 0;
+  }
+
+  .card {
+    background: white;
+    padding: 0;
+    border-radius: 16px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    overflow: hidden;
+    cursor: pointer;
+  }
+
+  .card:hover {
+    transform: translateY(-8px);
+    box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+  }
+
+  .card img.thumb {
+    width: 100%;
+    height: 180px;
+    object-fit: cover;
+    display: block;
+  }
+
+  .card-content {
+    padding: 15px;
+  }
+
+  .card-title {
+    font-weight: 600;
+    font-size: 15px;
+    line-height: 1.4;
+    color: #333;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  /* 中央ボックス（ログインなど） */
+  .center-box {
+    max-width: 420px;
+    margin: 80px auto;
+    background: white;
+    padding: 40px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  }
+
+  .center-box h2 {
+    margin-bottom: 30px;
+    color: #667eea;
+  }
+
+  /* 検索ボックス */
+  .search-box {
+    max-width: 800px;
+    margin: 0 auto 40px;
+    background: white;
+    padding: 30px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  }
+
+  /* フォーム要素 */
+  input[type="text"],
+  input[type="password"],
+  select,
+  .region-select {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    border-radius: 10px;
+    border: 2px solid #e0e0e0;
+    margin-bottom: 16px;
+    background: white;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    font-family: inherit;
+  }
+
+  input:focus,
+  select:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+  }
+
+  button {
+    width: 100%;
+    padding: 14px 16px;
+    font-size: 16px;
+    font-weight: 600;
+    border-radius: 10px;
+    border: none;
+    cursor: pointer;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    font-family: inherit;
+  }
+
+  button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+  }
+
+  button:active {
+    transform: translateY(0);
+  }
+
+  button.danger {
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+  }
+
+  /* 履歴カード */
+  .history-card {
+    background: white;
+    padding: 20px;
+    margin-bottom: 15px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    border-left: 4px solid #667eea;
+  }
+
+  .history-card strong {
+    color: #667eea;
+    font-size: 16px;
+  }
+
+  .history-card a {
+    color: #555;
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+
+  .history-card a:hover {
+    color: #667eea;
+    text-decoration: underline;
+  }
+
+  /* エラーページ */
+  .error-container {
+    max-width: 600px;
+    margin: 100px auto;
+    text-align: center;
+    background: white;
+    padding: 50px;
+    border-radius: 20px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+  }
+
+  .error-icon {
+    font-size: 80px;
+    margin-bottom: 20px;
+  }
+
+  .error-title {
+    font-size: 32px;
+    color: #f5576c;
+    margin-bottom: 15px;
+  }
+
+  .error-message {
+    font-size: 18px;
+    color: #666;
+    margin-bottom: 30px;
+    line-height: 1.6;
+  }
+
+  .error-link {
+    display: inline-block;
+    padding: 12px 30px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    text-decoration: none;
+    border-radius: 10px;
+    font-weight: 600;
+    transition: transform 0.2s ease;
+  }
+
+  .error-link:hover {
+    transform: translateY(-2px);
+  }
+
+  /* ローディング */
+  .loading {
+    text-align: center;
+    padding: 40px;
+    font-size: 18px;
+    color: #667eea;
+  }
+
+  .spinner {
+    border: 4px solid #f3f3f3;
+    border-top: 4px solid #667eea;
+    border-radius: 50%;
+    width: 50px;
+    height: 50px;
+    animation: spin 1s linear infinite;
+    margin: 20px auto;
+  }
+
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+
+  /* タブ（管理者ページ用） */
+  .tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 30px;
+    border-bottom: 2px solid #e0e0e0;
+  }
+
+  .tab {
+    padding: 12px 24px;
+    cursor: pointer;
+    border-bottom: 3px solid transparent;
+    transition: all 0.3s ease;
+    font-weight: 600;
+    color: #666;
+  }
+
+  .tab:hover {
+    color: #667eea;
+  }
+
+  .tab.active {
+    color: #667eea;
+    border-bottom-color: #667eea;
+  }
+
+  .tab-content {
+    display: none;
+  }
+
+  .tab-content.active {
+    display: block;
+  }
+
+  /* レスポンシブデザイン */
+  @media (max-width: 768px) {
+    .menu-toggle {
+      display: block;
+    }
+
+    .sidebar {
+      width: 0;
+      transform: translateX(-100%);
+      padding-top: 70px;
+    }
+
+    .sidebar.open {
+      width: 280px;
+      transform: translateX(0);
+    }
+
+    .main-content {
+      margin-left: 0;
+      padding: 80px 15px 30px;
+    }
+
+    .main-content.shift {
+      margin-left: 0;
+    }
+
+    .card-grid {
+      grid-template-columns: 1fr;
+      gap: 16px;
+    }
+
+    .center-box {
+      margin: 40px 15px;
+      padding: 30px 20px;
+    }
+
+    .search-box {
+      padding: 20px;
+      margin-bottom: 30px;
+    }
+
+    h2 {
+      font-size: 24px;
+    }
+
+    .error-container {
+      margin: 50px 15px;
+      padding: 30px 20px;
+    }
+
+    .error-icon {
+      font-size: 60px;
+    }
+
+    .error-title {
+      font-size: 24px;
+    }
+  }
+
+  @media (min-width: 769px) and (max-width: 1024px) {
+    .card-grid {
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    }
+  }
+
+  /* ダークモード対応 */
+  @media (prefers-color-scheme: dark) {
+    body {
+      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    }
+
+    .sidebar {
+      background: #2a2a3e;
+      border-right-color: #3a3a4e;
+    }
+
+    .sidebar a {
+      color: #b0b0c0;
+    }
+
+    .sidebar a:hover {
+      background: linear-gradient(90deg, #3a3a4e 0%, #2a2a3e 100%);
+      color: #667eea;
+    }
+
+    .card,
+    .center-box,
+    .search-box,
+    .history-card,
+    .error-container {
+      background: #2a2a3e;
+      color: #e0e0e0;
+    }
+
+    .card-title,
+    h2 {
+      color: #e0e0e0;
+    }
+
+    input,
+    select {
+      background: #3a3a4e;
+      border-color: #4a4a5e;
+      color: #e0e0e0;
+    }
+
+    .menu-toggle {
+      background: #2a2a3e;
+      color: #e0e0e0;
+    }
+  }
+</style>
+`;
+
+// --------------------------------------
+// サイドバー HTML
+// --------------------------------------
+const SIDEBAR_HTML = `
+<button class="menu-toggle" onclick="toggleSidebar()" aria-label="メニュー">☰</button>
+<div id="sidebar" class="sidebar">
+  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
+  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
+  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
+  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
+  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
+</div>
+`;
+
+// --------------------------------------
+// サイドバー JS
+// --------------------------------------
+const SIDEBAR_JS = `
+<script>
+const sidebar = document.getElementById("sidebar");
+const main = document.getElementById("main-content");
+
+// デスクトップ: ホバーで開閉
+if (window.innerWidth > 768) {
+  sidebar.addEventListener("mouseenter", () => {
+    sidebar.classList.add("open");
+    main.classList.add("shift");
+  });
+
+  sidebar.addEventListener("mouseleave", () => {
+    sidebar.classList.remove("open");
+    main.classList.remove("shift");
+  });
+}
+
+// モバイル: ボタンでトグル
+function toggleSidebar() {
+  sidebar.classList.toggle("open");
+}
+
+// サイドバー外クリックで閉じる（モバイル）
+document.addEventListener("click", (e) => {
+  if (window.innerWidth <= 768) {
+    const menuToggle = document.querySelector(".menu-toggle");
+    if (!sidebar.contains(e.target) && !menuToggle.contains(e.target)) {
+      sidebar.classList.remove("open");
+    }
+  }
+});
+</script>
+`;
+
+// --------------------------------------
+// エラーページ生成関数
+// --------------------------------------
+function renderError(title, message, backLink = "/") {
+  return `
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>${escapeHtml(title)}</title>
+      ${CSS}
+    </head>
+    <body>
+      <div class="error-container">
+        <div class="error-icon">⚠️</div>
+        <h1 class="error-title">${escapeHtml(title)}</h1>
+        <p class="error-message">${escapeHtml(message)}</p>
+        <a href="${backLink}" class="error-link">ホームに戻る</a>
+      </div>
+    </body>
+    </html>
+  `;
+}
+
+// --------------------------------------
 // ログイン画面
 // --------------------------------------
 app.get("/login", (req, res) => {
   res.send(`
-    <html>
-    <head>${CSS}</head>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>ログイン</title>
+      ${CSS}
+    </head>
     <body>
-
       <div class="center-box">
         <h2>ログイン</h2>
         <form method="POST" action="/login">
-          <input name="user" placeholder="ユーザー名" required>
-          <input name="pass" type="password" placeholder="パスワード" required>
-          <button>ログイン</button>
+          <input name="user" placeholder="ユーザー名" required autocomplete="username">
+          <input name="pass" type="password" placeholder="パスワード" required autocomplete="current-password">
+          <button type="submit">ログイン</button>
         </form>
       </div>
-
     </body>
     </html>
   `);
 });
 
 app.post("/login", (req, res) => {
-  const { user, pass } = req.body;
-  const users = loadUsers();
+  try {
+    const { user, pass } = req.body;
+    const users = loadUsers();
 
-  const found = users.find(u => u.user === user && u.pass === pass);
-  if (!found) return res.send("ユーザー名またはパスワードが違います");
+    const found = users.find(u => u.user === user && u.pass === pass);
+    if (!found) {
+      return res.send(renderError("ログイン失敗", "ユーザー名またはパスワードが間違っています", "/login"));
+    }
 
-  res.cookie("user", user, { httpOnly: true });
-  res.redirect("/");
+    res.cookie("user", user, { 
+      httpOnly: true,
+      maxAge: 24 * 60 * 60 * 1000 // 24時間
+    });
+    res.redirect("/");
+  } catch (error) {
+    console.error("Login error:", error);
+    res.send(renderError("エラー", "ログイン処理中にエラーが発生しました", "/login"));
+  }
 });
 
 // --------------------------------------
-// ホーム
+// ホーム（ルート重複を削除し、1つに統合）
 // --------------------------------------
 app.get("/", (req, res) => {
   const user = req.cookies.user;
-
   if (!user) return res.redirect("/login");
 
   res.send(`
-    <html>
-    <head>${CSS}</head>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>ホーム</title>
+      ${CSS}
+    </head>
     <body>
-
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-        <h2>ようこそ ${user} さん</h2>
-        <center>
-          <form action="/search">
-            <input type="text" name="q" placeholder="検索ワード" required style="max-width:400px;">
-            <button style="width:200px;">検索</button>
-          </form>
-          <br>
-          <a href="/logout">ログアウト</a>
-        </center>
+        <div class="container">
+          <div class="search-box">
+            <h2>動画検索</h2>
+            <form action="/search" method="post">
+              <input type="text" name="q" placeholder="検索ワードを入力" required>
+              <select name="region" class="region-select">
+                <option value="jp">日本のみ</option>
+                <option value="global">全世界</option>
+              </select>
+              <button type="submit">🔍 動画を検索</button>
+            </form>
+          </div>
+        </div>
       </div>
 
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `);
 });
 
 // --------------------------------------
-// 動画検索（60件）
+// 動画検索（エラーハンドリング追加）
 // --------------------------------------
 app.post("/search", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  // ★ POST で受け取る（履歴に残らない）
-  const q = req.body.q;
-  const region = req.body.region || "jp";
+  try {
+    const q = req.body.q;
+    const region = req.body.region || "jp";
 
-  if (!q) return res.send("検索ワードがありません");
+    if (!q) {
+      return res.send(renderError("入力エラー", "検索ワードを入力してください"));
+    }
 
-  // ★ 地域ごとに URL を切り替え
-  let url;
-  if (region === "global") {
-    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
-  } else {
-    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
+    // URL構築
+    let url;
+    if (region === "global") {
+      url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}`;
+    } else {
+      url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&gl=JP&hl=ja`;
+    }
+
+    // YouTube取得
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`YouTube API returned ${response.status}`);
+    }
+
+    const html = await response.text();
+
+    // 動画パース
+    const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
+
+    if (videoMatches.length === 0) {
+      return res.send(renderError("検索結果なし", "検索結果が見つかりませんでした。別のキーワードをお試しください。"));
+    }
+
+    const videos = videoMatches.slice(0, 60).map(m => ({
+      id: m[1],
+      title: m[2]
+    }));
+
+    // HTML出力
+    let list = `
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>検索結果: ${escapeHtml(q)}</title>
+        ${CSS}
+      </head>
+      <body>
+        ${SIDEBAR_HTML}  
+
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <h2>🔍 検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#888;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
+            <div class="card-grid">
+    `;
+
+    list += videos.map(v => `
+      <form action="/watch" method="post" style="margin:0;">
+        <input type="hidden" name="id" value="${escapeHtml(v.id)}">
+        <button type="submit" style="all:unset;display:block;width:100%;">
+          <div class="card">
+            <img class="thumb" src="https://i.ytimg.com/vi/${escapeHtml(v.id)}/hqdefault.jpg" alt="${escapeHtml(v.title)}">
+            <div class="card-content">
+              <div class="card-title">${escapeHtml(v.title)}</div>
+            </div>
+          </div>
+        </button>
+      </form>
+    `).join("");
+
+    list += `
+            </div>
+          </div>
+        </div>
+
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `;
+
+    res.send(list);
+
+  } catch (error) {
+    console.error("Search error:", error);
+    res.send(renderError("検索エラー", "検索中にエラーが発生しました。しばらくしてからもう一度お試しください。"));
   }
-
-  const html = await fetch(url).then(r => r.text());
-
-  // ★ 正規表現は必ず1行（改行禁止）
-  const videoMatches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
-
-  const videos = videoMatches.slice(0, 60).map(m => ({
-    id: m[1],
-    title: m[2]
-  }));
-
-  // ★ HTML 出力
-  let list = `
-    <html>
-    <head>${CSS}</head>
-    <body>
-      ${SIDEBAR_HTML}  
-
-      <div id="main-content" class="main-content">
-        <h2>動画検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
-        <div class="card-grid">
-  `;
-
-  // ★ 動画カード（POST 方式・履歴に残らない）
-  list += videos.map(v => `
-    <form action="/watch" method="post" style="display:inline;">
-      <input type="hidden" name="id" value="${v.id}">
-      <button style="all:unset;cursor:pointer;">
-        <div class="card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-          <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-        </div>
-      </button>
-    </form>
-  `).join("");
-
-  list += `
-        </div>
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `;
-
-  res.send(list);
 });
 
 // --------------------------------------
-// チャンネル動画一覧（内部ページ）
+// チャンネル動画一覧（エラーハンドリング追加）
 // --------------------------------------
 app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const id = req.query.id;
-  if (!id) return res.send("チャンネルIDがありません");
+  try {
+    const id = req.query.id;
+    if (!id) {
+      return res.send(renderError("入力エラー", "チャンネルIDが指定されていません", "/channel-search"));
+    }
 
-  // チャンネルの動画一覧ページを取得
-  const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
-  const html = await fetch(url).then(r => r.text());
+    const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
+    const response = await fetch(url);
+    
+    if (!response.ok) {
+      throw new Error(`YouTube returned ${response.status}`);
+    }
 
-  // ytInitialData を抽出（複数パターン対応）
-  let jsonText =
-  html.match(/ytInitialData"\]\s*=\s*(\{.*?\});/) ||
-  html.match(/var ytInitialData = (\{.*?\});/) ||
-  html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});/);
+    const html = await response.text();
 
-  if (!jsonText)
-    return res.send("データを取得できませんでした（ytInitialData が見つかりません）");
+    // ytInitialData を抽出
+    let jsonText =
+      html.match(/ytInitialData"\]\s*=\s*(\{.*?\});/) ||
+      html.match(/var ytInitialData = (\{.*?\});/) ||
+      html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});/);
 
-  const data = JSON.parse(jsonText[1]);
+    if (!jsonText) {
+      return res.send(renderError("データ取得エラー", "チャンネルデータを取得できませんでした", "/channel-search"));
+    }
 
-function getTitle(v) {
-  if (v.title?.simpleText) return v.title.simpleText;
+    const data = JSON.parse(jsonText[1]);
 
-  if (Array.isArray(v.title?.runs)) {
-    return v.title.runs.map(r => r.text).join("") || "No Title";
+    function findGridItems(obj) {
+      if (!obj || typeof obj !== "object") return null;
+
+      if (obj.gridRenderer?.items) return obj.gridRenderer.items;
+      if (obj.richGridRenderer?.contents) return obj.richGridRenderer.contents;
+
+      for (const key in obj) {
+        const found = findGridItems(obj[key]);
+        if (found) return found;
+      }
+
+      return null;
+    }
+
+    const grid = findGridItems(data) || [];
+
+    const videos = grid
+      .map(v => v.gridVideoRenderer || v.richItemRenderer?.content?.videoRenderer)
+      .filter(v => v && v.videoId)
+      .map(v => ({
+        id: v.videoId,
+        title:
+          v.title?.simpleText ||
+          v.title?.runs?.map(r => r.text).join("") ||
+          "No Title",
+        thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
+      }));
+
+    const list60 = videos.slice(0, 60);
+
+    const channelTitle =
+      data.metadata?.channelMetadataRenderer?.title ||
+      "チャンネル名取得不可";
+
+    let list = `
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${escapeHtml(channelTitle)}</title>
+        ${CSS}
+      </head>
+      <body>
+        ${SIDEBAR_HTML}
+
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <h2>📺 ${escapeHtml(channelTitle)}</h2>
+            <div class="card-grid">
+    `;
+
+    list += list60.map(v => `
+      <form action="/watch" method="post" style="margin:0;">
+        <input type="hidden" name="id" value="${escapeHtml(v.id)}">
+        <button type="submit" style="all:unset;display:block;width:100%;">
+          <div class="card">
+            <img class="thumb" src="https://i.ytimg.com/vi/${escapeHtml(v.id)}/hqdefault.jpg" alt="${escapeHtml(v.title)}">
+            <div class="card-content">
+              <div class="card-title">${escapeHtml(v.title)}</div>
+            </div>
+          </div>
+        </button>
+      </form>
+    `).join("");
+
+    list += `
+            </div>
+          </div>
+        </div>
+
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `;
+
+    res.send(list);
+
+  } catch (error) {
+    console.error("Channel videos error:", error);
+    res.send(renderError("エラー", "チャンネル動画の取得中にエラーが発生しました", "/channel-search"));
   }
-
-  return "No Title";
-}
-  
-function findGridItems(obj) {
-  if (!obj || typeof obj !== "object") return null;
-
-  // gridRenderer.items
-  if (obj.gridRenderer?.items) return obj.gridRenderer.items;
-
-  // richGridRenderer.contents
-  if (obj.richGridRenderer?.contents) return obj.richGridRenderer.contents;
-
-  // 再帰的に探索
-  for (const key in obj) {
-    const found = findGridItems(obj[key]);
-    if (found) return found;
-  }
-
-  return null;
-}
-
-const grid = findGridItems(data) || [];
-
-// ★★★ videos はここで 1 回だけ生成する（これが正しい）★★★
-const videos = grid
-  .map(v => v.gridVideoRenderer || v.richItemRenderer?.content?.videoRenderer)
-  .filter(v => v && v.videoId)
-  .map(v => ({
-    id: v.videoId,
-    title:
-      v.title?.simpleText ||
-      v.title?.runs?.map(r => r.text).join("") ||
-      "No Title",
-    thumb: v.thumbnail?.thumbnails?.slice(-1)[0]?.url || ""
-  }));
-
-// 最大 60 件
-const list60 = videos.slice(0, 60);
-
-// チャンネル名
-const title =
-  data.metadata?.channelMetadataRenderer?.title ||
-  "チャンネル名取得不可";
-
-// HTML 出力
-let list = `
-  <html>
-  <head>${CSS}</head>
-  <body>
-
-    ${SIDEBAR_HTML}
-
-    <div id="main-content" class="main-content">
-      <h2>${title} の動画一覧</h2>
-      <div class="card-grid">
-`;
-
-list += list60.map(v => `
-<div class="card">
-  <form action="/watch" method="post" style="display:inline;">
-    <input type="hidden" name="id" value="${v.id}">
-    <button style="all:unset;cursor:pointer;">
-      <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-      <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-    </button>
-  </form>
-</div>
-`).join("");
-
-list += `
-      </div>
-    </div>
-
-    ${SIDEBAR_JS}
-
-  </body>
-  </html>
-`;
-
-res.send(list);
 });
 
 // --------------------------------------
-// チャンネル検索（横幅広 UI）
+// チャンネル検索
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
   res.send(`
-    <html>
-    <head>${CSS}</head>
+    <html lang="ja">
+    <head>
+      <meta charset="UTF-8">
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <title>チャンネル検索</title>
+      ${CSS}
+    </head>
     <body>
-
       ${SIDEBAR_HTML}
 
       <div id="main-content" class="main-content">
-
-        <h2>チャンネル検索</h2>
-
-        <div style="max-width:800px;margin:0 auto;">
-          <form action="/channel-search/result" method="get">
-            <input type="text" name="q" placeholder="チャンネル名を入力">
-            <select name="region" class="region-select">
-              <option value="jp">日本のみ</option>
-              <option value="global">全世界</option>
-            </select>
-            <button type="submit">検索</button>
-          </form>
+        <div class="container">
+          <div class="search-box">
+            <h2>チャンネル検索</h2>
+            <form action="/channel-search/result" method="get">
+              <input type="text" name="q" placeholder="チャンネル名を入力" required>
+              <select name="region" class="region-select">
+                <option value="jp">日本のみ</option>
+                <option value="global">全世界</option>
+              </select>
+              <button type="submit">📺 検索</button>
+            </form>
+          </div>
         </div>
-
       </div>
 
       ${SIDEBAR_JS}
-
     </body>
     </html>
   `);
 });
 
-
 // --------------------------------------
-// チャンネル検索結果（60件）
+// チャンネル検索結果（エラーハンドリング追加）
 // --------------------------------------
 app.get("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const q = req.query.q;
-  const region = req.query.region || "jp";
-
-  // ★ 地域で URL 切替
-  let url;
-  if (region === "global") {
-    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
-  } else {
-    url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&hl=ja&gl=JP`;
-  }
-
-  const html = await fetch(url).then(r => r.text());
-
-  const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
-  if (!jsonText) return res.send("データを取得できませんでした");
-
-  const data = JSON.parse(jsonText[1]);
-
-  const channels = [];
-  function scan(obj) {
-    if (typeof obj !== "object" || obj === null) return;
-
-    if (obj.channelRenderer) {
-      const c = obj.channelRenderer;
-      channels.push({
-        id: c.channelId,
-        title: c.title?.simpleText || c.title?.runs?.[0]?.text || "No Title",
-        icon: c.thumbnail?.thumbnails?.[0]?.url || ""
-      });
-    }
-
-    for (const key in obj) scan(obj[key]);
-  }
-  scan(data);
-
-  const list60 = channels.slice(0, 60);
-
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
-
-      ${SIDEBAR_HTML}
-
-      <div id="main-content" class="main-content">
-        <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
-        <div class="card-grid">
-          ${list60.map(c => `
-            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
-              <img class="thumb" src="${c.icon}">
-              <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
-            </div>
-          `).join("")}
-        </div>
-      </div>
-
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `);
-});
-
-
-app.post("/watch", async (req, res) => {
-  const id = req.body.id;
-  if (!id) return res.send("動画IDがありません");
-
-  const user = req.cookies.user;
-  const embedUrl = `https://www.youtube.com/embed/${id}`;
-  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
-
-  let embeddable = true;
-  let title = "動画タイトル不明";
-
   try {
-    const check = await fetch(oembedUrl);
-    if (!check.ok) {
-      embeddable = false;
-    } else {
-      const data = await check.json();
-      title = data.title || title;
+    const q = req.query.q;
+    const region = req.query.region || "jp";
+
+    if (!q) {
+      return res.send(renderError("入力エラー", "チャンネル名を入力してください", "/channel-search"));
     }
-  } catch {
-    embeddable = false;
-  }
 
-  if (!embeddable) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
-  }
+    let url;
+    if (region === "global") {
+      url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D`;
+    } else {
+      url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&hl=ja&gl=JP`;
+    }
 
-  // ★★★ 履歴保存（POST 版）★★★
-  if (user) {
-    await saveHistory(user, "watch", id, title);
-  }
+    const response = await fetch(url);
+    if (!response.ok) {
+      throw new Error(`YouTube returned ${response.status}`);
+    }
 
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
-      ${SIDEBAR_HTML}
-      <div id="main-content" class="main-content">
-        <h2>${title}</h2>
-        <center>
-          <iframe width="560" height="315"
-            src="${embedUrl}"
-            frameborder="0" allowfullscreen></iframe>
-          <br><br>
-          <a href="/">ホーム</a>
-        </center>
-      </div>
-      ${SIDEBAR_JS}
+    const html = await response.text();
 
-      <!-- ★★★ POST 送信用スクリプト ★★★ -->
-      <script>
-      function postWatch(id) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/watch";
+    const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
+    if (!jsonText) {
+      return res.send(renderError("データ取得エラー", "チャンネルデータを取得できませんでした", "/channel-search"));
+    }
 
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "id";
-        input.value = id;
+    const data = JSON.parse(jsonText[1]);
 
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
+    const channels = [];
+    function scan(obj) {
+      if (typeof obj !== "object" || obj === null) return;
+
+      if (obj.channelRenderer) {
+        const c = obj.channelRenderer;
+        channels.push({
+          id: c.channelId,
+          title: c.title?.simpleText || c.title?.runs?.[0]?.text || "No Title",
+          icon: c.thumbnail?.thumbnails?.[0]?.url || ""
+        });
       }
-      </script>
-    </body>
-    </html>
-  `);
+
+      for (const key in obj) scan(obj[key]);
+    }
+    scan(data);
+
+    if (channels.length === 0) {
+      return res.send(renderError("検索結果なし", "チャンネルが見つかりませんでした。別のキーワードをお試しください。", "/channel-search"));
+    }
+
+    const list60 = channels.slice(0, 60);
+
+    res.send(`
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>チャンネル検索結果: ${escapeHtml(q)}</title>
+        ${CSS}
+      </head>
+      <body>
+        ${SIDEBAR_HTML}
+
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <h2>📺 チャンネル検索結果: ${escapeHtml(q)} <small style="font-size:18px;color:#888;">(${region === "jp" ? "日本" : "全世界"})</small></h2>
+            <div class="card-grid">
+              ${list60.map(c => `
+                <div class="card" onclick="location.href='/channel-videos?id=${escapeHtml(c.id)}'" style="cursor:pointer;">
+                  <img class="thumb" src="${escapeHtml(c.icon)}" alt="${escapeHtml(c.title)}">
+                  <div class="card-content">
+                    <div class="card-title">${escapeHtml(c.title)}</div>
+                  </div>
+                </div>
+              `).join("")}
+            </div>
+          </div>
+        </div>
+
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error("Channel search error:", error);
+    res.send(renderError("検索エラー", "チャンネル検索中にエラーが発生しました", "/channel-search"));
+  }
 });
 
 // --------------------------------------
-// 履歴ページ（ユーザー用） PostgreSQL 版
+// 動画視聴（エラーハンドリング追加）
+// --------------------------------------
+app.post("/watch", async (req, res) => {
+  try {
+    const id = req.body.id;
+    if (!id) {
+      return res.send(renderError("エラー", "動画IDが指定されていません"));
+    }
+
+    const user = req.cookies.user;
+    const embedUrl = `https://www.youtube.com/embed/${id}`;
+    const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
+
+    let embeddable = true;
+    let title = "動画タイトル不明";
+
+    try {
+      const check = await fetch(oembedUrl);
+      if (!check.ok) {
+        embeddable = false;
+      } else {
+        const data = await check.json();
+        title = data.title || title;
+      }
+    } catch {
+      embeddable = false;
+    }
+
+    if (!embeddable) {
+      return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    }
+
+    // 履歴保存
+    if (user) {
+      await saveHistory(user, "watch", id, title);
+    }
+
+    res.send(`
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${escapeHtml(title)}</title>
+        ${CSS}
+        <style>
+          .video-container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 16px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+          }
+          .video-wrapper {
+            position: relative;
+            padding-bottom: 56.25%;
+            height: 0;
+            overflow: hidden;
+            border-radius: 12px;
+          }
+          .video-wrapper iframe {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+          }
+          .video-title {
+            margin-top: 20px;
+            font-size: 24px;
+            font-weight: 600;
+            color: #333;
+          }
+          @media (max-width: 768px) {
+            .video-container {
+              padding: 20px 15px;
+            }
+            .video-title {
+              font-size: 20px;
+            }
+          }
+        </style>
+      </head>
+      <body>
+        ${SIDEBAR_HTML}
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <div class="video-container">
+              <div class="video-wrapper">
+                <iframe
+                  src="${embedUrl}"
+                  frameborder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowfullscreen></iframe>
+              </div>
+              <div class="video-title">${escapeHtml(title)}</div>
+            </div>
+          </div>
+        </div>
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `);
+
+  } catch (error) {
+    console.error("Watch error:", error);
+    res.send(renderError("エラー", "動画の読み込み中にエラーが発生しました"));
+  }
+});
+
+// --------------------------------------
+// 履歴ページ（エラーハンドリング追加）
 // --------------------------------------
 app.get("/history", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const result = await pool.query(
-    `SELECT query, video_id, title, created_at
-     FROM history
-     WHERE user_id = $1
-     ORDER BY created_at DESC`,
-    [user]
-  );
+  try {
+    const result = await pool.query(
+      `SELECT query, video_id, title, created_at
+       FROM history
+       WHERE user_id = $1
+       ORDER BY created_at DESC`,
+      [user]
+    );
 
-  const data = result.rows;
+    const data = result.rows;
 
-  let html = `
-    <html>
-    <head>${CSS}</head>
-    <body>
+    let html = `
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>履歴</title>
+        ${CSS}
+      </head>
+      <body>
+        ${SIDEBAR_HTML}
 
-      ${SIDEBAR_HTML}
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <h2>🕘 ${escapeHtml(user)} さんの検索履歴</h2>
 
-      <div id="main-content" class="main-content">
-        <h2>${user} さんの検索履歴</h2>
+            ${data.length > 0 ? `
+              <form action="/history/delete" method="POST" style="text-align:center;margin-bottom:30px;">
+                <button class="danger" style="width:auto;max-width:300px;">すべての履歴を削除</button>
+              </form>
+            ` : ''}
 
-        <form action="/history/delete" method="POST">
-          <button class="danger" style="width:200px;">履歴をすべて削除</button>
-        </form>
-        <br>
-  `;
+            ${data.length === 0 ? `
+              <div style="text-align:center;padding:60px 20px;background:white;border-radius:16px;">
+                <div style="font-size:60px;margin-bottom:20px;">📭</div>
+                <p style="font-size:18px;color:#666;">まだ履歴がありません</p>
+              </div>
+            ` : ''}
+    `;
 
-  html += data.map((item, index) => `
-    <div class="history-card">
-      ${formatDateJP(item.created_at)}<br>
-      <strong>${item.query}</strong><br>
-
-      <a href="#" onclick="postWatch('${item.video_id}')">
-        ${item.title}
-      </a>
-
-      <br><br>
-      <a href="/history/delete-one?index=${index}" style="color:red;">この履歴を削除</a>
-    </div>
-  `).join("");
-
-  html += `
-        <br><center><a href="/">ホームへ戻る</a></center>
+    html += data.map((item, index) => `
+      <div class="history-card">
+        <div style="color:#999;font-size:14px;margin-bottom:8px;">${formatDateJP(item.created_at)}</div>
+        <strong>${escapeHtml(item.query)}</strong><br>
+        <a href="#" onclick="postWatch('${escapeHtml(item.video_id)}'); return false;">
+          ${escapeHtml(item.title)}
+        </a>
+        <br><br>
+        <a href="/history/delete-one?index=${index}" style="color:#f5576c;font-size:14px;">この履歴を削除</a>
       </div>
+    `).join("");
 
-      ${SIDEBAR_JS}
+    html += `
+          </div>
+        </div>
 
-      <script>
-      function postWatch(id) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/watch";
+        ${SIDEBAR_JS}
 
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "id";
-        input.value = id;
+        <script>
+        function postWatch(id) {
+          const form = document.createElement("form");
+          form.method = "POST";
+          form.action = "/watch";
 
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-      }
-      </script>
+          const input = document.createElement("input");
+          input.type = "hidden";
+          input.name = "id";
+          input.value = id;
 
-    </body>
-    </html>
-  `;   // ← ← ← ★★★ ここでテンプレート文字列が正しく閉じる ★★★
+          form.appendChild(input);
+          document.body.appendChild(form);
+          form.submit();
+        }
+        </script>
 
-  res.send(html);
+      </body>
+      </html>
+    `;
+
+    res.send(html);
+
+  } catch (error) {
+    console.error("History error:", error);
+    res.send(renderError("エラー", "履歴の取得中にエラーが発生しました"));
+  }
 });
+
 // --------------------------------------
-// 履歴削除（ユーザー用・全削除）
+// 履歴削除（全削除）
 // --------------------------------------
-app.post("/history/delete", (req, res) => {
+app.post("/history/delete", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const file = `history_user_${user}.json`;
-
-  if (fs.existsSync(file)) fs.unlinkSync(file);
-
-  res.redirect("/history");
+  try {
+    await pool.query('DELETE FROM history WHERE user_id = $1', [user]);
+    res.redirect("/history");
+  } catch (error) {
+    console.error("History delete error:", error);
+    res.send(renderError("エラー", "履歴の削除中にエラーが発生しました", "/history"));
+  }
 });
 
 // --------------------------------------
-// 履歴削除（ユーザー用・1件削除）
+// 履歴削除（1件削除）
 // --------------------------------------
-app.get("/history/delete-one", (req, res) => {
+app.get("/history/delete-one", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const index = parseInt(req.query.index);
-  const file = `history_user_${user}.json`;
+  try {
+    const index = parseInt(req.query.index);
+    
+    // インデックスから実際のレコードを取得して削除
+    const result = await pool.query(
+      `SELECT id FROM history WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1 OFFSET $2`,
+      [user, index]
+    );
 
-  let data = [];
-  if (fs.existsSync(file)) {
-    data = JSON.parse(fs.readFileSync(file, "utf8"));
+    if (result.rows.length > 0) {
+      await pool.query('DELETE FROM history WHERE id = $1', [result.rows[0].id]);
+    }
+
+    res.redirect("/history");
+  } catch (error) {
+    console.error("History delete one error:", error);
+    res.send(renderError("エラー", "履歴の削除中にエラーが発生しました", "/history"));
   }
-
-  if (!isNaN(index) && data[index]) {
-    data.splice(index, 1);
-    fs.writeFileSync(file, JSON.stringify(data, null, 2));
-  }
-
-  res.redirect("/history");
 });
-// --------------------------------------
-// 管理者ページ（本物の履歴）
-// --------------------------------------
-const ADMIN_PASSWORD = "jagdyufr5t62";
 
 // --------------------------------------
-// GET /admin（ログイン画面 or パスワード確認）
+// 管理者ページ
 // --------------------------------------
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "jagdyufr5t62";
+
 app.get("/admin", (req, res) => {
   const user = req.cookies.user;
   const pass = req.query.pass;
 
-  // ① ログインしていない
   if (!user) return res.redirect("/login");
 
-  // ② ユーザー名が hinata 以外
   if (user !== "hinata") {
-    return res.send("あなたには管理者ページへのアクセス権がありません");
+    return res.send(renderError("アクセス拒否", "管理者ページへのアクセス権限がありません"));
   }
 
-  // ③ パスワードが違う → ログイン画面を表示
   if (pass !== ADMIN_PASSWORD) {
     return res.send(`
-      <html>
-      <head>${CSS}</head>
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>管理者ログイン</title>
+        ${CSS}
+      </head>
       <body>
-
         ${SIDEBAR_HTML}
 
         <div id="main-content" class="main-content">
           <div class="center-box">
             <h2>管理者ログイン</h2>
             <form>
-              <input name="pass" type="password" placeholder="管理者パスワード" required>
-              <button>ログイン</button>
+              <input name="pass" type="password" placeholder="管理者パスワード" required autocomplete="current-password">
+              <button type="submit">ログイン</button>
             </form>
           </div>
         </div>
 
         ${SIDEBAR_JS}
-
       </body>
       </html>
     `);
   }
 
-  // ④ パスワードが正しい → POST /admin に飛ばすフォームを自動送信
   res.send(`
     <form id="f" method="POST" action="/admin">
       <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
@@ -873,85 +1342,84 @@ app.get("/admin", (req, res) => {
   `);
 });
 
-
-// --------------------------------------
-// POST /admin（本物の履歴表示）
-// --------------------------------------
 app.post("/admin", async (req, res) => {
   const pass = req.body.pass;
   if (pass !== ADMIN_PASSWORD) {
-    return res.send("パスワードが違います");
+    return res.send(renderError("認証エラー", "パスワードが間違っています", "/admin"));
   }
 
-  // ★★★ PostgreSQL から履歴を取得 ★★★
-  const result = await pool.query(`
-    SELECT user_id, query, video_id, title, created_at
-    FROM history
-    ORDER BY created_at DESC
-  `);
+  try {
+    const result = await pool.query(`
+      SELECT user_id, query, video_id, title, created_at
+      FROM history
+      ORDER BY created_at DESC
+    `);
 
-  // ユーザーごとにグループ化
-  const historyByUser = {};
-  for (const row of result.rows) {
-    if (!historyByUser[row.user_id]) {
-      historyByUser[row.user_id] = [];
+    const historyByUser = {};
+    for (const row of result.rows) {
+      if (!historyByUser[row.user_id]) {
+        historyByUser[row.user_id] = [];
+      }
+      historyByUser[row.user_id].push(row);
     }
-    historyByUser[row.user_id].push(row);
-  }
 
-  let allHistoryHTML = "";
-  let deleteButtonsHTML = "";
+    let allHistoryHTML = "";
+    let deleteButtonsHTML = "";
 
-  // ★★★ ユーザーごとに HTML を生成 ★★★
-  for (const userName in historyByUser) {
-    const data = historyByUser[userName];
+    for (const userName in historyByUser) {
+      const data = historyByUser[userName];
 
-    allHistoryHTML += `<h3>${userName}</h3>`;
-    allHistoryHTML += data.map(item => `
-      <div class="history-card">
-        ${formatDateJP(item.created_at)}<br>
-        <strong>${item.query}</strong><br>
+      allHistoryHTML += `<h3 style="color:#667eea;margin-top:30px;">${escapeHtml(userName)}</h3>`;
+      allHistoryHTML += data.map(item => `
+        <div class="history-card">
+          <div style="color:#999;font-size:14px;margin-bottom:8px;">${formatDateJP(item.created_at)}</div>
+          <strong>${escapeHtml(item.query)}</strong><br>
+          <a href="#" onclick="postWatch('${escapeHtml(item.video_id)}'); return false;">
+            ${escapeHtml(item.title)}
+          </a>
+        </div>
+      `).join("");
 
-        <a href="#" onclick="postWatch('${item.video_id}')">
-          ${item.title}
-        </a>
-      </div>
-    `).join("");
+      deleteButtonsHTML += `
+        <form method="POST" action="/admin/delete-user" style="margin-bottom:15px;">
+          <input type="hidden" name="user" value="${escapeHtml(userName)}">
+          <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+          <button class="danger" style="width:auto;max-width:300px;">${escapeHtml(userName)} の履歴を削除</button>
+        </form>
+      `;
+    }
 
-    // ★★★ 削除ボタンは for の中に置く ★★★
-    deleteButtonsHTML += `
-      <form method="POST" action="/admin/delete-user">
-        <input type="hidden" name="user" value="${userName}">
-        <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
-        <button class="danger" style="width:200px;">${userName} の履歴を削除</button>
-      </form>
-      <br>
-    `;
-  }
+    res.send(`
+      <html lang="ja">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>管理者ページ</title>
+        ${CSS}
+      </head>
+      <body>
+        ${SIDEBAR_HTML}
 
-  // ★★★ 管理者ページ HTML ★★★
-  res.send(`
-    <html>
-    <head>${CSS}</head>
-    <body>
+        <div id="main-content" class="main-content">
+          <div class="container">
+            <h2>⚙️ 管理者ページ</h2>
 
-      ${SIDEBAR_HTML}
+            <div class="tabs">
+              <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
+              <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+            </div>
 
-      <div id="main-content" class="main-content">
-        <h2>管理者ページ</h2>
+            <div class="tab-content active" id="content-all">
+              ${allHistoryHTML || '<p style="text-align:center;padding:40px;color:#999;">履歴がありません</p>'}
+            </div>
 
-        <div class="tabs">
-          <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
-          <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+            <div class="tab-content" id="content-delete">
+              ${deleteButtonsHTML || '<p style="text-align:center;padding:40px;color:#999;">ユーザーがいません</p>'}
+            </div>
+          </div>
         </div>
 
-        <div class="tab-content active" id="content-all">
-          ${allHistoryHTML}
-        </div>
-
-        <div class="tab-content" id="content-delete">
-          ${deleteButtonsHTML}
-        </div>
+        ${SIDEBAR_JS}
 
         <script>
           function openTab(name) {
@@ -977,35 +1445,34 @@ app.post("/admin", async (req, res) => {
             form.submit();
           }
         </script>
-      </div>
+      </body>
+      </html>
+    `);
 
-      ${SIDEBAR_JS}
-
-    </body>
-    </html>
-  `);
+  } catch (error) {
+    console.error("Admin error:", error);
+    res.send(renderError("エラー", "管理者ページの読み込み中にエラーが発生しました"));
+  }
 });
 
 // --------------------------------------
-// POST /admin/delete-user（特定ユーザーの履歴削除）
+// 管理者：ユーザー削除
 // --------------------------------------
 app.post("/admin/delete-user", async (req, res) => {
   const pass = req.body.pass;
   const user = req.body.user;
 
-  // パスワードチェック
   if (pass !== ADMIN_PASSWORD) {
-    return res.send("パスワードが違います");
+    return res.send(renderError("認証エラー", "パスワードが間違っています", "/admin"));
   }
 
-  // 履歴削除
-  await pool.query(
-    `DELETE FROM history WHERE user_id = $1`,
-    [user]
-  );
-
-  // 管理者ページに戻る
-  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+  try {
+    await pool.query('DELETE FROM history WHERE user_id = $1', [user]);
+    res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+  } catch (error) {
+    console.error("Admin delete user error:", error);
+    res.send(renderError("エラー", "ユーザー履歴の削除中にエラーが発生しました", `/admin?pass=${ADMIN_PASSWORD}`));
+  }
 });
 
 // --------------------------------------
@@ -1017,16 +1484,32 @@ app.get("/logout", (req, res) => {
 });
 
 // --------------------------------------
-// ミュージック
+// ミュージック（外部リダイレクト）
 // --------------------------------------
 app.get("/music", (req, res) => {
   res.redirect("https://musicviewer.onrender.com/");
 });
-  
+
+// --------------------------------------
+// 404エラー
+// --------------------------------------
+app.use((req, res) => {
+  res.status(404).send(renderError("ページが見つかりません", "お探しのページは存在しません"));
+});
+
+// --------------------------------------
+// グローバルエラーハンドラ
+// --------------------------------------
+app.use((err, req, res, next) => {
+  console.error("Unhandled error:", err);
+  res.status(500).send(renderError("サーバーエラー", "予期しないエラーが発生しました。しばらくしてからもう一度お試しください。"));
+});
+
 // --------------------------------------
 // サーバー起動
 // --------------------------------------
 app.listen(PORT, () => {
-  console.log("Server running on port " + PORT);
-
+  console.log(`✅ Server running on port ${PORT}`);
+  console.log(`📱 Mobile-friendly UI enabled`);
+  console.log(`🛡️ Error handling active`);
 });
