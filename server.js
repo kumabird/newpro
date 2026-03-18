@@ -66,7 +66,7 @@ function formatDateJP(date) {
 }
 
 // --------------------------------------
-// 改善版CSS（スマホ対応 + UI向上）
+// 美しい青系UI（スマホ対応）
 // --------------------------------------
 const CSS = `
 <style>
@@ -78,138 +78,213 @@ const CSS = `
 
   body {
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+    background-attachment: fixed;
     min-height: 100vh;
     color: #333;
+    position: relative;
+  }
+
+  /* 美しい背景アニメーション */
+  body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: 
+      radial-gradient(circle at 20% 50%, rgba(52, 152, 219, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 80% 80%, rgba(41, 128, 185, 0.1) 0%, transparent 50%),
+      radial-gradient(circle at 40% 20%, rgba(93, 173, 226, 0.05) 0%, transparent 50%);
+    pointer-events: none;
+    z-index: 0;
   }
 
   h2 {
-    margin-bottom: 20px;
-    color: #2c3e50;
+    margin-bottom: 25px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
     text-align: center;
-    font-size: 28px;
-    font-weight: 600;
+    font-size: 32px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
   }
 
-  /* ハンバーガーメニューボタン（モバイル用） */
+  /* ハンバーガーメニューボタン */
   .menu-toggle {
     display: none;
     position: fixed;
     top: 15px;
     left: 15px;
     z-index: 2000;
-    background: white;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
     border: none;
-    border-radius: 8px;
-    width: 45px;
-    height: 45px;
+    border-radius: 12px;
+    width: 50px;
+    height: 50px;
     cursor: pointer;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    box-shadow: 0 4px 20px rgba(52, 152, 219, 0.3);
     font-size: 24px;
+    transition: all 0.3s ease;
   }
 
-  /* サイドバー */
+  .menu-toggle:hover {
+    background: white;
+    transform: scale(1.05);
+    box-shadow: 0 6px 25px rgba(52, 152, 219, 0.4);
+  }
+
+  /* サイドバー - ガラスモーフィズム */
   .sidebar {
     position: fixed;
     top: 0;
     left: 0;
-    width: 70px;
+    width: 75px;
     height: 100%;
-    background: white;
-    border-right: 1px solid #e0e0e0;
-    padding-top: 20px;
-    transition: width 0.3s ease, transform 0.3s ease;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-right: 1px solid rgba(52, 152, 219, 0.1);
+    padding-top: 25px;
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     z-index: 1000;
-    box-shadow: 2px 0 10px rgba(0,0,0,0.05);
+    box-shadow: 4px 0 30px rgba(0, 0, 0, 0.08);
   }
 
   .sidebar.open {
-    width: 240px;
+    width: 260px;
   }
 
   .sidebar a {
     display: flex;
     align-items: center;
-    gap: 15px;
-    padding: 16px 20px;
+    gap: 18px;
+    padding: 18px 22px;
     font-size: 16px;
-    color: #555;
+    color: #2c3e50;
     text-decoration: none;
     white-space: nowrap;
-    transition: background 0.2s ease, color 0.2s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     border-left: 3px solid transparent;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .sidebar a::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    width: 0;
+    background: linear-gradient(90deg, rgba(52, 152, 219, 0.1) 0%, transparent 100%);
+    transition: width 0.3s ease;
+  }
+
+  .sidebar a:hover::before {
+    width: 100%;
   }
 
   .sidebar a:hover {
-    background: linear-gradient(90deg, #f0f4ff 0%, #ffffff 100%);
-    color: #667eea;
-    border-left-color: #667eea;
+    color: #3498db;
+    border-left-color: #3498db;
+    transform: translateX(5px);
   }
 
   .sidebar-icon {
-    font-size: 22px;
-    min-width: 30px;
+    font-size: 24px;
+    min-width: 32px;
     text-align: center;
   }
 
   /* メインコンテンツ */
   .main-content {
-    margin-left: 90px;
-    padding: 30px 20px;
-    transition: margin-left 0.3s ease;
+    margin-left: 95px;
+    padding: 40px 25px;
+    transition: margin-left 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     min-height: 100vh;
+    position: relative;
+    z-index: 1;
   }
 
   .main-content.shift {
-    margin-left: 260px;
+    margin-left: 280px;
   }
 
   /* カードコンテナ */
   .container {
-    max-width: 1200px;
+    max-width: 1400px;
     margin: 0 auto;
   }
 
   /* カードグリッド */
   .card-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-    gap: 24px;
-    padding: 20px 0;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 28px;
+    padding: 25px 0;
   }
 
   .card {
-    background: white;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
     padding: 0;
-    border-radius: 16px;
-    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-    transition: transform 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.12);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
     overflow: hidden;
     cursor: pointer;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    position: relative;
+  }
+
+  .card::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: linear-gradient(90deg, #3498db 0%, #2980b9 100%);
+    transform: scaleX(0);
+    transition: transform 0.4s ease;
+  }
+
+  .card:hover::before {
+    transform: scaleX(1);
   }
 
   .card:hover {
-    transform: translateY(-8px);
-    box-shadow: 0 12px 24px rgba(0,0,0,0.15);
+    transform: translateY(-12px) scale(1.02);
+    box-shadow: 0 20px 60px rgba(52, 152, 219, 0.25);
   }
 
   .card img.thumb {
     width: 100%;
-    height: 180px;
+    height: 200px;
     object-fit: cover;
     display: block;
+    transition: transform 0.4s ease;
+  }
+
+  .card:hover img.thumb {
+    transform: scale(1.05);
   }
 
   .card-content {
-    padding: 15px;
+    padding: 18px;
   }
 
   .card-title {
     font-weight: 600;
-    font-size: 15px;
-    line-height: 1.4;
-    color: #333;
+    font-size: 16px;
+    line-height: 1.5;
+    color: #2c3e50;
     display: -webkit-box;
     -webkit-line-clamp: 2;
     -webkit-box-orient: vertical;
@@ -218,27 +293,30 @@ const CSS = `
 
   /* 中央ボックス（ログインなど） */
   .center-box {
-    max-width: 420px;
-    margin: 80px auto;
-    background: white;
-    padding: 40px;
-    border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+    max-width: 460px;
+    margin: 100px auto;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    padding: 50px;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .center-box h2 {
-    margin-bottom: 30px;
-    color: #667eea;
+    margin-bottom: 35px;
   }
 
   /* 検索ボックス */
   .search-box {
-    max-width: 800px;
-    margin: 0 auto 40px;
-    background: white;
-    padding: 30px;
-    border-radius: 16px;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    max-width: 850px;
+    margin: 0 auto 50px;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    padding: 40px;
+    border-radius: 24px;
+    box-shadow: 0 15px 50px rgba(0, 0, 0, 0.15);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   /* フォーム要素 */
@@ -247,136 +325,176 @@ const CSS = `
   select,
   .region-select {
     width: 100%;
-    padding: 14px 16px;
+    padding: 16px 20px;
     font-size: 16px;
-    border-radius: 10px;
-    border: 2px solid #e0e0e0;
-    margin-bottom: 16px;
-    background: white;
-    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+    border-radius: 12px;
+    border: 2px solid rgba(52, 152, 219, 0.2);
+    margin-bottom: 18px;
+    background: rgba(255, 255, 255, 0.9);
+    transition: all 0.3s ease;
     font-family: inherit;
   }
 
   input:focus,
   select:focus {
     outline: none;
-    border-color: #667eea;
-    box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.1);
+    border-color: #3498db;
+    box-shadow: 0 0 0 4px rgba(52, 152, 219, 0.15);
+    background: white;
   }
 
   button {
     width: 100%;
-    padding: 14px 16px;
-    font-size: 16px;
+    padding: 16px 20px;
+    font-size: 17px;
     font-weight: 600;
-    border-radius: 10px;
+    border-radius: 12px;
     border: none;
     cursor: pointer;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
     color: white;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: all 0.3s ease;
     font-family: inherit;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
+    position: relative;
+    overflow: hidden;
+  }
+
+  button::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent, rgba(255,255,255,0.3), transparent);
+    transition: left 0.5s ease;
+  }
+
+  button:hover::before {
+    left: 100%;
   }
 
   button:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
   }
 
   button:active {
-    transform: translateY(0);
+    transform: translateY(-1px);
   }
 
   button.danger {
-    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    box-shadow: 0 4px 15px rgba(231, 76, 60, 0.3);
+  }
+
+  button.danger:hover {
+    box-shadow: 0 8px 25px rgba(231, 76, 60, 0.4);
   }
 
   /* 履歴カード */
   .history-card {
-    background: white;
-    padding: 20px;
-    margin-bottom: 15px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    border-left: 4px solid #667eea;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(10px);
+    padding: 25px;
+    margin-bottom: 18px;
+    border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+    border-left: 5px solid #3498db;
+    transition: all 0.3s ease;
+  }
+
+  .history-card:hover {
+    transform: translateX(8px);
+    box-shadow: 0 6px 30px rgba(52, 152, 219, 0.2);
   }
 
   .history-card strong {
-    color: #667eea;
-    font-size: 16px;
+    color: #3498db;
+    font-size: 17px;
   }
 
   .history-card a {
-    color: #555;
+    color: #2c3e50;
     text-decoration: none;
     transition: color 0.2s ease;
   }
 
   .history-card a:hover {
-    color: #667eea;
+    color: #3498db;
     text-decoration: underline;
   }
 
   /* エラーページ */
   .error-container {
-    max-width: 600px;
-    margin: 100px auto;
+    max-width: 650px;
+    margin: 120px auto;
     text-align: center;
-    background: white;
-    padding: 50px;
-    border-radius: 20px;
-    box-shadow: 0 10px 40px rgba(0,0,0,0.15);
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(20px);
+    padding: 60px;
+    border-radius: 24px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
   }
 
   .error-icon {
-    font-size: 80px;
-    margin-bottom: 20px;
+    font-size: 90px;
+    margin-bottom: 25px;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.1));
   }
 
   .error-title {
-    font-size: 32px;
-    color: #f5576c;
-    margin-bottom: 15px;
+    font-size: 36px;
+    background: linear-gradient(135deg, #e74c3c 0%, #c0392b 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 18px;
+    font-weight: 700;
   }
 
   .error-message {
     font-size: 18px;
-    color: #666;
-    margin-bottom: 30px;
-    line-height: 1.6;
+    color: #555;
+    margin-bottom: 35px;
+    line-height: 1.7;
   }
 
   .error-link {
     display: inline-block;
-    padding: 12px 30px;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    padding: 14px 35px;
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
     color: white;
     text-decoration: none;
-    border-radius: 10px;
+    border-radius: 12px;
     font-weight: 600;
-    transition: transform 0.2s ease;
+    transition: all 0.3s ease;
+    box-shadow: 0 4px 15px rgba(52, 152, 219, 0.3);
   }
 
   .error-link:hover {
-    transform: translateY(-2px);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 25px rgba(52, 152, 219, 0.4);
   }
 
   /* ローディング */
   .loading {
     text-align: center;
-    padding: 40px;
-    font-size: 18px;
-    color: #667eea;
+    padding: 50px;
+    font-size: 19px;
+    color: #3498db;
   }
 
   .spinner {
-    border: 4px solid #f3f3f3;
-    border-top: 4px solid #667eea;
+    border: 5px solid rgba(52, 152, 219, 0.1);
+    border-top: 5px solid #3498db;
     border-radius: 50%;
-    width: 50px;
-    height: 50px;
+    width: 60px;
+    height: 60px;
     animation: spin 1s linear infinite;
-    margin: 20px auto;
+    margin: 25px auto;
   }
 
   @keyframes spin {
@@ -387,27 +505,30 @@ const CSS = `
   /* タブ（管理者ページ用） */
   .tabs {
     display: flex;
-    gap: 10px;
-    margin-bottom: 30px;
-    border-bottom: 2px solid #e0e0e0;
+    gap: 12px;
+    margin-bottom: 35px;
+    border-bottom: 2px solid rgba(52, 152, 219, 0.2);
   }
 
   .tab {
-    padding: 12px 24px;
+    padding: 14px 28px;
     cursor: pointer;
     border-bottom: 3px solid transparent;
     transition: all 0.3s ease;
     font-weight: 600;
-    color: #666;
+    color: #7f8c8d;
+    border-radius: 8px 8px 0 0;
   }
 
   .tab:hover {
-    color: #667eea;
+    color: #3498db;
+    background: rgba(52, 152, 219, 0.05);
   }
 
   .tab.active {
-    color: #667eea;
-    border-bottom-color: #667eea;
+    color: #3498db;
+    border-bottom-color: #3498db;
+    background: rgba(52, 152, 219, 0.08);
   }
 
   .tab-content {
@@ -416,6 +537,12 @@ const CSS = `
 
   .tab-content.active {
     display: block;
+    animation: fadeIn 0.4s ease;
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
   }
 
   /* レスポンシブデザイン */
@@ -427,17 +554,18 @@ const CSS = `
     .sidebar {
       width: 0;
       transform: translateX(-100%);
-      padding-top: 70px;
+      padding-top: 75px;
     }
 
     .sidebar.open {
-      width: 280px;
+      width: 85%;
+      max-width: 300px;
       transform: translateX(0);
     }
 
     .main-content {
       margin-left: 0;
-      padding: 80px 15px 30px;
+      padding: 90px 18px 35px;
     }
 
     .main-content.shift {
@@ -446,61 +574,60 @@ const CSS = `
 
     .card-grid {
       grid-template-columns: 1fr;
-      gap: 16px;
+      gap: 20px;
     }
 
     .center-box {
-      margin: 40px 15px;
-      padding: 30px 20px;
+      margin: 50px 18px;
+      padding: 35px 25px;
     }
 
     .search-box {
-      padding: 20px;
-      margin-bottom: 30px;
+      padding: 25px;
+      margin-bottom: 35px;
     }
 
     h2 {
-      font-size: 24px;
+      font-size: 26px;
     }
 
     .error-container {
-      margin: 50px 15px;
-      padding: 30px 20px;
+      margin: 60px 18px;
+      padding: 40px 25px;
     }
 
     .error-icon {
-      font-size: 60px;
+      font-size: 70px;
     }
 
     .error-title {
-      font-size: 24px;
+      font-size: 28px;
     }
   }
 
   @media (min-width: 769px) and (max-width: 1024px) {
     .card-grid {
-      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
     }
   }
 
   /* ダークモード対応 */
   @media (prefers-color-scheme: dark) {
     body {
-      background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+      background: linear-gradient(135deg, #0a0e27 0%, #1a1f3a 50%, #1e2a3a 100%);
     }
 
     .sidebar {
-      background: #2a2a3e;
-      border-right-color: #3a3a4e;
+      background: rgba(30, 39, 58, 0.95);
+      border-right-color: rgba(52, 152, 219, 0.2);
     }
 
     .sidebar a {
-      color: #b0b0c0;
+      color: #cbd5e0;
     }
 
     .sidebar a:hover {
-      background: linear-gradient(90deg, #3a3a4e 0%, #2a2a3e 100%);
-      color: #667eea;
+      color: #5dade2;
     }
 
     .card,
@@ -508,25 +635,42 @@ const CSS = `
     .search-box,
     .history-card,
     .error-container {
-      background: #2a2a3e;
-      color: #e0e0e0;
+      background: rgba(30, 39, 58, 0.95);
+      border-color: rgba(52, 152, 219, 0.2);
     }
 
-    .card-title,
+    .card-title {
+      color: #e8edf2;
+    }
+
     h2 {
-      color: #e0e0e0;
+      background: linear-gradient(135deg, #5dade2 0%, #3498db 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
     }
 
     input,
     select {
-      background: #3a3a4e;
-      border-color: #4a4a5e;
-      color: #e0e0e0;
+      background: rgba(20, 29, 48, 0.7);
+      border-color: rgba(52, 152, 219, 0.3);
+      color: #e8edf2;
+    }
+
+    input:focus,
+    select:focus {
+      background: rgba(20, 29, 48, 0.9);
+      border-color: #5dade2;
     }
 
     .menu-toggle {
-      background: #2a2a3e;
-      color: #e0e0e0;
+      background: rgba(30, 39, 58, 0.95);
+      color: #e8edf2;
+    }
+
+    .error-message,
+    .history-card a {
+      color: #cbd5e0;
     }
   }
 </style>
@@ -1509,7 +1653,12 @@ app.use((err, req, res, next) => {
 // サーバー起動
 // --------------------------------------
 app.listen(PORT, () => {
-  console.log(`✅ Server running on port ${PORT}`);
-  console.log(`📱 Mobile-friendly UI enabled`);
-  console.log(`🛡️ Error handling active`);
+  console.log(`\n╔═══════════════════════════════════════╗`);
+  console.log(`║  🌊 サーバー起動成功                  ║`);
+  console.log(`╠═══════════════════════════════════════╣`);
+  console.log(`║  🌐 ポート: ${PORT.toString().padEnd(24)}║`);
+  console.log(`║  📱 レスポンシブUI: 有効              ║`);
+  console.log(`║  🛡️  安全機能: 有効                    ║`);
+  console.log(`║  💎 美しい青系デザイン: 適用済み      ║`);
+  console.log(`╚═══════════════════════════════════════╝\n`);
 });
