@@ -231,7 +231,7 @@ const CSS = `
     visibility: visible;
   }
 
-  /* カスタムアイコン（シンプル版） */
+  /* カスタムアイコン（純粋CSS版） */
   .icon {
     width: 28px;
     height: 28px;
@@ -240,73 +240,136 @@ const CSS = `
     align-items: center;
     justify-content: center;
     position: relative;
-    font-style: normal;
   }
 
-  /* ホームアイコン */
-  .icon-home {
-    font-size: 20px;
-    font-weight: bold;
-  }
-  
+  /* ホームアイコン - 家の形 */
   .icon-home::before {
-    content: '⌂';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 14px;
+    border: 2.5px solid currentColor;
+    border-top: none;
+    bottom: 6px;
   }
 
-  /* チャンネルアイコン（TV） */
-  .icon-channel {
-    font-size: 20px;
-    font-weight: bold;
+  .icon-home::after {
+    content: '';
+    position: absolute;
+    width: 0;
+    height: 0;
+    border-left: 11px solid transparent;
+    border-right: 11px solid transparent;
+    border-bottom: 10px solid currentColor;
+    top: 5px;
   }
-  
+
+  /* チャンネルアイコン - TV画面 */
   .icon-channel::before {
-    content: '▭';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 15px;
+    border: 2.5px solid currentColor;
+    border-radius: 2px;
   }
 
-  /* 音楽アイコン */
-  .icon-music {
-    font-size: 20px;
-    font-weight: bold;
+  .icon-channel::after {
+    content: '';
+    position: absolute;
+    width: 3px;
+    height: 3px;
+    background: currentColor;
+    border-radius: 50%;
+    right: 5px;
+    top: 11px;
   }
-  
+
+  /* 音楽アイコン - 音符 */
   .icon-music::before {
-    content: '♪';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 2.5px;
+    height: 16px;
+    background: currentColor;
+    left: 15px;
+    top: 4px;
+    border-radius: 1.5px;
   }
 
-  /* 履歴アイコン（時計） */
-  .icon-history {
-    font-size: 20px;
-    font-weight: bold;
+  .icon-music::after {
+    content: '';
+    position: absolute;
+    width: 6px;
+    height: 6px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
+    left: 11px;
+    bottom: 5px;
+    background: transparent;
   }
-  
+
+  /* 履歴アイコン - 時計 */
   .icon-history::before {
-    content: '◷';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
   }
 
-  /* 設定アイコン（歯車） */
-  .icon-settings {
-    font-size: 20px;
-    font-weight: bold;
+  .icon-history::after {
+    content: '';
+    position: absolute;
+    width: 2px;
+    height: 7px;
+    background: currentColor;
+    top: 8px;
+    left: 13px;
+    transform-origin: bottom center;
+    border-radius: 1px;
   }
-  
+
+  /* 設定アイコン - 歯車 */
   .icon-settings::before {
-    content: '⚙';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 14px;
+    height: 14px;
+    border: 2.5px solid currentColor;
+    border-radius: 50%;
   }
 
-  /* ログアウトアイコン（ドア） */
-  .icon-logout {
-    font-size: 20px;
-    font-weight: bold;
+  .icon-settings::after {
+    content: '';
+    position: absolute;
+    width: 18px;
+    height: 18px;
+    background: 
+      linear-gradient(currentColor, currentColor) no-repeat center/2.5px 7px,
+      linear-gradient(currentColor, currentColor) no-repeat center/7px 2.5px;
   }
-  
+
+  /* ログアウトアイコン - ドアと矢印 */
   .icon-logout::before {
-    content: '⎆';
-    display: block;
+    content: '';
+    position: absolute;
+    width: 12px;
+    height: 18px;
+    border: 2.5px solid currentColor;
+    border-left: none;
+    border-radius: 0 2px 2px 0;
+    left: 8px;
+  }
+
+  .icon-logout::after {
+    content: '→';
+    position: absolute;
+    font-size: 12px;
+    font-weight: bold;
+    left: 4px;
+    font-style: normal;
   }
 
   /* メインコンテンツ */
@@ -556,9 +619,20 @@ const CSS = `
   }
 
   .error-icon {
-    font-size: 100px;
+    font-size: 70px;
     margin-bottom: 28px;
-    filter: drop-shadow(0 5px 12px rgba(0,0,0,0.12));
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+    margin-right: auto;
+    font-weight: bold;
+    box-shadow: 0 8px 25px rgba(255, 107, 107, 0.3);
   }
 
   .error-title {
@@ -714,7 +788,9 @@ const CSS = `
     }
 
     .error-icon {
-      font-size: 75px;
+      font-size: 50px;
+      width: 80px;
+      height: 80px;
     }
 
     .error-title {
