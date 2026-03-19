@@ -1,4 +1,3 @@
-
 import express from "express";
 import fetch from "node-fetch";
 import fs from "fs";
@@ -168,16 +167,7 @@ const CSS = `
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
 // --------------------------------------
-const SIDEBAR_HTML = `
-<div id="sidebar" class="sidebar">
-  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
-  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
-  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
-  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
-  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
-</div>
-`;
+function
 
 // --------------------------------------
 // ホーム（動画検索のみ・横幅広 UI）
@@ -237,6 +227,58 @@ sidebar.addEventListener("mouseleave", () => {
 </script>
 `;
 
+
+// --------------------------------------
+// Invidious経由 動画ストリームURL取得
+// --------------------------------------
+let invidiousApis = null;
+const INV_JSON_URL = "https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json";
+const INV_TIMEOUT = 4000;
+
+async function loadInvidiousApis() {
+  try {
+    const res = await fetch(INV_JSON_URL);
+    invidiousApis = await res.json();
+    console.log("Invidious APIリストを取得しました");
+  } catch (e) {
+    console.error("Invidious APIリスト取得失敗:", e.message);
+  }
+}
+loadInvidiousApis();
+
+async function getStreamUrl(videoId) {
+  if (!invidiousApis) await loadInvidiousApis();
+  if (!invidiousApis) throw new Error("APIリストを取得できません");
+
+  for (const instance of invidiousApis) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: controller.signal });
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = await res.json();
+
+      if (!data.formatStreams) continue;
+
+      // 通常ストリーム（音声付き）
+      const streamUrl = [...data.formatStreams].reverse().map(s => s.url)[0];
+      // 音声のみ（m4a）
+      const audioUrl = (data.adaptiveFormats || [])
+        .filter(s => s.container === "m4a" && s.audioQuality === "AUDIO_QUALITY_MEDIUM")
+        .map(s => s.url)[0];
+      // 高画質ストリーム（映像のみ webm）
+      const videoStreams = (data.adaptiveFormats || [])
+        .filter(s => s.container === "webm" && s.resolution)
+        .map(s => ({ url: s.url, resolution: s.resolution }));
+
+      return { streamUrl, audioUrl, videoStreams, title: data.title || "" };
+    } catch (e) {
+      console.error(`Invidious ${instance} エラー:`, e.message);
+    }
+  }
+  throw new Error("すべてのInvidiousインスタンスで取得に失敗しました");
+}
 
 // --------------------------------------
 // 固定ユーザー管理
@@ -658,8 +700,81 @@ app.post("/watch", async (req, res) => {
     embeddable = false;
   }
 
+  // ★ 埋め込み不可（年齢制限など）→ Invidious経由でストリーム再生
   if (!embeddable) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    try {
+      const stream = await getStreamUrl(id);
+      if (stream.title) title = stream.title;
+
+      if (user) await saveHistory(user, "watch", id, title);
+
+      return res.send(`
+        <html>
+        <head>${CSS}
+        <style>
+          video { width:100%; max-width:800px; border-radius:10px; }
+          .stream-info { max-width:800px; margin:10px auto; font-size:14px; color:#666; }
+          .quality-btn {
+            padding:6px 12px; margin:4px; border-radius:6px;
+            border:1px solid #ccc; background:#fff; cursor:pointer;
+          }
+          .quality-btn.active { background:#3498db; color:#fff; border-color:#3498db; }
+        </style>
+        </head>
+        <body>
+          ${SIDEBAR_HTML}
+          <div id="main-content" class="main-content">
+            <h2>${title}</h2>
+            <center>
+              <video id="player" controls autoplay>
+                <source src="${stream.streamUrl}" type="video/mp4">
+                お使いのブラウザは動画再生に対応していません
+              </video>
+              <div class="stream-info">
+                <p>🔓 Invidious経由で再生中（年齢制限対応）</p>
+                ${stream.videoStreams && stream.videoStreams.length > 0 ? `
+                <p>画質選択：
+                  <button class="quality-btn active" onclick="changeQuality('${stream.streamUrl}', this)">標準</button>
+                  ${stream.videoStreams.map(s => `
+                    <button class="quality-btn" onclick="changeQuality('${s.url}', this)">${s.resolution}</button>
+                  `).join("")}
+                </p>` : ""}
+              </div>
+              <br>
+              <a href="/">ホームへ戻る</a>
+            </center>
+          </div>
+          ${SIDEBAR_JS}
+          <script>
+          function changeQuality(url, btn) {
+            const player = document.getElementById("player");
+            const currentTime = player.currentTime;
+            player.src = url;
+            player.currentTime = currentTime;
+            player.play();
+            document.querySelectorAll(".quality-btn").forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+          }
+          function postWatch(id) {
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = "/watch";
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "id";
+            input.value = id;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+          }
+          </script>
+        </body>
+        </html>
+      `);
+    } catch (e) {
+      console.error("Invidious取得失敗:", e.message);
+      return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    }
   }
 
   // ★★★ 履歴保存（POST 版）★★★
