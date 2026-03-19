@@ -688,65 +688,82 @@ app.get("/channel-search/result", async (req, res) => {
 
 
 // --------------------------------------
-// Invidious から動画情報・コメント取得（並走版）
+// YouTube InnerTube API（直接アクセス・Invidious不要）
 // --------------------------------------
-const RACE_COUNT = 5; // 同時に試すインスタンス数
+const INNERTUBE_KEY = "AIzaSyAO_FJ2SlqU8Q4STEHLGCilw_Y9_11qcW8";
+const INNERTUBE_CONTEXT = {
+  client: {
+    clientName: "ANDROID",
+    clientVersion: "17.31.35",
+    androidSdkVersion: 30,
+    hl: "ja",
+    gl: "JP"
+  }
+};
 
-async function tryInstance(instance, path, validate) {
+async function innertubePost(endpoint, body) {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
+  const timer = setTimeout(() => controller.abort(), 8000);
   try {
-    const res = await fetch(`${instance}${path}`, { signal: controller.signal });
+    const res = await fetch(
+      `https://www.youtube.com/youtubei/v1/${endpoint}?key=${INNERTUBE_KEY}&prettyPrint=false`,
+      {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "User-Agent": "Mozilla/5.0" },
+        body: JSON.stringify({ context: INNERTUBE_CONTEXT, ...body }),
+        signal: controller.signal
+      }
+    );
     clearTimeout(timer);
-    if (!res.ok) throw new Error("not ok");
-    const d = await res.json();
-    if (!validate(d)) throw new Error("invalid");
-    return d;
+    if (!res.ok) throw new Error(`InnerTube ${endpoint} ${res.status}`);
+    return await res.json();
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function raceInvidious(path, validate) {
-  if (!invidiousApis) await loadInvidiousApis();
-  if (!invidiousApis) throw new Error("APIリストなし");
-
-  // シャッフルして先頭RACE_COUNT個を並走
-  const shuffled = [...invidiousApis].sort(() => Math.random() - 0.5);
-  const batch = shuffled.slice(0, RACE_COUNT);
-
-  try {
-    return await Promise.any(batch.map(inst => tryInstance(inst, path, validate)));
-  } catch {
-    // 残りも試す
-    const rest = shuffled.slice(RACE_COUNT);
-    for (const inst of rest) {
-      try {
-        return await tryInstance(inst, path, validate);
-      } catch {}
-    }
-    throw new Error("全インスタンス失敗");
-  }
-}
-
 async function getVideoInfo(videoId) {
   try {
-    const d = await raceInvidious(`/api/v1/videos/${videoId}`, d => !!d.title);
-    const streamUrl = [...(d.formatStreams || [])].reverse().map(s => s.url)[0] || null;
-    const videoStreams = (d.adaptiveFormats || [])
-      .filter(s => s.container === "webm" && s.resolution)
-      .map(s => ({ url: s.url, resolution: s.resolution }));
-    return {
-      title: d.title || "タイトル不明",
-      channelName: d.author || "",
-      channelId: d.authorId || "",
-      published: d.publishedText || "",
-      viewCount: d.viewCountText || String(d.viewCount || ""),
-      likeCount: d.likeCount || "",
-      description: d.description || "",
-      streamUrl,
-      videoStreams
-    };
+    // player エンドポイントでストリームURL・基本情報を取得
+    const [playerData, nextData] = await Promise.allSettled([
+      innertubePost("player", { videoId }),
+      innertubePost("next", { videoId })
+    ]);
+
+    let title = "タイトル不明", channelName = "", published = "", viewCount = "", description = "";
+    let streamUrl = null, videoStreams = [];
+
+    // player から取得
+    if (playerData.status === "fulfilled") {
+      const p = playerData.value;
+      title = p.videoDetails?.title || title;
+      channelName = p.videoDetails?.author || channelName;
+      description = p.videoDetails?.shortDescription || description;
+      viewCount = p.videoDetails?.viewCount
+        ? Number(p.videoDetails.viewCount).toLocaleString() + " 回視聴"
+        : "";
+
+      // ストリームURL（ANDROID クライアントは署名不要）
+      const formats = p.streamingData?.formats || [];
+      const adaptiveFormats = p.streamingData?.adaptiveFormats || [];
+      streamUrl = [...formats].reverse().find(f => f.mimeType?.includes("video/mp4"))?.url || null;
+      videoStreams = adaptiveFormats
+        .filter(f => f.mimeType?.includes("video/mp4") && f.qualityLabel)
+        .map(f => ({ url: f.url, resolution: f.qualityLabel }))
+        .filter(f => f.url);
+    }
+
+    // next から投稿日時を取得
+    if (nextData.status === "fulfilled") {
+      const n = nextData.value;
+      try {
+        const vidPrimary = n.contents?.twoColumnWatchNextResults?.results?.results?.contents;
+        const primaryInfo = vidPrimary?.find(c => c.videoPrimaryInfoRenderer)?.videoPrimaryInfoRenderer;
+        published = primaryInfo?.dateText?.simpleText || primaryInfo?.relativeDateText?.simpleText || "";
+      } catch {}
+    }
+
+    return { title, channelName, published, viewCount, description, streamUrl, videoStreams };
   } catch (e) {
     console.error("getVideoInfo失敗:", e.message);
     return null;
@@ -755,19 +772,38 @@ async function getVideoInfo(videoId) {
 
 async function getComments(videoId) {
   try {
-    const d = await raceInvidious(`/api/v1/comments/${videoId}?hl=ja`, d => Array.isArray(d.comments));
-    return d.comments.slice(0, 20).map(c => ({
-      author: c.author || "不明",
-      text: c.content || "",
-      likes: c.likeCount || 0,
-      published: c.publishedText || ""
-    }));
-  } catch {
+    const data = await innertubePost("next", { videoId });
+    const engagements = data.engagementPanels || [];
+    const commentPanel = engagements.find(p =>
+      p.engagementPanelSectionListRenderer?.panelIdentifier === "comment-item-section"
+    );
+    if (!commentPanel) return [];
+
+    const items = commentPanel.engagementPanelSectionListRenderer?.content
+      ?.sectionListRenderer?.contents?.[0]
+      ?.itemSectionRenderer?.contents || [];
+
+    return items
+      .filter(i => i.commentThreadRenderer)
+      .slice(0, 20)
+      .map(i => {
+        const c = i.commentThreadRenderer?.comment?.commentRenderer;
+        if (!c) return null;
+        return {
+          author: c.authorText?.simpleText || "不明",
+          text: c.contentText?.runs?.map(r => r.text).join("") || "",
+          likes: c.voteCount?.simpleText || "0",
+          published: c.publishedTimeText?.runs?.[0]?.text || ""
+        };
+      })
+      .filter(Boolean);
+  } catch (e) {
+    console.error("getComments失敗:", e.message);
     return [];
   }
 }
 
-// 動画情報API（クライアントから非同期取得用）
+// 動画情報API
 app.get("/api/videoinfo/:id", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.status(401).json(null);
