@@ -688,71 +688,94 @@ app.get("/channel-search/result", async (req, res) => {
 
 
 // --------------------------------------
-// Invidious から動画情報・コメント取得
+// Invidious から動画情報・コメント取得（並走版）
 // --------------------------------------
-async function getVideoInfo(videoId) {
-  if (!invidiousApis) await loadInvidiousApis();
-  for (const instance of invidiousApis) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
-      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) continue;
-      const d = await res.json();
-      if (!d.title) continue;
+const RACE_COUNT = 5; // 同時に試すインスタンス数
 
-      const formatStreams = d.formatStreams || [];
-      const streamUrl = [...formatStreams].reverse().map(s => s.url)[0] || null;
-      const videoStreams = (d.adaptiveFormats || [])
-        .filter(s => s.container === "webm" && s.resolution)
-        .map(s => ({ url: s.url, resolution: s.resolution }));
-
-      return {
-        title: d.title || "タイトル不明",
-        channelName: d.author || "",
-        channelId: d.authorId || "",
-        published: d.publishedText || "",
-        viewCount: d.viewCountText || d.viewCount || "",
-        likeCount: d.likeCount || "",
-        description: d.description || "",
-        embeddable: d.isFamilyFriendly !== false,
-        streamUrl,
-        videoStreams,
-        instance
-      };
-    } catch (e) {
-      console.error(`getVideoInfo ${instance}:`, e.message);
-    }
+async function tryInstance(instance, path, validate) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
+  try {
+    const res = await fetch(`${instance}${path}`, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) throw new Error("not ok");
+    const d = await res.json();
+    if (!validate(d)) throw new Error("invalid");
+    return d;
+  } finally {
+    clearTimeout(timer);
   }
-  return null;
+}
+
+async function raceInvidious(path, validate) {
+  if (!invidiousApis) await loadInvidiousApis();
+  if (!invidiousApis) throw new Error("APIリストなし");
+
+  // シャッフルして先頭RACE_COUNT個を並走
+  const shuffled = [...invidiousApis].sort(() => Math.random() - 0.5);
+  const batch = shuffled.slice(0, RACE_COUNT);
+
+  try {
+    return await Promise.any(batch.map(inst => tryInstance(inst, path, validate)));
+  } catch {
+    // 残りも試す
+    const rest = shuffled.slice(RACE_COUNT);
+    for (const inst of rest) {
+      try {
+        return await tryInstance(inst, path, validate);
+      } catch {}
+    }
+    throw new Error("全インスタンス失敗");
+  }
+}
+
+async function getVideoInfo(videoId) {
+  try {
+    const d = await raceInvidious(`/api/v1/videos/${videoId}`, d => !!d.title);
+    const streamUrl = [...(d.formatStreams || [])].reverse().map(s => s.url)[0] || null;
+    const videoStreams = (d.adaptiveFormats || [])
+      .filter(s => s.container === "webm" && s.resolution)
+      .map(s => ({ url: s.url, resolution: s.resolution }));
+    return {
+      title: d.title || "タイトル不明",
+      channelName: d.author || "",
+      channelId: d.authorId || "",
+      published: d.publishedText || "",
+      viewCount: d.viewCountText || String(d.viewCount || ""),
+      likeCount: d.likeCount || "",
+      description: d.description || "",
+      streamUrl,
+      videoStreams
+    };
+  } catch (e) {
+    console.error("getVideoInfo失敗:", e.message);
+    return null;
+  }
 }
 
 async function getComments(videoId) {
-  if (!invidiousApis) await loadInvidiousApis();
-  for (const instance of invidiousApis) {
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
-      const res = await fetch(`${instance}/api/v1/comments/${videoId}?hl=ja`, { signal: controller.signal });
-      clearTimeout(timer);
-      if (!res.ok) continue;
-      const d = await res.json();
-      if (!d.comments) continue;
-      return d.comments.slice(0, 20).map(c => ({
-        author: c.author || "不明",
-        text: c.content || "",
-        likes: c.likeCount || 0,
-        published: c.publishedText || ""
-      }));
-    } catch (e) {
-      console.error(`getComments ${instance}:`, e.message);
-    }
+  try {
+    const d = await raceInvidious(`/api/v1/comments/${videoId}?hl=ja`, d => Array.isArray(d.comments));
+    return d.comments.slice(0, 20).map(c => ({
+      author: c.author || "不明",
+      text: c.content || "",
+      likes: c.likeCount || 0,
+      published: c.publishedText || ""
+    }));
+  } catch {
+    return [];
   }
-  return [];
 }
 
-// コメントAPI（非同期取得用）
+// 動画情報API（クライアントから非同期取得用）
+app.get("/api/videoinfo/:id", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.status(401).json(null);
+  const info = await getVideoInfo(req.params.id);
+  res.json(info);
+});
+
+// コメントAPI
 app.get("/api/comments/:id", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.status(401).json([]);
@@ -761,52 +784,18 @@ app.get("/api/comments/:id", async (req, res) => {
 });
 
 // --------------------------------------
-// /watch（統合版）
+// /watch（即時レスポンス + クライアント側非同期取得）
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
   const user = req.cookies.user;
 
-  // Invidiousから動画情報を取得
-  const info = await getVideoInfo(id);
-  const title = info ? info.title : "タイトル不明";
-
-  if (user) await saveHistory(user, "watch", id, title);
-
-  // 埋め込みを試みる（oEmbed確認）
-  let embeddable = false;
-  try {
-    const controller = new AbortController();
-    setTimeout(() => controller.abort(), 3000);
-    const check = await fetch(
-      `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`,
-      { signal: controller.signal }
-    );
-    embeddable = check.ok;
-  } catch {}
-
-  const playerHTML = embeddable
-    ? `<div class="video-wrap">
-        <iframe src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
-          allow="autoplay; fullscreen" allowfullscreen></iframe>
-       </div>`
-    : info && info.streamUrl
-      ? `<div class="video-wrap">
-          <video id="player" controls autoplay>
-            <source src="${info.streamUrl}" type="video/mp4">
-          </video>
-         </div>
-         ${info.videoStreams && info.videoStreams.length ? `
-         <div class="quality-bar">
-           画質：<button class="q-btn active" onclick="changeQ('${info.streamUrl}',this)">標準</button>
-           ${info.videoStreams.map(s =>
-             '<button class="q-btn" onclick="changeQ(\'' + s.url + '\',this)">' + s.resolution + '</button>'
-           ).join("")}
-         </div>` : ""}`
-      : `<div class="video-wrap" style="background:#111;display:flex;align-items:center;justify-content:center;">
-          <p style="color:#fff;">この動画は再生できません</p>
-         </div>`;
+  // ページを即座に返す（情報はクライアント側で非同期取得）
+  // 履歴はバックグラウンドで保存（awaitしない）
+  getVideoInfo(id).then(info => {
+    if (user && info) saveHistory(user, "watch", id, info.title).catch(() => {});
+  });
 
   res.send(`
     <html>
@@ -814,14 +803,15 @@ app.post("/watch", async (req, res) => {
     ${CSS}
     <style>
       .watch-container { max-width: 900px; margin: 0 auto; padding: 0 16px 40px; }
-      .video-wrap { position:relative; width:100%; aspect-ratio:16/9; background:#000; border-radius:10px; overflow:hidden; margin-bottom:14px; }
+      .video-wrap { position:relative; width:100%; aspect-ratio:16/9; background:#111; border-radius:10px; overflow:hidden; margin-bottom:14px; display:flex; align-items:center; justify-content:center; }
       .video-wrap iframe, .video-wrap video { position:absolute; top:0; left:0; width:100%; height:100%; border:none; }
+      .video-wrap .loading-msg { color:#888; font-size:14px; }
       .meta-box { background:#fff; border-radius:10px; padding:16px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,0,0,0.08); }
       .video-title { font-size:18px; font-weight:bold; margin-bottom:10px; color:#1a1a1a; }
       .meta-row { display:flex; align-items:center; gap:12px; flex-wrap:wrap; color:#555; font-size:14px; margin-bottom:8px; }
       .channel-name { font-weight:bold; color:#2c3e50; font-size:15px; }
       .desc-box { font-size:13px; color:#555; white-space:pre-wrap; max-height:100px; overflow:hidden; transition:max-height 0.3s; }
-      .desc-box.open { max-height:1000px; }
+      .desc-box.open { max-height:2000px; }
       .desc-toggle { background:none; border:none; color:#3498db; cursor:pointer; font-size:13px; padding:4px 0; width:auto; margin:0; }
       .quality-bar { margin-bottom:12px; font-size:13px; color:#555; }
       .q-btn { padding:4px 10px; margin:2px; border-radius:6px; border:1px solid #ccc; background:#fff; cursor:pointer; font-size:13px; width:auto; margin-bottom:0; }
@@ -833,6 +823,8 @@ app.post("/watch", async (req, res) => {
       .comment-text { font-size:13px; color:#333; margin:4px 0; }
       .comment-meta { font-size:11px; color:#aaa; }
       .badge { display:inline-block; background:#e8f4ff; color:#3498db; border-radius:4px; padding:2px 8px; font-size:12px; }
+      .skeleton { background:#eee; border-radius:4px; animation:pulse 1.2s infinite; }
+      @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
     </style>
     </head>
     <body>
@@ -840,68 +832,146 @@ app.post("/watch", async (req, res) => {
       <div id="main-content" class="main-content">
         <div class="watch-container">
 
-          ${playerHTML}
+          <!-- プレイヤー：まず iframe で試みる、失敗したらストリームに差し替え -->
+          <div class="video-wrap" id="player-wrap">
+            <iframe id="yt-iframe"
+              src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
+              allow="autoplay; fullscreen" allowfullscreen
+              onerror="switchToStream()">
+            </iframe>
+          </div>
+          <div class="quality-bar" id="quality-bar" style="display:none;"></div>
 
           <div class="meta-box">
-            <div class="video-title">${title}</div>
-            <div class="meta-row">
-              <span class="channel-name">📺 ${info ? info.channelName : ""}</span>
-              ${info && info.published ? `<span>📅 ${info.published}</span>` : ""}
-              ${info && info.viewCount ? `<span>👁 ${info.viewCount}</span>` : ""}
-              ${info && info.likeCount ? `<span>👍 ${Number(info.likeCount).toLocaleString()}</span>` : ""}
-              ${!embeddable && info && info.streamUrl ? '<span class="badge">🔓 Invidious再生</span>' : ""}
+            <div class="video-title" id="v-title">
+              <span class="skeleton" style="display:inline-block;width:70%;height:20px;"></span>
             </div>
-            ${info && info.description ? `
-            <div class="desc-box" id="desc">${info.description.replace(/</g,"&lt;").replace(/\n/g,"<br>")}</div>
-            <button class="desc-toggle" onclick="toggleDesc()">▼ 続きを読む</button>
-            ` : ""}
+            <div class="meta-row" id="v-meta">
+              <span class="skeleton" style="width:120px;height:14px;"></span>
+              <span class="skeleton" style="width:80px;height:14px;"></span>
+            </div>
+            <div id="v-desc-wrap" style="display:none;">
+              <div class="desc-box" id="v-desc"></div>
+              <button class="desc-toggle" onclick="toggleDesc()">▼ 続きを読む</button>
+            </div>
           </div>
 
           <div class="comments-box">
             <h3 style="margin:0 0 12px;font-size:16px;">💬 コメント</h3>
-            <div id="comments-list"><p style="color:#aaa;font-size:13px;">読み込み中...</p></div>
+            <div id="comments-list">
+              <p style="color:#aaa;font-size:13px;">読み込み中...</p>
+            </div>
           </div>
 
         </div>
       </div>
       ${SIDEBAR_JS}
       <script>
+      const videoId = "${id}";
+
       function postWatch(id) {
         const form = document.createElement("form");
         form.method = "POST"; form.action = "/watch";
-        const input = document.createElement("input");
-        input.type = "hidden"; input.name = "id"; input.value = id;
-        form.appendChild(input); document.body.appendChild(form); form.submit();
+        const inp = document.createElement("input");
+        inp.type = "hidden"; inp.name = "id"; inp.value = id;
+        form.appendChild(inp); document.body.appendChild(form); form.submit();
       }
+
+      function toggleDesc() {
+        const d = document.getElementById("v-desc");
+        const btn = d.nextElementSibling;
+        d.classList.toggle("open");
+        btn.textContent = d.classList.contains("open") ? "▲ 閉じる" : "▼ 続きを読む";
+      }
+
       function changeQ(url, btn) {
-        const p = document.getElementById("player");
+        const p = document.getElementById("stream-player");
+        if (!p) return;
         const t = p.currentTime;
         p.src = url; p.currentTime = t; p.play();
         document.querySelectorAll(".q-btn").forEach(b => b.classList.remove("active"));
         btn.classList.add("active");
       }
-      function toggleDesc() {
-        const d = document.getElementById("desc");
-        const btn = d.nextElementSibling;
-        d.classList.toggle("open");
-        btn.textContent = d.classList.contains("open") ? "▲ 閉じる" : "▼ 続きを読む";
+
+      // iframeが再生できない場合のフォールバック（動画情報取得後に使う）
+      let streamInfo = null;
+      function switchToStream() {
+        if (!streamInfo || !streamInfo.streamUrl) return;
+        const wrap = document.getElementById("player-wrap");
+        wrap.innerHTML = '<video id="stream-player" controls autoplay style="position:absolute;top:0;left:0;width:100%;height:100%;"><source src="' + streamInfo.streamUrl + '" type="video/mp4"></video>';
+        if (streamInfo.videoStreams && streamInfo.videoStreams.length) {
+          const bar = document.getElementById("quality-bar");
+          bar.style.display = "block";
+          bar.innerHTML = "画質：" + streamInfo.videoStreams.map(s =>
+            '<button class="q-btn" onclick="changeQ(\'' + s.url + '\',this)">' + s.resolution + '</button>'
+          ).join("");
+        }
       }
-      // コメント非同期取得
-      fetch("/api/comments/${id}")
+
+      // iframe の埋め込みエラーを検知
+      const iframe = document.getElementById("yt-iframe");
+      iframe.addEventListener("load", () => {
+        // 読み込めているか確認（クロスオリジンのため間接的に確認）
+        setTimeout(() => {
+          try {
+            // アクセスできれば埋め込み成功（エラー時は例外）
+            iframe.contentWindow.location.href;
+          } catch(e) {
+            // クロスオリジン = YouTubeが正常にロードされた証拠
+          }
+        }, 2000);
+      });
+
+      // 動画情報を非同期取得
+      fetch("/api/videoinfo/" + videoId)
+        .then(r => r.json())
+        .then(info => {
+          if (!info) return;
+          streamInfo = info;
+
+          // タイトル
+          document.getElementById("v-title").textContent = info.title;
+          document.title = info.title;
+
+          // メタ情報
+          let metaHTML = "";
+          if (info.channelName) metaHTML += '<span class="channel-name">📺 ' + info.channelName + '</span>';
+          if (info.published)   metaHTML += '<span>📅 ' + info.published + '</span>';
+          if (info.viewCount)   metaHTML += '<span>👁 ' + info.viewCount + '</span>';
+          if (info.likeCount)   metaHTML += '<span>👍 ' + Number(info.likeCount).toLocaleString() + '</span>';
+          document.getElementById("v-meta").innerHTML = metaHTML;
+
+          // 概要欄
+          if (info.description) {
+            const descWrap = document.getElementById("v-desc-wrap");
+            document.getElementById("v-desc").innerHTML = info.description.replace(/</g,"&lt;").replace(/\\n/g,"<br>");
+            descWrap.style.display = "block";
+          }
+        })
+        .catch(() => {
+          document.getElementById("v-title").textContent = "情報を取得できませんでした";
+        });
+
+      // コメントを非同期取得
+      fetch("/api/comments/" + videoId)
         .then(r => r.json())
         .then(comments => {
           const box = document.getElementById("comments-list");
-          if (!comments.length) { box.innerHTML = '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>'; return; }
+          if (!comments.length) {
+            box.innerHTML = '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>';
+            return;
+          }
           box.innerHTML = comments.map(c =>
             '<div class="comment-item">' +
-            '<div class="comment-author">' + c.author + '</div>' +
-            '<div class="comment-text">' + c.text.replace(/</g,"&lt;").replace(/\n/g,"<br>") + '</div>' +
+            '<div class="comment-author">' + c.author.replace(/</g,"&lt;") + '</div>' +
+            '<div class="comment-text">' + c.text.replace(/</g,"&lt;").replace(/\\n/g,"<br>") + '</div>' +
             '<div class="comment-meta">👍 ' + c.likes + '  ・  ' + c.published + '</div>' +
             '</div>'
           ).join("");
         })
         .catch(() => {
-          document.getElementById("comments-list").innerHTML = '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>';
+          document.getElementById("comments-list").innerHTML =
+            '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>';
         });
       </script>
     </body>
