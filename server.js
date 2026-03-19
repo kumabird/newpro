@@ -832,13 +832,9 @@ app.post("/watch", async (req, res) => {
       <div id="main-content" class="main-content">
         <div class="watch-container">
 
-          <!-- プレイヤー：まず iframe で試みる、失敗したらストリームに差し替え -->
+          <!-- プレイヤー：Invidious情報取得後に決定 -->
           <div class="video-wrap" id="player-wrap">
-            <iframe id="yt-iframe"
-              src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
-              allow="autoplay; fullscreen" allowfullscreen
-              onerror="switchToStream()">
-            </iframe>
+            <div style="color:#888;font-size:14px;">動画を準備中...</div>
           </div>
           <div class="quality-bar" id="quality-bar" style="display:none;"></div>
 
@@ -893,47 +889,43 @@ app.post("/watch", async (req, res) => {
         btn.classList.add("active");
       }
 
-      // iframeが再生できない場合のフォールバック（動画情報取得後に使う）
-      let streamInfo = null;
-      function switchToStream() {
-        if (!streamInfo || !streamInfo.streamUrl) return;
+      function showStreamPlayer(info) {
         const wrap = document.getElementById("player-wrap");
-        wrap.innerHTML = '<video id="stream-player" controls autoplay style="position:absolute;top:0;left:0;width:100%;height:100%;"><source src="' + streamInfo.streamUrl + '" type="video/mp4"></video>';
-        if (streamInfo.videoStreams && streamInfo.videoStreams.length) {
+        wrap.innerHTML = '<video id="stream-player" controls autoplay style="position:absolute;top:0;left:0;width:100%;height:100%;">'
+          + '<source src="' + info.streamUrl + '" type="video/mp4">'
+          + 'お使いのブラウザは動画再生に対応していません'
+          + '</video>';
+        if (info.videoStreams && info.videoStreams.length) {
           const bar = document.getElementById("quality-bar");
           bar.style.display = "block";
-          bar.innerHTML = "画質：" + streamInfo.videoStreams.map(s =>
+          bar.innerHTML = "画質：" + info.videoStreams.map(s =>
             '<button class="q-btn" onclick="changeQ(\'' + s.url + '\',this)">' + s.resolution + '</button>'
           ).join("");
         }
       }
 
-      // iframe の埋め込みエラーを検知
-      const iframe = document.getElementById("yt-iframe");
-      iframe.addEventListener("load", () => {
-        // 読み込めているか確認（クロスオリジンのため間接的に確認）
-        setTimeout(() => {
-          try {
-            // アクセスできれば埋め込み成功（エラー時は例外）
-            iframe.contentWindow.location.href;
-          } catch(e) {
-            // クロスオリジン = YouTubeが正常にロードされた証拠
-          }
-        }, 2000);
-      });
+      function showIframePlayer() {
+        const wrap = document.getElementById("player-wrap");
+        wrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + videoId + '?autoplay=1&rel=0"'
+          + ' allow="autoplay; fullscreen" allowfullscreen'
+          + ' style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe>';
+      }
 
-      // 動画情報を非同期取得
+      // 動画情報を非同期取得 → ストリームがあればvideo、なければiframe
       fetch("/api/videoinfo/" + videoId)
         .then(r => r.json())
         .then(info => {
-          if (!info) return;
-          streamInfo = info;
+          if (info && info.streamUrl) {
+            showStreamPlayer(info);
+          } else {
+            showIframePlayer();
+          }
 
-          // タイトル
+          if (!info) return;
+
           document.getElementById("v-title").textContent = info.title;
           document.title = info.title;
 
-          // メタ情報
           let metaHTML = "";
           if (info.channelName) metaHTML += '<span class="channel-name">📺 ' + info.channelName + '</span>';
           if (info.published)   metaHTML += '<span>📅 ' + info.published + '</span>';
@@ -941,14 +933,13 @@ app.post("/watch", async (req, res) => {
           if (info.likeCount)   metaHTML += '<span>👍 ' + Number(info.likeCount).toLocaleString() + '</span>';
           document.getElementById("v-meta").innerHTML = metaHTML;
 
-          // 概要欄
           if (info.description) {
-            const descWrap = document.getElementById("v-desc-wrap");
-            document.getElementById("v-desc").innerHTML = info.description.replace(/</g,"&lt;").replace(/\\n/g,"<br>");
-            descWrap.style.display = "block";
+            document.getElementById("v-desc").innerHTML = info.description.replace(/</g,"&lt;").replace(/\n/g,"<br>");
+            document.getElementById("v-desc-wrap").style.display = "block";
           }
         })
         .catch(() => {
+          showIframePlayer();
           document.getElementById("v-title").textContent = "情報を取得できませんでした";
         });
 
