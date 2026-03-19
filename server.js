@@ -832,9 +832,13 @@ app.post("/watch", async (req, res) => {
       <div id="main-content" class="main-content">
         <div class="watch-container">
 
-          <!-- プレイヤー：Invidious情報取得後に決定 -->
+          <!-- プレイヤー：即時iframe表示 -->
           <div class="video-wrap" id="player-wrap">
-            <div style="color:#888;font-size:14px;">動画を準備中...</div>
+            <iframe id="yt-iframe"
+              src="https://www.youtube.com/embed/${id}?autoplay=1&rel=0"
+              allow="autoplay; fullscreen" allowfullscreen
+              style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;">
+            </iframe>
           </div>
           <div class="quality-bar" id="quality-bar" style="display:none;"></div>
 
@@ -889,58 +893,84 @@ app.post("/watch", async (req, res) => {
         btn.classList.add("active");
       }
 
-      function showStreamPlayer(info) {
+      function showStreamPlayer(streamUrl, videoStreams) {
         const wrap = document.getElementById("player-wrap");
         wrap.innerHTML = '<video id="stream-player" controls autoplay style="position:absolute;top:0;left:0;width:100%;height:100%;">'
-          + '<source src="' + info.streamUrl + '" type="video/mp4">'
-          + 'お使いのブラウザは動画再生に対応していません'
+          + '<source src="' + streamUrl + '" type="video/mp4">'
           + '</video>';
-        if (info.videoStreams && info.videoStreams.length) {
+        if (videoStreams && videoStreams.length) {
           const bar = document.getElementById("quality-bar");
           bar.style.display = "block";
-          bar.innerHTML = "画質：" + info.videoStreams.map(s =>
+          bar.innerHTML = "画質：" + videoStreams.map(s =>
             '<button class="q-btn" onclick="changeQ(\'' + s.url + '\',this)">' + s.resolution + '</button>'
           ).join("");
         }
       }
 
-      function showIframePlayer() {
-        const wrap = document.getElementById("player-wrap");
-        wrap.innerHTML = '<iframe src="https://www.youtube.com/embed/' + videoId + '?autoplay=1&rel=0"'
-          + ' allow="autoplay; fullscreen" allowfullscreen'
-          + ' style="position:absolute;top:0;left:0;width:100%;height:100%;border:none;"></iframe>';
+      // iframeのエラー検知（制限動画はYouTubeがエラー画面を表示する）
+      // postMessageでYouTube Player APIのエラーを受信
+      let streamFetched = false;
+      window.addEventListener("message", function(e) {
+        if (!e.origin.includes("youtube.com")) return;
+        try {
+          const data = JSON.parse(e.data);
+          if (data.event === "infoDelivery" && data.info && data.info.playerState === 5) return;
+          // エラーコード 100,101,150 = 制限・非公開
+          if (data.event === "onError" || (data.info && [100,101,150].includes(data.info))) {
+            loadStream();
+          }
+        } catch {}
+      });
+
+      // iframeロード後にJS APIを有効化して監視
+      document.getElementById("yt-iframe").src =
+        "https://www.youtube.com/embed/${id}?autoplay=1&rel=0&enablejsapi=1";
+
+      let streamLoading = false;
+      async function loadStream() {
+        if (streamLoading) return;
+        streamLoading = true;
+        try {
+          const r = await fetch("/api/videoinfo/" + videoId);
+          const info = await r.json();
+          if (info && info.streamUrl) showStreamPlayer(info.streamUrl, info.videoStreams);
+        } catch {}
       }
 
-      // 動画情報を非同期取得 → ストリームがあればvideo、なければiframe
+      // メタ情報・コメントは完全に非同期（再生に影響しない）
       fetch("/api/videoinfo/" + videoId)
         .then(r => r.json())
         .then(info => {
-          if (info && info.streamUrl) {
-            showStreamPlayer(info);
-          } else {
-            showIframePlayer();
-          }
-
           if (!info) return;
-
           document.getElementById("v-title").textContent = info.title;
           document.title = info.title;
-
           let metaHTML = "";
           if (info.channelName) metaHTML += '<span class="channel-name">📺 ' + info.channelName + '</span>';
           if (info.published)   metaHTML += '<span>📅 ' + info.published + '</span>';
           if (info.viewCount)   metaHTML += '<span>👁 ' + info.viewCount + '</span>';
           if (info.likeCount)   metaHTML += '<span>👍 ' + Number(info.likeCount).toLocaleString() + '</span>';
           document.getElementById("v-meta").innerHTML = metaHTML;
-
           if (info.description) {
             document.getElementById("v-desc").innerHTML = info.description.replace(/</g,"&lt;").replace(/\n/g,"<br>");
             document.getElementById("v-desc-wrap").style.display = "block";
           }
-        })
-        .catch(() => {
-          showIframePlayer();
-          document.getElementById("v-title").textContent = "情報を取得できませんでした";
+        }).catch(() => {});
+
+      fetch("/api/comments/" + videoId)
+        .then(r => r.json())
+        .then(comments => {
+          const box = document.getElementById("comments-list");
+          if (!comments.length) { box.innerHTML = '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>'; return; }
+          box.innerHTML = comments.map(c =>
+            '<div class="comment-item">' +
+            '<div class="comment-author">' + c.author.replace(/</g,"&lt;") + '</div>' +
+            '<div class="comment-text">' + c.text.replace(/</g,"&lt;").replace(/\n/g,"<br>") + '</div>' +
+            '<div class="comment-meta">👍 ' + c.likes + '  ・  ' + c.published + '</div>' +
+            '</div>'
+          ).join("");
+        }).catch(() => {
+          document.getElementById("comments-list").innerHTML =
+            '<p style="color:#aaa;font-size:13px;">コメントを取得できませんでした</p>';
         });
 
       // コメントを非同期取得
