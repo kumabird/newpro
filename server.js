@@ -167,7 +167,17 @@ const CSS = `
 // --------------------------------------
 // サイドバー HTML（全ページ共通）
 // --------------------------------------
-function
+const SIDEBAR_HTML = `
+<div id="sidebar" class="sidebar">
+  <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
+  <a href="/shorts"><span class="sidebar-icon">📱</span> <span class="sidebar-text">Shorts</span></a>
+  <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
+  <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
+  <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
+  <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
+</div>
+`;
 
 // --------------------------------------
 // ホーム（動画検索のみ・横幅広 UI）
@@ -198,9 +208,49 @@ app.get("/", (req, res) => {
           </form>
         </div>
 
+        <!-- Shorts セクション -->
+        <div style="max-width:800px;margin:30px auto 0;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <h2 style="margin:0;font-size:20px;">📱 Shorts</h2>
+            <a href="/shorts" style="font-size:14px;color:#3498db;text-decoration:none;">すべて見る →</a>
+          </div>
+          <div id="shorts-preview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
+            <div style="text-align:center;color:#aaa;padding:20px;">読み込み中...</div>
+          </div>
+        </div>
+
       </div>
 
       ${SIDEBAR_JS}
+      <script>
+      // ホームのShortsプレビュー（最大8件）
+      fetch("/shorts/api?limit=8")
+        .then(r => r.json())
+        .then(shorts => {
+          const box = document.getElementById("shorts-preview");
+          if (!shorts.length) { box.innerHTML = '<p style="color:#aaa">取得できませんでした</p>'; return; }
+          box.innerHTML = shorts.map(s => `
+            <form action="/watch" method="post" style="display:inline;">
+              <input type="hidden" name="id" value="${s.id}">
+              <button style="all:unset;cursor:pointer;display:block;width:100%;">
+                <div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:9/16;background:#000;">
+                  <img src="https://i.ytimg.com/vi/${s.id}/hqdefault.jpg"
+                       style="width:100%;height:100%;object-fit:cover;opacity:0.85;">
+                  <div style="position:absolute;bottom:6px;left:0;right:0;padding:0 6px;
+                               font-size:11px;color:#fff;font-weight:bold;
+                               text-shadow:0 1px 3px rgba(0,0,0,0.8);
+                               overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
+                    ${s.title}
+                  </div>
+                </div>
+              </button>
+            </form>
+          `).join("");
+        })
+        .catch(() => {
+          document.getElementById("shorts-preview").innerHTML = '<p style="color:#aaa">取得できませんでした</p>';
+        });
+      </script>
 
     </body>
     </html>
@@ -1121,6 +1171,264 @@ app.post("/admin/delete-user", async (req, res) => {
 
   // 管理者ページに戻る
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+// --------------------------------------
+// Shorts API（動画IDリスト返却）
+// --------------------------------------
+async function fetchShorts(limit = 20) {
+  const url = "https://www.youtube.com/shorts";
+  const html = await fetch(url, {
+    headers: { "Accept-Language": "ja", "User-Agent": "Mozilla/5.0" }
+  }).then(r => r.text());
+
+  const matches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+  const seen = new Set();
+  const shorts = [];
+  for (const m of matches) {
+    if (seen.has(m[1])) continue;
+    seen.add(m[1]);
+    shorts.push({ id: m[1], title: "" });
+    if (shorts.length >= limit) break;
+  }
+
+  // タイトルを取得（ytInitialData から）
+  const titleMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]*?"text":"([^"]+)"/g)];
+  const titleMap = {};
+  for (const m of titleMatches) titleMap[m[1]] = m[2];
+  for (const s of shorts) s.title = titleMap[s.id] || s.id;
+
+  return shorts;
+}
+
+app.get("/shorts/api", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.status(401).json([]);
+  const limit = Math.min(parseInt(req.query.limit) || 20, 40);
+  try {
+    const shorts = await fetchShorts(limit);
+    res.json(shorts);
+  } catch (e) {
+    console.error("Shorts取得エラー:", e.message);
+    res.json([]);
+  }
+});
+
+// --------------------------------------
+// Shorts ページ（TikTok風縦スクロール）
+// --------------------------------------
+app.get("/shorts", (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  res.send(`
+    <html>
+    <head>
+      ${CSS}
+      <style>
+        body { overflow: hidden; background: #000; }
+
+        .shorts-container {
+          position: fixed;
+          top: 0; left: 50px; right: 0; bottom: 0;
+          overflow-y: scroll;
+          scroll-snap-type: y mandatory;
+          -webkit-overflow-scrolling: touch;
+        }
+
+        .short-item {
+          height: 100dvh;
+          scroll-snap-align: start;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          position: relative;
+          background: #000;
+        }
+
+        .short-item video {
+          height: 100%;
+          max-height: 100dvh;
+          max-width: 100%;
+          aspect-ratio: 9/16;
+          object-fit: contain;
+          display: block;
+        }
+
+        .short-item iframe {
+          height: 100%;
+          max-height: 100dvh;
+          aspect-ratio: 9/16;
+          border: none;
+        }
+
+        .short-info {
+          position: absolute;
+          bottom: 30px;
+          left: 16px;
+          right: 60px;
+          color: #fff;
+          text-shadow: 0 1px 4px rgba(0,0,0,0.8);
+          pointer-events: none;
+        }
+
+        .short-info .title {
+          font-size: 15px;
+          font-weight: bold;
+          margin-bottom: 6px;
+        }
+
+        .short-actions {
+          position: absolute;
+          right: 10px;
+          bottom: 80px;
+          display: flex;
+          flex-direction: column;
+          align-items: center;
+          gap: 18px;
+        }
+
+        .short-btn {
+          background: rgba(255,255,255,0.15);
+          border: none;
+          border-radius: 50%;
+          width: 44px; height: 44px;
+          font-size: 20px;
+          cursor: pointer;
+          color: #fff;
+          display: flex; align-items: center; justify-content: center;
+          backdrop-filter: blur(4px);
+        }
+        .short-btn:hover { background: rgba(255,255,255,0.3); }
+
+        .nav-bar {
+          position: fixed;
+          top: 0; left: 50px; right: 0;
+          height: 48px;
+          background: rgba(0,0,0,0.6);
+          backdrop-filter: blur(8px);
+          display: flex;
+          align-items: center;
+          padding: 0 16px;
+          z-index: 100;
+          gap: 12px;
+          color: #fff;
+          font-size: 16px;
+          font-weight: bold;
+        }
+
+        .nav-bar a { color: #aaa; text-decoration: none; font-size: 14px; }
+        .nav-bar a:hover { color: #fff; }
+
+        .loading-card {
+          height: 100dvh;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          color: #fff;
+          font-size: 18px;
+          scroll-snap-align: start;
+        }
+
+        /* サイドバーは上書き */
+        .sidebar { background: rgba(20,20,20,0.95) !important; border-right: 1px solid #333 !important; }
+        .sidebar a { color: #ccc !important; }
+        .sidebar a:hover { background: #222 !important; }
+      </style>
+    </head>
+    <body>
+      ${SIDEBAR_HTML}
+
+      <div class="nav-bar">
+        <span>📱 Shorts</span>
+        <a href="/">← ホーム</a>
+      </div>
+
+      <div class="shorts-container" id="shortsContainer">
+        <div class="loading-card">読み込み中...</div>
+      </div>
+
+      ${SIDEBAR_JS}
+
+      <script>
+      const container = document.getElementById("shortsContainer");
+      let shorts = [];
+      let currentIndex = 0;
+      let rendered = 0;
+
+      async function loadShorts() {
+        const res = await fetch("/shorts/api?limit=30");
+        shorts = await res.json();
+        container.innerHTML = "";
+        if (!shorts.length) {
+          container.innerHTML = '<div class="loading-card">Shortsを取得できませんでした</div>';
+          return;
+        }
+        // 最初の3件をレンダリング
+        for (let i = 0; i < Math.min(3, shorts.length); i++) renderShort(i);
+      }
+
+      function renderShort(i) {
+        if (i >= shorts.length || rendered > i) return;
+        rendered = i + 1;
+        const s = shorts[i];
+        const item = document.createElement("div");
+        item.className = "short-item";
+        item.dataset.index = i;
+        item.dataset.id = s.id;
+
+        item.innerHTML = \`
+          <iframe
+            src="https://www.youtube.com/embed/\${s.id}?autoplay=0&loop=1&playlist=\${s.id}&rel=0&modestbranding=1"
+            allow="autoplay; fullscreen"
+            allowfullscreen>
+          </iframe>
+          <div class="short-info">
+            <div class="title">\${s.title}</div>
+          </div>
+          <div class="short-actions">
+            <button class="short-btn" title="YouTubeで開く" onclick="openYT('\${s.id}')">▶</button>
+            <button class="short-btn" title="動画を見る" onclick="postWatch('\${s.id}')">🎬</button>
+          </div>
+        \`;
+
+        container.appendChild(item);
+      }
+
+      // スクロール監視: 次の動画を先読みレンダリング
+      container.addEventListener("scroll", () => {
+        const h = window.innerHeight;
+        const idx = Math.round(container.scrollTop / h);
+        if (idx !== currentIndex) {
+          currentIndex = idx;
+          // 2件先をプリレンダリング
+          renderShort(idx + 1);
+          renderShort(idx + 2);
+        }
+      }, { passive: true });
+
+      function openYT(id) {
+        window.open("https://www.youtube.com/shorts/" + id, "_blank");
+      }
+
+      function postWatch(id) {
+        const form = document.createElement("form");
+        form.method = "POST";
+        form.action = "/watch";
+        const input = document.createElement("input");
+        input.type = "hidden";
+        input.name = "id";
+        input.value = id;
+        form.appendChild(input);
+        document.body.appendChild(form);
+        form.submit();
+      }
+
+      loadShorts();
+      </script>
+    </body>
+    </html>
+  `);
 });
 
 // --------------------------------------
