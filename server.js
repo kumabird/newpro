@@ -341,32 +341,84 @@ app.post("/search", async (req, res) => {
 });
 
 // --------------------------------------
-// 動画視聴 + 関連動画
+// Invidiousインスタンスリストを取得
+// --------------------------------------
+let invidiousApis = null;
+
+async function getInvidiousApis() {
+  try {
+    const res = await fetch("https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json");
+    invidiousApis = await res.json();
+    console.log("Invidiousリスト取得成功:", invidiousApis.length, "件");
+  } catch (e) {
+    console.error("Invidiousリスト取得失敗:", e);
+  }
+}
+
+// サーバー起動時に取得
+getInvidiousApis();
+
+// --------------------------------------
+// Invidiousから動画ストリームURLを取得
+// --------------------------------------
+async function getStreamUrl(videoId) {
+  if (!invidiousApis) await getInvidiousApis();
+  if (!invidiousApis) throw new Error("APIリストが取得できません");
+
+  for (const instance of invidiousApis) {
+    try {
+      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+        signal: AbortSignal.timeout(4000)
+      });
+      if (!res.ok) continue;
+
+      const data = await res.json();
+      if (!data.formatStreams) continue;
+
+      // MP4ストリームURLを取得（画質高い順）
+      const streamUrl = data.formatStreams.reverse().map(s => s.url)[0];
+
+      // 音声URL（m4a）
+      const audioUrl = (data.adaptiveFormats || [])
+        .filter(s => s.container === "m4a" && s.audioQuality === "AUDIO_QUALITY_MEDIUM")
+        .map(s => s.url)[0] || null;
+
+      const title = data.title || "タイトル不明";
+      const channelName = data.author || "";
+      const channelId = data.authorId || "";
+
+      // 関連動画
+      const related = (data.recommendedVideos || []).slice(0, 20).map(v => ({
+        id: v.videoId,
+        title: v.title
+      }));
+
+      console.log(`使用インスタンス: ${instance}`);
+      return { streamUrl, audioUrl, title, channelName, channelId, related };
+
+    } catch (e) {
+      console.error(`失敗: ${instance} - ${e.message}`);
+    }
+  }
+  throw new Error("全インスタンスで失敗しました");
+}
+
+// --------------------------------------
+// 動画視聴 + 関連動画（Invidious版）
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.send("動画IDが正しくありません");
 
   const user = req.cookies.user;
-  const embedUrl = `https://www.youtube.com/embed/${id}`;
-  const oembedUrl = `https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=${id}&format=json`;
 
-  let embeddable = true;
-  let title = "動画タイトル不明";
+  let streamUrl, audioUrl, title, channelName, channelId, related;
 
   try {
-    const check = await fetch(oembedUrl);
-    if (!check.ok) {
-      embeddable = false;
-    } else {
-      const data = await check.json();
-      title = data.title || title;
-    }
-  } catch {
-    embeddable = false;
-  }
-
-  if (!embeddable) {
+    ({ streamUrl, audioUrl, title, channelName, channelId, related } = await getStreamUrl(id));
+  } catch (e) {
+    // 全インスタンス失敗時はYouTubeへリダイレクト
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
@@ -374,41 +426,7 @@ app.post("/watch", async (req, res) => {
     await saveHistory(user, "watch", id, title);
   }
 
-  // 関連動画をスクレイピング
-  let related = [];
-  try {
-    const pageUrl = `https://www.youtube.com/watch?v=${id}&hl=ja&gl=JP`;
-    const html = await fetch(pageUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
-        "Accept-Language": "ja,en;q=0.9"
-      }
-    }).then(r => r.text());
-
-    const jsonMatch = html.match(/var ytInitialData = (\{.*?\});<\/script>/s);
-    if (jsonMatch) {
-      const data = JSON.parse(jsonMatch[1]);
-      const secondary =
-        data?.contents?.twoColumnWatchNextResults?.secondaryResults
-             ?.secondaryResults?.results || [];
-
-      for (const item of secondary) {
-        const v = item.compactVideoRenderer;
-        if (!v || !v.videoId) continue;
-        related.push({
-          id: v.videoId,
-          title:
-            v.title?.simpleText ||
-            v.title?.runs?.map(r => r.text).join("") ||
-            "No Title"
-        });
-        if (related.length >= 20) break;
-      }
-    }
-  } catch (e) {
-    console.error("関連動画取得エラー:", e);
-  }
-
+  // 関連動画HTML
   const relatedHTML = related.length > 0
     ? related.map(v => `
         <form action="/watch" method="post" style="display:block;margin-bottom:12px;">
@@ -443,11 +461,11 @@ app.post("/watch", async (req, res) => {
           flex: 1;
           min-width: 0;
         }
-        .watch-player iframe {
+        .watch-player video {
           width: 100%;
           aspect-ratio: 16/9;
           border-radius: 12px;
-          border: none;
+          background: #000;
         }
         .watch-related {
           width: 380px;
@@ -460,6 +478,14 @@ app.post("/watch", async (req, res) => {
           margin-bottom: 12px;
           color: #2c3e50;
         }
+        .channel-info {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          margin: 12px 0;
+          font-size: 14px;
+          color: #555;
+        }
         @media (max-width: 900px) {
           .watch-layout { flex-direction: column; }
           .watch-related { width: 100%; }
@@ -470,16 +496,37 @@ app.post("/watch", async (req, res) => {
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <div class="watch-layout">
+
+          <!-- 左：プレイヤー -->
           <div class="watch-player">
-            <h2 style="font-size:18px;margin-bottom:12px;">${title}</h2>
-            <iframe src="${embedUrl}" allowfullscreen></iframe>
-            <br><br>
-            <a href="/">← ホームへ戻る</a>
+            <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
+            <div class="channel-info">
+              <a href="/channel-videos?id=${channelId}" style="color:#3498db;font-weight:bold;">
+                📺 ${channelName}
+              </a>
+            </div>
+
+            <!-- ★ iframeなし・直接再生 -->
+            <video id="mainVideo" controls preload="auto" playsinline
+                   poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
+              <source id="videoSrc" src="${streamUrl}" type="video/mp4">
+            </video>
+
+            <div style="margin-top:12px;">
+              <a href="/" style="color:#3498db;">← ホームへ戻る</a>
+              &nbsp;|&nbsp;
+              <a href="https://www.youtube.com/watch?v=${id}" target="_blank" style="color:#e74c3c;">
+                YouTubeで開く
+              </a>
+            </div>
           </div>
+
+          <!-- 右：関連動画 -->
           <div class="watch-related">
             <h3>関連動画</h3>
             ${relatedHTML}
           </div>
+
         </div>
       </div>
       ${SIDEBAR_JS}
