@@ -208,46 +208,9 @@ app.get("/", (req, res) => {
           </form>
         </div>
 
-        <!-- Shorts セクション -->
-        <div style="max-width:800px;margin:30px auto 0;">
-          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
-            <h2 style="margin:0;font-size:20px;">📱 Shorts</h2>
-            <a href="/shorts" style="font-size:14px;color:#3498db;text-decoration:none;">すべて見る →</a>
-          </div>
-          <div id="shorts-preview" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(130px,1fr));gap:10px;">
-            <div style="text-align:center;color:#aaa;padding:20px;">読み込み中...</div>
-          </div>
-        </div>
-
       </div>
 
       ${SIDEBAR_JS}
-      <script>
-      // ホームのShortsプレビュー（最大8件）
-      fetch("/shorts/api?limit=8")
-        .then(r => r.json())
-        .then(shorts => {
-          const box = document.getElementById("shorts-preview");
-          if (!shorts.length) { box.innerHTML = '<p style="color:#aaa">取得できませんでした</p>'; return; }
-          box.innerHTML = shorts.map(s =>
-            '<form action="/watch" method="post" style="display:inline;">' +
-            '<input type="hidden" name="id" value="' + s.id + '">' +
-            '<button style="all:unset;cursor:pointer;display:block;width:100%;">' +
-            '<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:9/16;background:#000;">' +
-            '<img src="https://i.ytimg.com/vi/' + s.id + '/hqdefault.jpg"' +
-            ' style="width:100%;height:100%;object-fit:cover;opacity:0.85;">' +
-            '<div style="position:absolute;bottom:6px;left:0;right:0;padding:0 6px;' +
-            'font-size:11px;color:#fff;font-weight:bold;' +
-            'text-shadow:0 1px 3px rgba(0,0,0,0.8);' +
-            'overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' +
-            s.title +
-            '</div></div></button></form>'
-          ).join("");
-        })
-        .catch(() => {
-          document.getElementById("shorts-preview").innerHTML = '<p style="color:#aaa">取得できませんでした</p>';
-        });
-      </script>
 
     </body>
     </html>
@@ -1173,29 +1136,51 @@ app.post("/admin/delete-user", async (req, res) => {
 // --------------------------------------
 // Shorts API（動画IDリスト返却）
 // --------------------------------------
-async function fetchShorts(limit = 20) {
-  const url = "https://www.youtube.com/shorts";
-  const html = await fetch(url, {
-    headers: { "Accept-Language": "ja", "User-Agent": "Mozilla/5.0" }
-  }).then(r => r.text());
+// --------------------------------------
+// Shorts取得（Invidious trending API + キャッシュ）
+// --------------------------------------
+let shortsCache = null;
+let shortsCacheTime = 0;
+const SHORTS_CACHE_TTL = 10 * 60 * 1000; // 10分
 
-  const matches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
-  const seen = new Set();
-  const shorts = [];
-  for (const m of matches) {
-    if (seen.has(m[1])) continue;
-    seen.add(m[1]);
-    shorts.push({ id: m[1], title: "" });
-    if (shorts.length >= limit) break;
+async function fetchShorts(limit = 20) {
+  // キャッシュが有効なら即返す
+  if (shortsCache && Date.now() - shortsCacheTime < SHORTS_CACHE_TTL) {
+    return shortsCache.slice(0, limit);
   }
 
-  // タイトルを取得（ytInitialData から）
-  const titleMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]*?"text":"([^"]+)"/g)];
-  const titleMap = {};
-  for (const m of titleMatches) titleMap[m[1]] = m[2];
-  for (const s of shorts) s.title = titleMap[s.id] || s.id;
+  if (!invidiousApis) await loadInvidiousApis();
+  if (!invidiousApis) throw new Error("APIリストを取得できません");
 
-  return shorts;
+  for (const instance of invidiousApis) {
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), INV_TIMEOUT);
+      const res = await fetch(
+        `${instance}/api/v1/trending?type=shorts&region=JP&hl=ja`,
+        { signal: controller.signal }
+      );
+      clearTimeout(timer);
+      if (!res.ok) continue;
+      const data = await res.json();
+      if (!Array.isArray(data) || !data.length) continue;
+
+      const shorts = data
+        .filter(v => v.videoId && v.lengthSeconds <= 60)
+        .slice(0, 40)
+        .map(v => ({ id: v.videoId, title: v.title || v.videoId }));
+
+      if (!shorts.length) continue;
+
+      // キャッシュ更新
+      shortsCache = shorts;
+      shortsCacheTime = Date.now();
+      return shorts.slice(0, limit);
+    } catch (e) {
+      console.error(`Shorts取得失敗 ${instance}:`, e.message);
+    }
+  }
+  throw new Error("Shortsを取得できませんでした");
 }
 
 app.get("/shorts/api", async (req, res) => {
@@ -1363,6 +1348,8 @@ app.get("/shorts", (req, res) => {
         }
         // 最初の3件をレンダリング
         for (let i = 0; i < Math.min(3, shorts.length); i++) renderShort(i);
+        // 最初の動画を自動再生
+        activateShort(0);
       }
 
       function renderShort(i) {
@@ -1374,33 +1361,43 @@ app.get("/shorts", (req, res) => {
         item.dataset.index = i;
         item.dataset.id = s.id;
 
-        item.innerHTML = \`
-          <iframe
-            src="https://www.youtube.com/embed/\${s.id}?autoplay=0&loop=1&playlist=\${s.id}&rel=0&modestbranding=1"
-            allow="autoplay; fullscreen"
-            allowfullscreen>
-          </iframe>
-          <div class="short-info">
-            <div class="title">\${s.title}</div>
-          </div>
-          <div class="short-actions">
-            <button class="short-btn" title="YouTubeで開く" onclick="openYT('\${s.id}')">▶</button>
-            <button class="short-btn" title="動画を見る" onclick="postWatch('\${s.id}')">🎬</button>
-          </div>
-        \`;
+        item.innerHTML =
+          '<iframe id="iframe-' + i + '"' +
+          ' src=""' +
+          ' data-src="https://www.youtube.com/embed/' + s.id + '?autoplay=1&mute=1&loop=1&playlist=' + s.id + '&rel=0&modestbranding=1&playsinline=1"' +
+          ' allow="autoplay; fullscreen" allowfullscreen></iframe>' +
+          '<div class="short-info">' +
+          '<div class="title">' + s.title + '</div>' +
+          '</div>' +
+          '<div class="short-actions">' +
+          '<button class="short-btn" title="YouTubeで開く" onclick="openYT(\'' + s.id + '\')">▶</button>' +
+          '<button class="short-btn" title="動画を見る" onclick="postWatch(\'' + s.id + '\')">🎬</button>' +
+          '</div>';
 
         container.appendChild(item);
       }
 
-      // スクロール監視: 次の動画を先読みレンダリング
+      // スクロール監視: 次の動画を先読みレンダリング＆自動再生切替
+      function activateShort(idx) {
+        // 全iframeを停止（srcを空に）
+        document.querySelectorAll(".short-item iframe").forEach(f => {
+          if (f.src !== "") f.src = "";
+        });
+        // 対象のiframeを再生開始
+        const target = document.getElementById("iframe-" + idx);
+        if (target && target.dataset.src) {
+          target.src = target.dataset.src;
+        }
+      }
+
       container.addEventListener("scroll", () => {
         const h = window.innerHeight;
         const idx = Math.round(container.scrollTop / h);
         if (idx !== currentIndex) {
           currentIndex = idx;
-          // 2件先をプリレンダリング
           renderShort(idx + 1);
           renderShort(idx + 2);
+          activateShort(idx);
         }
       }, { passive: true });
 
