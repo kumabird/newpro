@@ -229,23 +229,20 @@ app.get("/", (req, res) => {
         .then(shorts => {
           const box = document.getElementById("shorts-preview");
           if (!shorts.length) { box.innerHTML = '<p style="color:#aaa">取得できませんでした</p>'; return; }
-          box.innerHTML = shorts.map(s => `
-            <form action="/watch" method="post" style="display:inline;">
-              <input type="hidden" name="id" value="${s.id}">
-              <button style="all:unset;cursor:pointer;display:block;width:100%;">
-                <div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:9/16;background:#000;">
-                  <img src="https://i.ytimg.com/vi/${s.id}/hqdefault.jpg"
-                       style="width:100%;height:100%;object-fit:cover;opacity:0.85;">
-                  <div style="position:absolute;bottom:6px;left:0;right:0;padding:0 6px;
-                               font-size:11px;color:#fff;font-weight:bold;
-                               text-shadow:0 1px 3px rgba(0,0,0,0.8);
-                               overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">
-                    ${s.title}
-                  </div>
-                </div>
-              </button>
-            </form>
-          `).join("");
+          box.innerHTML = shorts.map(s =>
+            '<form action="/watch" method="post" style="display:inline;">' +
+            '<input type="hidden" name="id" value="' + s.id + '">' +
+            '<button style="all:unset;cursor:pointer;display:block;width:100%;">' +
+            '<div style="position:relative;border-radius:10px;overflow:hidden;aspect-ratio:9/16;background:#000;">' +
+            '<img src="https://i.ytimg.com/vi/' + s.id + '/hqdefault.jpg"' +
+            ' style="width:100%;height:100%;object-fit:cover;opacity:0.85;">' +
+            '<div style="position:absolute;bottom:6px;left:0;right:0;padding:0 6px;' +
+            'font-size:11px;color:#fff;font-weight:bold;' +
+            'text-shadow:0 1px 3px rgba(0,0,0,0.8);' +
+            'overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;">' +
+            s.title +
+            '</div></div></button></form>'
+          ).join("");
         })
         .catch(() => {
           document.getElementById("shorts-preview").innerHTML = '<p style="color:#aaa">取得できませんでした</p>';
