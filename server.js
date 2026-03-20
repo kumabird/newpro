@@ -207,7 +207,15 @@ async function saveHistory(user, keyword, videoId, title) {
       [user, keyword, videoId, title]
     );
   } catch (err) {
-    console.error("履歴保存エラー:", err);
+    console.error("履歴保存エラー(history):", err);
+  }
+  try {
+    await pool.query(
+      "INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
+      [user, keyword, videoId, title]
+    );
+  } catch (err) {
+    console.error("履歴保存エラー(admin_history):", err);
   }
 }
 
@@ -791,7 +799,7 @@ app.post("/history/delete", async (req, res) => {
 // --------------------------------------
 // 管理者ページ
 // --------------------------------------
-const ADMIN_PASSWORD = "jagdyufr5t62";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
 
 app.get("/admin", (req, res) => {
   const user = req.cookies.user;
@@ -834,7 +842,7 @@ app.post("/admin", async (req, res) => {
   if (pass !== ADMIN_PASSWORD) return res.send("パスワードが違います");
 
   const result = await pool.query(
-    `SELECT user_id, query, video_id, title, created_at FROM history ORDER BY created_at DESC`
+    `SELECT user_id, query, video_id, title, created_at FROM admin_history ORDER BY created_at DESC`
   );
 
   const historyByUser = {};
@@ -888,9 +896,10 @@ app.post("/admin", async (req, res) => {
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <h2>管理者ページ</h2>
+        <p style="color:#e74c3c;font-size:13px;text-align:center;">※ユーザーが自分の履歴を削除しても、この画面の記録は消えません</p>
         <div class="tabs">
           <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
-          <div class="tab" id="tab-delete" onclick="openTab('delete')">ユーザー削除</div>
+          <div class="tab" id="tab-delete" onclick="openTab('delete')">記録削除</div>
         </div>
         <div class="tab-content active" id="content-all">
           ${allHistoryHTML}
@@ -932,7 +941,7 @@ app.post("/admin/delete-user", async (req, res) => {
   const pass = req.body.pass;
   const user = req.body.user;
   if (pass !== ADMIN_PASSWORD) return res.send("パスワードが違います");
-  await pool.query("DELETE FROM history WHERE user_id = $1", [user]);
+  await pool.query("DELETE FROM admin_history WHERE user_id = $1", [user]);
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
 
