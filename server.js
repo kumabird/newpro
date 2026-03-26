@@ -164,8 +164,18 @@ const CSS = `
 const SIDEBAR_HTML = `
 <div id="sidebar" class="sidebar">
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-<form action="/channel-search" method="POST">
-  <button style="all:unset;cursor:pointer;">
+<form action="/channel-search" method="POST" style="margin:0;">
+  <button style="
+    all: unset;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 12px 18px;
+    font-size: 17px;
+    color: #333;
+    cursor: pointer;
+  ">
     <span class="sidebar-icon">📺</span>
     <span class="sidebar-text">チャンネル検索</span>
   </button>
