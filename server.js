@@ -582,7 +582,7 @@ app.post("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const q = req.query.q;
+  const q = req.body.q;
   const region = req.query.region || "jp";
 
   let url;
