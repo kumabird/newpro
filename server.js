@@ -697,7 +697,7 @@ app.post("/channel-search/result", async (req, res) => {
 // --------------------------------------
 // チャンネル動画一覧
 // --------------------------------------
-app.get("/channel-videos", async (req, res) => {
+app.post("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
