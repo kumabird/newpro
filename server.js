@@ -434,7 +434,13 @@ async function getStreamUrl(videoId) {
   for (const instance of invidiousApis) {
     try {
       const result = await tryInstance(instance);
-      lastWorkingInstance = instance; // ←ここ重要
+      lastWorkingInstance = instance;
+
+// DBにも保存
+pool.query(
+  "INSERT INTO settings (key, value) VALUES ('lastApi', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+  [instance]
+).catch(console.error);
       console.log("使用インスタンス:", instance);
       return result;
     } catch (e) {
