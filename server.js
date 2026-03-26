@@ -638,25 +638,6 @@ app.post("/channel-search/result", async (req, res) => {
     </html>
   `);
 });
-
-
-<script>
-function postChannel(id) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/channel-videos";
-
-  const input = document.createElement("input");
-  input.type = "hidden";
-  input.name = "id";
-  input.value = id;
-
-  form.appendChild(input);
-  document.body.appendChild(form);
-  form.submit();
-}
-</script>
-
 // --------------------------------------
 // チャンネル動画一覧
 // --------------------------------------
