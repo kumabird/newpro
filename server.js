@@ -589,10 +589,11 @@ app.post("/watch", async (req, res) => {
               </span>
             </div>
 
-            <video id="mainVideo" controls preload="auto" playsinline
-                   poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
-              <source id="videoSrc" src="${streamUrl}" type="video/mp4">
-            </video>
+            <video id="mainVideo" controls autoplay preload="auto" playsinline
+       poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg"
+       src="/proxy-stream?url=${encodeURIComponent(streamUrl)}"
+       type="video/mp4">
+</video>
 
             <div style="margin-top:12px;">
               <a href="/" style="color:#3498db;">← ホームへ戻る</a>
