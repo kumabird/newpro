@@ -486,8 +486,19 @@ app.post("/watch", async (req, res) => {
 
   try {
     ({ streamUrl, audioUrl, title, channelName, channelId, related } = await getStreamUrl(id));
+ // 変更後
   } catch (e) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    return res.send(`
+      <html><head>${CSS}</head><body>
+        ${SIDEBAR_HTML}
+        <div id="main-content" class="main-content">
+          <h2>動画を読み込めませんでした</h2>
+          <p>すべてのサーバーで取得に失敗しました。</p>
+          <a href="/">← ホームへ戻る</a>
+        </div>
+        ${SIDEBAR_JS}
+      </body></html>
+    `);
   }
 
   if (user) {
