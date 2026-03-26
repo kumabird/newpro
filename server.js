@@ -580,7 +580,7 @@ app.post("/watch", async (req, res) => {
 
             <video id="mainVideo" controls preload="auto" playsinline
                    poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
-              <source id="videoSrc" src="${streamUrl}" type="video/mp4">
+              <source id="videoSrc" src="/stream/${id}" type="video/mp4">
             </video>
 
             <div style="margin-top:12px;">
