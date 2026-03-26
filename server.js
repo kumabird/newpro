@@ -164,22 +164,7 @@ const CSS = `
 const SIDEBAR_HTML = `
 <div id="sidebar" class="sidebar">
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-<form action="/channel-search" method="POST" style="margin:0;">
-  <button style="
-    all: unset;
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    width: 100%;
-    padding: 12px 18px;
-    font-size: 17px;
-    color: #333;
-    cursor: pointer;
-  ">
-    <span class="sidebar-icon">📺</span>
-    <span class="sidebar-text">チャンネル検索</span>
-  </button>
-</form>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
   <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
@@ -204,21 +189,6 @@ sidebar.addEventListener("mouseleave", () => {
   sidebar.classList.remove("open");
   main.classList.remove("shift");
 });
-
-function postChannel(id) {
-  const form = document.createElement("form");
-  form.method = "POST";
-  form.action = "/channel-videos";
-
-  const input = document.createElement("input");
-  input.type = "hidden";
-  input.name = "id";
-  input.value = id;
-
-  form.appendChild(input);
-  document.body.appendChild(form);
-  form.submit();
-}
 </script>
 `;
 
@@ -539,12 +509,9 @@ app.post("/watch", async (req, res) => {
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
             <div class="channel-info">
-              <form action="/channel-videos" method="POST" style="display:inline;">
-  <input type="hidden" name="id" value="${channelId}">
-  <button style="all:unset;cursor:pointer;color:#3498db;font-weight:bold;">
-    📺 ${channelName}
-  </button>
-</form>
+              <a href="/channel-videos?id=${channelId}" style="color:#3498db;font-weight:bold;">
+                📺 ${channelName}
+              </a>
             </div>
 
             <!-- ★ iframeなし・直接再生 -->
@@ -579,7 +546,7 @@ app.post("/watch", async (req, res) => {
 // --------------------------------------
 // チャンネル検索
 // --------------------------------------
-app.post("/channel-search", (req, res) => {
+app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
@@ -610,7 +577,7 @@ app.post("/channel-search", (req, res) => {
 // --------------------------------------
 // チャンネル検索結果（60件）
 // --------------------------------------
-app.post("/channel-search/result", async (req, res) => {
+app.get("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
@@ -656,7 +623,7 @@ app.post("/channel-search/result", async (req, res) => {
         <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
           ${list60.map(c => `
-            <div class="card" onclick="postChannel('${c.id}')" style="cursor:pointer;">
+            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
               <img class="thumb" src="${c.icon}">
               <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
             </div>
@@ -668,14 +635,15 @@ app.post("/channel-search/result", async (req, res) => {
     </html>
   `);
 });
+
 // --------------------------------------
 // チャンネル動画一覧
 // --------------------------------------
-app.post("/channel-videos", async (req, res) => {
+app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const id = req.body.id;
+  const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
   const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
