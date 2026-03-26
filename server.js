@@ -195,6 +195,26 @@ sidebar.addEventListener("mouseleave", () => {
 `;
 
 // --------------------------------------
+// チャンネルへ POST 遷移するヘルパー JS
+// --------------------------------------
+const CHANNEL_NAV_JS = `
+<script>
+function goChannel(id) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/channel-videos";
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "id";
+  input.value = id;
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
+`;
+
+// --------------------------------------
 // ユーザー管理
 // --------------------------------------
 function loadUsers() {
@@ -203,22 +223,17 @@ function loadUsers() {
 }
 
 async function saveHistory(user, keyword, videoId, title) {
-  try {
-    await pool.query(
+  const params = [user, keyword, videoId, title];
+  await Promise.allSettled([
+    pool.query(
       "INSERT INTO history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
-      [user, keyword, videoId, title]
-    );
-  } catch (err) {
-    console.error("履歴保存エラー(history):", err);
-  }
-  try {
-    await pool.query(
+      params
+    ),
+    pool.query(
       "INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
-      [user, keyword, videoId, title]
-    );
-  } catch (err) {
-    console.error("履歴保存エラー(admin_history):", err);
-  }
+      params
+    )
+  ]);
 }
 
 function formatDateJP(date) {
@@ -359,11 +374,14 @@ let invidiousApis = null;
 
 async function getInvidiousApis() {
   try {
-    const res = await fetch("https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json");
+    const res = await fetch("https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json", {
+      signal: AbortSignal.timeout(5000)
+    });
     invidiousApis = await res.json();
     console.log("Invidiousリスト取得成功:", invidiousApis.length, "件");
   } catch (e) {
     console.error("Invidiousリスト取得失敗:", e);
+    invidiousApis = [];
   }
 }
 
@@ -390,17 +408,17 @@ loadLastInstance();
 // Invidiousから動画ストリームURLを取得
 // --------------------------------------
 async function getStreamUrl(videoId) {
-  if (!invidiousApis) await getInvidiousApis();
-  if (!invidiousApis) throw new Error("APIリストが取得できません");
+  if (!invidiousApis || invidiousApis.length === 0) await getInvidiousApis();
+  if (!invidiousApis || invidiousApis.length === 0) throw new Error("APIリストが取得できません");
 
   const tryInstance = async (instance) => {
     const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
       signal: AbortSignal.timeout(4000)
     });
-    if (!res.ok) throw new Error("bad");
+    if (!res.ok) throw new Error("bad status: " + res.status);
 
     const data = await res.json();
-    if (!data.formatStreams) throw new Error("no stream");
+    if (!data.formatStreams || data.formatStreams.length === 0) throw new Error("no stream");
 
     const streamUrl = data.formatStreams.slice().reverse()[0].url;
 
@@ -421,7 +439,7 @@ async function getStreamUrl(videoId) {
     };
   };
 
-  // 🔥 ① 前回成功したやつを最優先
+  // ① 前回成功したインスタンスを最優先
   if (lastWorkingInstance) {
     try {
       const result = await tryInstance(lastWorkingInstance);
@@ -432,28 +450,30 @@ async function getStreamUrl(videoId) {
     }
   }
 
-  // 🔥 ② 総当り（成功したら保存）
+  // ② 総当り（成功したら保存）
   for (const instance of invidiousApis) {
     try {
       const result = await tryInstance(instance);
       lastWorkingInstance = instance;
 
-// DBにも保存
-pool.query(
-  "INSERT INTO settings (key, value) VALUES ('lastApi', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
-  [instance]
-).catch(console.error);
+      // DBにも非同期で保存（待たない）
+      pool.query(
+        "INSERT INTO settings (key, value) VALUES ('lastApi', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+        [instance]
+      ).catch(console.error);
+
       console.log("使用インスタンス:", instance);
       return result;
-    } catch (e) {
+    } catch {
       console.log("失敗:", instance);
     }
   }
 
   throw new Error("全インスタンスで失敗");
 }
+
 // --------------------------------------
-// 動画視聴 + 関連動画（Invidious版）
+// 動画視聴 + 関連動画
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
@@ -467,7 +487,6 @@ app.post("/watch", async (req, res) => {
   try {
     ({ streamUrl, audioUrl, title, channelName, channelId, related } = await getStreamUrl(id));
   } catch (e) {
-    // 全インスタンス失敗時はYouTubeへリダイレクト
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
@@ -475,7 +494,6 @@ app.post("/watch", async (req, res) => {
     saveHistory(user, "watch", id, title).catch(console.error);
   }
 
-  // 関連動画HTML
   const relatedHTML = related.length > 0
     ? related.map(v => `
         <form action="/watch" method="post" style="display:block;margin-bottom:12px;">
@@ -549,17 +567,17 @@ app.post("/watch", async (req, res) => {
           <!-- 左：プレイヤー -->
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
-            <button onclick="addFav('${id}', \`${title}\`)"
-    style="margin-bottom:10px;padding:8px 12px;border:none;background:#f1c40f;color:#000;border-radius:6px;cursor:pointer;">
-    ⭐ お気に入り追加
-  </button>
+            <button onclick="addFav('${id}', \`${title.replace(/`/g, "\\`")}\`)"
+              style="margin-bottom:10px;padding:8px 12px;border:none;background:#f1c40f;color:#000;border-radius:6px;cursor:pointer;width:auto;">
+              ⭐ お気に入り追加
+            </button>
             <div class="channel-info">
-              <a href="/channel-videos?id=${channelId}" style="color:#3498db;font-weight:bold;">
+              <span style="color:#3498db;font-weight:bold;cursor:pointer;"
+                    onclick="goChannel('${channelId}')">
                 📺 ${channelName}
-              </a>
+              </span>
             </div>
 
-            <!-- ★ iframeなし・直接再生 -->
             <video id="mainVideo" controls preload="auto" playsinline
                    poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
               <source id="videoSrc" src="${streamUrl}" type="video/mp4">
@@ -583,30 +601,30 @@ app.post("/watch", async (req, res) => {
         </div>
       </div>
       ${SIDEBAR_JS}
+      ${CHANNEL_NAV_JS}
       <script>
-function addFav(id, title) {
-  fetch("/favorite/add", {
-    method: "POST",
-    headers: {"Content-Type":"application/json"},
-    body: JSON.stringify({
-      videoId: id,
-      title: title
-    })
-  })
-  .then(res => res.json())
-.then(data => {
-  if (data.ok) alert("追加しました");
-  else alert("すでに登録済み or エラー");
-})
-.catch(() => alert("通信エラー"));
-</script>
+        function addFav(id, title) {
+          fetch("/favorite/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: id, title: title })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok) alert("お気に入りに追加しました");
+            else if (data.duplicate) alert("すでにお気に入り登録済みです");
+            else alert("エラーが発生しました");
+          })
+          .catch(() => alert("通信エラー"));
+        }
+      </script>
     </body>
     </html>
   `);
 });
 
 // --------------------------------------
-// チャンネル検索
+// チャンネル検索（GET）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
@@ -637,14 +655,17 @@ app.get("/channel-search", (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル検索結果（60件）
+// チャンネル検索結果（POST）
+// ※ region を req.body から取得するよう修正
 // --------------------------------------
 app.post("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
   const q = req.body.q;
-  const region = req.query.region || "jp";
+  const region = req.body.region || "jp";  // ← 修正: req.query → req.body
+
+  if (!q) return res.send("検索ワードがありません");
 
   let url;
   if (region === "global") {
@@ -653,11 +674,23 @@ app.post("/channel-search/result", async (req, res) => {
     url = `https://www.youtube.com/results?search_query=${encodeURIComponent(q)}&sp=EgIQAg%253D%253D&hl=ja&gl=JP`;
   }
 
-  const html = await fetch(url).then(r => r.text());
+  let html;
+  try {
+    html = await fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => r.text());
+  } catch (e) {
+    return res.send("YouTubeへの接続がタイムアウトしました。再度お試しください。");
+  }
+
   const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
   if (!jsonText) return res.send("データを取得できませんでした");
 
-  const data = JSON.parse(jsonText[1]);
+  let data;
+  try {
+    data = JSON.parse(jsonText[1]);
+  } catch {
+    return res.send("データの解析に失敗しました");
+  }
+
   const channels = [];
 
   function scan(obj) {
@@ -685,7 +718,7 @@ app.post("/channel-search/result", async (req, res) => {
         <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
           ${list60.map(c => `
-            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
+            <div class="card" onclick="goChannel('${c.id}')" style="cursor:pointer;">
               <img class="thumb" src="${c.icon}">
               <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
             </div>
@@ -693,32 +726,46 @@ app.post("/channel-search/result", async (req, res) => {
         </div>
       </div>
       ${SIDEBAR_JS}
+      ${CHANNEL_NAV_JS}
     </body>
     </html>
   `);
 });
 
 // --------------------------------------
-// チャンネル動画一覧
+// チャンネル動画一覧（GET & POST 両対応）
+// ※ GET はサイドバーのリンクなど直リンク用、POST はフォーム遷移用
 // --------------------------------------
-app.post("/channel-videos", async (req, res) => {
+async function handleChannelVideos(req, res) {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const id = req.query.id;
+  // GET は query、POST は body または query から id を取得
+  const id = req.body?.id || req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
   const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
-  const html = await fetch(url).then(r => r.text());
 
-  let jsonText =
+  let html;
+  try {
+    html = await fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => r.text());
+  } catch (e) {
+    return res.send("YouTubeへの接続がタイムアウトしました。再度お試しください。");
+  }
+
+  const jsonText =
     html.match(/ytInitialData"\]\s*=\s*(\{.*?\});/) ||
     html.match(/var ytInitialData = (\{.*?\});/) ||
     html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});/);
 
   if (!jsonText) return res.send("データを取得できませんでした");
 
-  const data = JSON.parse(jsonText[1]);
+  let data;
+  try {
+    data = JSON.parse(jsonText[1]);
+  } catch {
+    return res.send("データの解析に失敗しました");
+  }
 
   function findGridItems(obj) {
     if (!obj || typeof obj !== "object") return null;
@@ -777,7 +824,11 @@ app.post("/channel-videos", async (req, res) => {
   `;
 
   res.send(list);
-});
+}
+
+// GET・POST 両方登録
+app.get("/channel-videos", handleChannelVideos);
+app.post("/channel-videos", handleChannelVideos);
 
 // --------------------------------------
 // お気に入り機能
@@ -818,21 +869,32 @@ app.get("/favorites", async (req, res) => {
   `);
 });
 
+// ★ お気に入り追加（重複チェック付き）
 app.post("/favorite/add", async (req, res) => {
   const user = req.cookies.user;
-  if (!user) return res.status(401).send("ログインしてください");
+  if (!user) return res.status(401).json({ ok: false, error: "unauthorized" });
 
   const { videoId, title } = req.body;
+  if (!videoId || !title) return res.status(400).json({ ok: false, error: "missing params" });
 
   try {
+    // 重複チェック
+    const existing = await pool.query(
+      "SELECT 1 FROM favorites WHERE user_id = $1 AND video_id = $2",
+      [user, videoId]
+    );
+    if (existing.rows.length > 0) {
+      return res.json({ ok: false, duplicate: true });
+    }
+
     await pool.query(
       "INSERT INTO favorites (user_id, video_id, title) VALUES ($1, $2, $3)",
       [user, videoId, title]
     );
     res.json({ ok: true });
   } catch (e) {
-    console.error(e);
-    res.json({ ok: false });
+    console.error("お気に入り追加エラー:", e);
+    res.json({ ok: false, error: e.message });
   }
 });
 
@@ -1064,7 +1126,7 @@ app.post("/admin/delete-user", async (req, res) => {
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
 
-//uptimerobot用
+// uptimerobot用
 app.get("/health", (req, res) => {
   res.status(200).send("OK");
 });
