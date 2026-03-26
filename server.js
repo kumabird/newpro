@@ -660,7 +660,7 @@ app.post("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const id = req.query.id;
+  const id = req.body.id;
   if (!id) return res.send("チャンネルIDがありません");
 
   const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
