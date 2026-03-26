@@ -166,6 +166,7 @@ const SIDEBAR_HTML = `
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
   <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
   <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
+  <a href="/favorites"><span class="sidebar-icon">⭐</span> <span class="sidebar-text">お気に入り</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
   <a href="/logout"><span class="sidebar-icon">🚪</span> <span class="sidebar-text">ログアウト</span></a>
