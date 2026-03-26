@@ -373,44 +373,45 @@ async function getStreamUrl(videoId) {
   if (!invidiousApis) await getInvidiousApis();
   if (!invidiousApis) throw new Error("APIリストが取得できません");
 
-  for (const instance of invidiousApis) {
-    try {
-      const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-        signal: AbortSignal.timeout(4000)
-      });
-      if (!res.ok) continue;
+  const controller = new AbortController();
 
-      const data = await res.json();
-      if (!data.formatStreams) continue;
+  const promises = invidiousApis.map(instance =>
+    fetch(`${instance}/api/v1/videos/${videoId}`, {
+      signal: controller.signal
+    })
+    .then(res => res.ok ? res.json() : Promise.reject())
+    .then(data => {
+      if (!data.formatStreams) throw new Error("no stream");
 
-      // MP4ストリームURLを取得（画質高い順）
-      const streamUrl = data.formatStreams.reverse().map(s => s.url)[0];
+      const streamUrl = data.formatStreams.slice().reverse()[0].url;
 
-      // 音声URL（m4a）
       const audioUrl = (data.adaptiveFormats || [])
-        .filter(s => s.container === "m4a" && s.audioQuality === "AUDIO_QUALITY_MEDIUM")
+        .filter(s => s.container === "m4a")
         .map(s => s.url)[0] || null;
 
-      const title = data.title || "タイトル不明";
-      const channelName = data.author || "";
-      const channelId = data.authorId || "";
+      return {
+        streamUrl,
+        audioUrl,
+        title: data.title || "タイトル不明",
+        channelName: data.author || "",
+        channelId: data.authorId || "",
+        related: (data.recommendedVideos || []).slice(0, 20).map(v => ({
+          id: v.videoId,
+          title: v.title
+        }))
+      };
+    })
+    .catch(() => null)
+  );
 
-      // 関連動画
-      const related = (data.recommendedVideos || []).slice(0, 20).map(v => ({
-        id: v.videoId,
-        title: v.title
-      }));
-
-      console.log(`使用インスタンス: ${instance}`);
-      return { streamUrl, audioUrl, title, channelName, channelId, related };
-
-    } catch (e) {
-      console.error(`失敗: ${instance} - ${e.message}`);
-    }
+  try {
+    const result = await Promise.any(promises);
+    controller.abort(); // 他のリクエスト止める
+    return result;
+  } catch {
+    throw new Error("全インスタンスで失敗しました");
   }
-  throw new Error("全インスタンスで失敗しました");
 }
-
 // --------------------------------------
 // 動画視聴 + 関連動画（Invidious版）
 // --------------------------------------
