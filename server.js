@@ -486,19 +486,8 @@ app.post("/watch", async (req, res) => {
 
   try {
     ({ streamUrl, audioUrl, title, channelName, channelId, related } = await getStreamUrl(id));
- // 変更後
   } catch (e) {
-    return res.send(`
-      <html><head>${CSS}</head><body>
-        ${SIDEBAR_HTML}
-        <div id="main-content" class="main-content">
-          <h2>動画を読み込めませんでした</h2>
-          <p>すべてのサーバーで取得に失敗しました。</p>
-          <a href="/">← ホームへ戻る</a>
-        </div>
-        ${SIDEBAR_JS}
-      </body></html>
-    `);
+    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
 
   if (user) {
@@ -589,11 +578,10 @@ app.post("/watch", async (req, res) => {
               </span>
             </div>
 
-            <video id="mainVideo" controls autoplay preload="auto" playsinline
-       poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg"
-       src="/proxy-stream?url=${encodeURIComponent(streamUrl)}"
-       type="video/mp4">
-</video>
+            <video id="mainVideo" controls preload="auto" playsinline
+                   poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
+              <source id="videoSrc" src="${streamUrl}" type="video/mp4">
+            </video>
 
             <div style="margin-top:12px;">
               <a href="/" style="color:#3498db;">← ホームへ戻る</a>
@@ -1156,47 +1144,6 @@ app.get("/logout", (req, res) => {
 // --------------------------------------
 app.get("/music", (req, res) => {
   res.redirect("https://musicviewer.onrender.com/");
-});
-
-// --------------------------------------
-// 動画ストリームプロキシ（CORS回避・直接再生用）
-// --------------------------------------
-app.get("/proxy-stream", async (req, res) => {
-  const url = req.query.url;
-  if (!url) return res.status(400).send("url required");
-
-  // URLの簡単なバリデーション（httpのみ許可）
-  if (!/^https?:\/\//.test(url)) return res.status(400).send("invalid url");
-
-  try {
-    const range = req.headers.range;
-    const headers = { "User-Agent": "Mozilla/5.0" };
-    if (range) headers["Range"] = range;
-
-    const upstream = await fetch(url, {
-      headers,
-      signal: AbortSignal.timeout(10000)
-    });
-
-    const status = upstream.status; // 200 or 206
-    const contentType = upstream.headers.get("content-type") || "video/mp4";
-    const contentLength = upstream.headers.get("content-length");
-    const contentRange = upstream.headers.get("content-range");
-
-    const resHeaders = {
-      "Content-Type": contentType,
-      "Accept-Ranges": "bytes",
-      "Access-Control-Allow-Origin": "*"
-    };
-    if (contentLength) resHeaders["Content-Length"] = contentLength;
-    if (contentRange) resHeaders["Content-Range"] = contentRange;
-
-    res.writeHead(status, resHeaders);
-    upstream.body.pipe(res);
-  } catch (e) {
-    console.error("proxy-stream error:", e);
-    res.status(502).send("stream error");
-  }
 });
 
 // --------------------------------------
