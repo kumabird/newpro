@@ -558,7 +558,7 @@ app.get("/channel-search", (req, res) => {
       <div id="main-content" class="main-content">
         <h2>チャンネル検索</h2>
         <div style="max-width:800px;margin:0 auto;">
-          <form action="/channel-search/result" method="get">
+          <form action="/channel-search/result" method="post">
             <input type="text" name="q" placeholder="チャンネル名を入力">
             <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
