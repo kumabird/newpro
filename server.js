@@ -447,6 +447,10 @@ async function getStreamUrl(videoId) {
     } catch {
       console.log("前回インスタンス失敗:", lastWorkingInstance);
       lastWorkingInstance = null;
+      // DBのキャッシュも無効化
+      pool.query(
+        "DELETE FROM settings WHERE key = 'lastApi'"
+      ).catch(console.error);
     }
   }
 
@@ -469,11 +473,31 @@ async function getStreamUrl(videoId) {
     }
   }
 
-  throw new Error("全インスタンスで失敗");
+  // ③ 全インスタンス失敗 → リストを再取得して1回だけ再挑戦
+  console.log("全インスタンス失敗。リストを再取得して再試行...");
+  await getInvidiousApis();
+
+  for (const instance of (invidiousApis || [])) {
+    try {
+      const result = await tryInstance(instance);
+      lastWorkingInstance = instance;
+      pool.query(
+        "INSERT INTO settings (key, value) VALUES ('lastApi', $1) ON CONFLICT (key) DO UPDATE SET value = $1",
+        [instance]
+      ).catch(console.error);
+      console.log("再試行成功インスタンス:", instance);
+      return result;
+    } catch {
+      console.log("再試行失敗:", instance);
+    }
+  }
+
+  throw new Error("全インスタンスで失敗（再試行含む）");
 }
 
 // --------------------------------------
 // 動画視聴 + 関連動画
+// ★ YouTube直リダイレクトを廃止 → エラーページに変更
 // --------------------------------------
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
@@ -487,7 +511,34 @@ app.post("/watch", async (req, res) => {
   try {
     ({ streamUrl, audioUrl, title, channelName, channelId, related } = await getStreamUrl(id));
   } catch (e) {
-    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+    // ★ YouTube直リダイレクトをなくし、エラーページを表示
+    return res.send(`
+      <html>
+      <head>${CSS}</head>
+      <body>
+        ${SIDEBAR_HTML}
+        <div id="main-content" class="main-content">
+          <div class="center-box" style="text-align:center;">
+            <div style="font-size:48px;margin-bottom:16px;">😞</div>
+            <h2>動画を読み込めませんでした</h2>
+            <p style="color:#666;margin-bottom:20px;">
+              現在すべての配信サーバーが応答していません。<br>
+              しばらく待ってからもう一度お試しください。
+            </p>
+            <form action="/watch" method="post" style="display:inline;">
+              <input type="hidden" name="id" value="${id}">
+              <button style="width:auto;padding:10px 24px;background:#27ae60;">
+                🔄 再試行
+              </button>
+            </form>
+            &nbsp;
+            <a href="/" style="display:inline-block;margin-top:12px;color:#3498db;">← ホームへ戻る</a>
+          </div>
+        </div>
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `);
   }
 
   if (user) {
@@ -567,10 +618,15 @@ app.post("/watch", async (req, res) => {
           <!-- 左：プレイヤー -->
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
-            <button onclick="addFav('${id}', \`${title.replace(/`/g, "\\`")}\`)"
-              style="margin-bottom:10px;padding:8px 12px;border:none;background:#f1c40f;color:#000;border-radius:6px;cursor:pointer;width:auto;">
-              ⭐ お気に入り追加
-            </button>
+            <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;">
+              <button id="favBtn" onclick="addFav('${id}', \`${title.replace(/`/g, "\\`")}\`)"
+                style="padding:8px 12px;border:none;background:#f1c40f;color:#000;border-radius:6px;cursor:pointer;width:auto;">
+                ⭐ お気に入り追加
+              </button>
+              <button id="unfavBtn" onclick="removeFav('${id}')" style="display:none;padding:8px 12px;border:none;background:#e74c3c;color:#fff;border-radius:6px;cursor:pointer;width:auto;">
+                💔 お気に入り解除
+              </button>
+            </div>
             <div class="channel-info">
               <span style="color:#3498db;font-weight:bold;cursor:pointer;"
                     onclick="goChannel('${channelId}')">
@@ -585,10 +641,6 @@ app.post("/watch", async (req, res) => {
 
             <div style="margin-top:12px;">
               <a href="/" style="color:#3498db;">← ホームへ戻る</a>
-              &nbsp;|&nbsp;
-              <a href="https://www.youtube.com/watch?v=${id}" target="_blank" style="color:#e74c3c;">
-                YouTubeで開く
-              </a>
             </div>
           </div>
 
@@ -603,6 +655,19 @@ app.post("/watch", async (req, res) => {
       ${SIDEBAR_JS}
       ${CHANNEL_NAV_JS}
       <script>
+        const videoId = "${id}";
+
+        // ページ読み込み時にお気に入り状態を確認
+        fetch("/favorite/status?videoId=" + videoId)
+          .then(r => r.json())
+          .then(data => {
+            if (data.isFavorite) {
+              document.getElementById("favBtn").style.display = "none";
+              document.getElementById("unfavBtn").style.display = "inline-block";
+            }
+          })
+          .catch(() => {});
+
         function addFav(id, title) {
           fetch("/favorite/add", {
             method: "POST",
@@ -611,9 +676,37 @@ app.post("/watch", async (req, res) => {
           })
           .then(res => res.json())
           .then(data => {
-            if (data.ok) alert("お気に入りに追加しました");
-            else if (data.duplicate) alert("すでにお気に入り登録済みです");
-            else alert("エラーが発生しました");
+            if (data.ok) {
+              alert("お気に入りに追加しました");
+              document.getElementById("favBtn").style.display = "none";
+              document.getElementById("unfavBtn").style.display = "inline-block";
+            } else if (data.duplicate) {
+              alert("すでにお気に入り登録済みです");
+              document.getElementById("favBtn").style.display = "none";
+              document.getElementById("unfavBtn").style.display = "inline-block";
+            } else {
+              alert("エラーが発生しました");
+            }
+          })
+          .catch(() => alert("通信エラー"));
+        }
+
+        function removeFav(id) {
+          if (!confirm("お気に入りから削除しますか？")) return;
+          fetch("/favorite/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: id })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok) {
+              alert("お気に入りから削除しました");
+              document.getElementById("favBtn").style.display = "inline-block";
+              document.getElementById("unfavBtn").style.display = "none";
+            } else {
+              alert("エラーが発生しました");
+            }
           })
           .catch(() => alert("通信エラー"));
         }
@@ -656,14 +749,13 @@ app.get("/channel-search", (req, res) => {
 
 // --------------------------------------
 // チャンネル検索結果（POST）
-// ※ region を req.body から取得するよう修正
 // --------------------------------------
 app.post("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
   const q = req.body.q;
-  const region = req.body.region || "jp";  // ← 修正: req.query → req.body
+  const region = req.body.region || "jp";
 
   if (!q) return res.send("検索ワードがありません");
 
@@ -734,13 +826,11 @@ app.post("/channel-search/result", async (req, res) => {
 
 // --------------------------------------
 // チャンネル動画一覧（GET & POST 両対応）
-// ※ GET はサイドバーのリンクなど直リンク用、POST はフォーム遷移用
 // --------------------------------------
 async function handleChannelVideos(req, res) {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  // GET は query、POST は body または query から id を取得
   const id = req.body?.id || req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
@@ -826,12 +916,12 @@ async function handleChannelVideos(req, res) {
   res.send(list);
 }
 
-// GET・POST 両方登録
 app.get("/channel-videos", handleChannelVideos);
 app.post("/channel-videos", handleChannelVideos);
 
 // --------------------------------------
 // お気に入り機能
+// ★ お気に入り解除ボタン付き
 // --------------------------------------
 app.get("/favorites", async (req, res) => {
   const user = req.cookies.user;
@@ -843,7 +933,7 @@ app.get("/favorites", async (req, res) => {
   );
 
   const list = result.rows.map(v => `
-    <div class="card">
+    <div class="card" id="fav-${v.video_id}">
       <form action="/watch" method="post">
         <input type="hidden" name="id" value="${v.video_id}">
         <button style="all:unset;cursor:pointer;">
@@ -851,6 +941,10 @@ app.get("/favorites", async (req, res) => {
           <div>${v.title}</div>
         </button>
       </form>
+      <button onclick="removeFav('${v.video_id}')"
+        style="margin-top:8px;padding:6px 10px;background:#e74c3c;color:white;border:none;border-radius:6px;cursor:pointer;font-size:13px;width:auto;">
+        💔 お気に入り解除
+      </button>
     </div>
   `).join("");
 
@@ -861,12 +955,52 @@ app.get("/favorites", async (req, res) => {
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <h2>お気に入り</h2>
-        <div class="card-grid">${list}</div>
+        <div class="card-grid" id="fav-grid">${list}</div>
+        ${result.rows.length === 0 ? '<p style="text-align:center;color:#999;">お気に入りはまだありません</p>' : ""}
       </div>
       ${SIDEBAR_JS}
+      <script>
+        function removeFav(videoId) {
+          if (!confirm("お気に入りから削除しますか？")) return;
+          fetch("/favorite/remove", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: videoId })
+          })
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok) {
+              const card = document.getElementById("fav-" + videoId);
+              if (card) card.remove();
+            } else {
+              alert("エラーが発生しました");
+            }
+          })
+          .catch(() => alert("通信エラー"));
+        }
+      </script>
     </body>
     </html>
   `);
+});
+
+// ★ お気に入り状態確認
+app.get("/favorite/status", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.json({ isFavorite: false });
+
+  const { videoId } = req.query;
+  if (!videoId) return res.json({ isFavorite: false });
+
+  try {
+    const result = await pool.query(
+      "SELECT 1 FROM favorites WHERE user_id = $1 AND video_id = $2",
+      [user, videoId]
+    );
+    res.json({ isFavorite: result.rows.length > 0 });
+  } catch (e) {
+    res.json({ isFavorite: false });
+  }
 });
 
 // ★ お気に入り追加（重複チェック付き）
@@ -878,7 +1012,6 @@ app.post("/favorite/add", async (req, res) => {
   if (!videoId || !title) return res.status(400).json({ ok: false, error: "missing params" });
 
   try {
-    // 重複チェック
     const existing = await pool.query(
       "SELECT 1 FROM favorites WHERE user_id = $1 AND video_id = $2",
       [user, videoId]
@@ -894,6 +1027,26 @@ app.post("/favorite/add", async (req, res) => {
     res.json({ ok: true });
   } catch (e) {
     console.error("お気に入り追加エラー:", e);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ★ お気に入り解除
+app.post("/favorite/remove", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  const { videoId } = req.body;
+  if (!videoId) return res.status(400).json({ ok: false, error: "missing params" });
+
+  try {
+    await pool.query(
+      "DELETE FROM favorites WHERE user_id = $1 AND video_id = $2",
+      [user, videoId]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("お気に入り解除エラー:", e);
     res.json({ ok: false, error: e.message });
   }
 });
