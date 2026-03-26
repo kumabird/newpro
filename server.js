@@ -757,6 +757,63 @@ app.get("/channel-videos", async (req, res) => {
 });
 
 // --------------------------------------
+// お気に入り機能
+// --------------------------------------
+app.get("/favorites", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const result = await pool.query(
+    "SELECT * FROM favorites WHERE user_id = $1 ORDER BY created_at DESC",
+    [user]
+  );
+
+  const list = result.rows.map(v => `
+    <div class="card">
+      <form action="/watch" method="post">
+        <input type="hidden" name="id" value="${v.video_id}">
+        <button style="all:unset;cursor:pointer;">
+          <img class="thumb" src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg">
+          <div>${v.title}</div>
+        </button>
+      </form>
+    </div>
+  `).join("");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <h2>お気に入り</h2>
+        <div class="card-grid">${list}</div>
+      </div>
+      ${SIDEBAR_JS}
+    </body>
+    </html>
+  `);
+});
+
+app.post("/favorite/add", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.status(401).send("ログインしてください");
+
+  const { videoId, title } = req.body;
+
+  try {
+    await pool.query(
+      "INSERT INTO favorites (user_id, video_id, title) VALUES ($1, $2, $3)",
+      [user, videoId, title]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.json({ ok: false });
+  }
+});
+
+// --------------------------------------
 // 履歴ページ
 // --------------------------------------
 app.get("/history", async (req, res) => {
