@@ -593,9 +593,12 @@ function addFav(id, title) {
       title: title
     })
   })
-  .then(() => alert("追加しました"))
-  .catch(() => alert("失敗しました"));
-}
+  .then(res => res.json())
+.then(data => {
+  if (data.ok) alert("追加しました");
+  else alert("すでに登録済み or エラー");
+})
+.catch(() => alert("通信エラー"));
 </script>
     </body>
     </html>
