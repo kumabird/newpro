@@ -547,6 +547,10 @@ app.post("/watch", async (req, res) => {
           <!-- 左：プレイヤー -->
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
+            <button onclick="addFav('${id}', \`${title}\`)"
+    style="margin-bottom:10px;padding:8px 12px;border:none;background:#f1c40f;color:#000;border-radius:6px;cursor:pointer;">
+    ⭐ お気に入り追加
+  </button>
             <div class="channel-info">
               <a href="/channel-videos?id=${channelId}" style="color:#3498db;font-weight:bold;">
                 📺 ${channelName}
