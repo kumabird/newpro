@@ -1060,6 +1060,11 @@ app.post("/admin/delete-user", async (req, res) => {
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
 
+//uptimerobot用
+app.get("/health", (req, res) => {
+  res.status(200).send("OK");
+});
+
 // --------------------------------------
 // ログアウト
 // --------------------------------------
