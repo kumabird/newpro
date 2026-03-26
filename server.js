@@ -375,44 +375,58 @@ async function getStreamUrl(videoId) {
   if (!invidiousApis) await getInvidiousApis();
   if (!invidiousApis) throw new Error("APIリストが取得できません");
 
-  const controller = new AbortController();
+  const tryInstance = async (instance) => {
+    const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
+      signal: AbortSignal.timeout(4000)
+    });
+    if (!res.ok) throw new Error("bad");
 
-  const promises = invidiousApis.map(instance =>
-    fetch(`${instance}/api/v1/videos/${videoId}`, {
-      signal: controller.signal
-    })
-    .then(res => res.ok ? res.json() : Promise.reject())
-    .then(data => {
-      if (!data.formatStreams) throw new Error("no stream");
+    const data = await res.json();
+    if (!data.formatStreams) throw new Error("no stream");
 
-      const streamUrl = data.formatStreams.slice().reverse()[0].url;
+    const streamUrl = data.formatStreams.slice().reverse()[0].url;
 
-      const audioUrl = (data.adaptiveFormats || [])
-        .filter(s => s.container === "m4a")
-        .map(s => s.url)[0] || null;
+    const audioUrl = (data.adaptiveFormats || [])
+      .filter(s => s.container === "m4a")
+      .map(s => s.url)[0] || null;
 
-      return {
-        streamUrl,
-        audioUrl,
-        title: data.title || "タイトル不明",
-        channelName: data.author || "",
-        channelId: data.authorId || "",
-        related: (data.recommendedVideos || []).slice(0, 20).map(v => ({
-          id: v.videoId,
-          title: v.title
-        }))
-      };
-    })
-    .catch(() => null)
-  );
+    return {
+      streamUrl,
+      audioUrl,
+      title: data.title || "タイトル不明",
+      channelName: data.author || "",
+      channelId: data.authorId || "",
+      related: (data.recommendedVideos || []).slice(0, 20).map(v => ({
+        id: v.videoId,
+        title: v.title
+      }))
+    };
+  };
 
-  try {
-    const result = await Promise.any(promises);
-    controller.abort(); // 他のリクエスト止める
-    return result;
-  } catch {
-    throw new Error("全インスタンスで失敗しました");
+  // 🔥 ① 前回成功したやつを最優先
+  if (lastWorkingInstance) {
+    try {
+      const result = await tryInstance(lastWorkingInstance);
+      return result;
+    } catch {
+      console.log("前回インスタンス失敗:", lastWorkingInstance);
+      lastWorkingInstance = null;
+    }
   }
+
+  // 🔥 ② 総当り（成功したら保存）
+  for (const instance of invidiousApis) {
+    try {
+      const result = await tryInstance(instance);
+      lastWorkingInstance = instance; // ←ここ重要
+      console.log("使用インスタンス:", instance);
+      return result;
+    } catch (e) {
+      console.log("失敗:", instance);
+    }
+  }
+
+  throw new Error("全インスタンスで失敗");
 }
 // --------------------------------------
 // 動画視聴 + 関連動画（Invidious版）
