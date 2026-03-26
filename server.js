@@ -164,7 +164,7 @@ const CSS = `
 const SIDEBAR_HTML = `
 <div id="sidebar" class="sidebar">
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
-  <form action="/channel-search" method="POST" style="margin:0;"><button style="all:unset;display:flex;align-items:center;gap:12px;padding:12px 18px;width:100%;cursor:pointer;"><span class="sidebar-icon">📺</span><span class="sidebar-text">チャンネル検索</span></button></form>
+  <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
   <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
@@ -544,9 +544,9 @@ app.post("/watch", async (req, res) => {
 });
 
 // --------------------------------------
-// チャンネル検索（POST化）
+// チャンネル検索
 // --------------------------------------
-app.post("/channel-search", (req, res) => {
+app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
@@ -558,7 +558,7 @@ app.post("/channel-search", (req, res) => {
       <div id="main-content" class="main-content">
         <h2>チャンネル検索</h2>
         <div style="max-width:800px;margin:0 auto;">
-          <form action="/channel-search/result" method="post">
+          <form action="/channel-search/result" method="get">
             <input type="text" name="q" placeholder="チャンネル名を入力">
             <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
@@ -574,24 +574,15 @@ app.post("/channel-search", (req, res) => {
   `);
 });
 
-// GETアクセス対策
-app.get("/channel-search", (req, res) => {
-  res.send(`
-    <form id="f" method="POST" action="/channel-search"></form>
-    <script>document.getElementById("f").submit()</script>
-  `);
-});
-
-
 // --------------------------------------
-// チャンネル検索結果（POST化）
+// チャンネル検索結果（60件）
 // --------------------------------------
-app.post("/channel-search/result", async (req, res) => {
+app.get("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const q = req.body.q;
-  const region = req.body.region || "jp";
+  const q = req.query.q;
+  const region = req.query.region || "jp";
 
   let url;
   if (region === "global") {
@@ -629,18 +620,13 @@ app.post("/channel-search/result", async (req, res) => {
     <body>
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
-        <h2>チャンネル検索結果: ${q}</h2>
+        <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
           ${list60.map(c => `
-            <form action="/channel-videos" method="post" style="display:inline;">
-              <input type="hidden" name="id" value="${c.id}">
-              <button style="all:unset;cursor:pointer;">
-                <div class="card">
-                  <img class="thumb" src="${c.icon}">
-                  <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
-                </div>
-              </button>
-            </form>
+            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
+              <img class="thumb" src="${c.icon}">
+              <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
+            </div>
           `).join("")}
         </div>
       </div>
@@ -650,20 +636,14 @@ app.post("/channel-search/result", async (req, res) => {
   `);
 });
 
-// GET対策
-app.get("/channel-search/result", (req, res) => {
-  res.send("POSTでアクセスしてください");
-});
-
-
 // --------------------------------------
-// チャンネル動画一覧（POST化）
+// チャンネル動画一覧
 // --------------------------------------
-app.post("/channel-videos", async (req, res) => {
+app.get("/channel-videos", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  const id = req.body.id;
+  const id = req.query.id;
   if (!id) return res.send("チャンネルIDがありません");
 
   const url = `https://www.youtube.com/channel/${id}/videos?hl=ja&gl=JP`;
@@ -704,7 +684,7 @@ app.post("/channel-videos", async (req, res) => {
   const list60 = videos.slice(0, 60);
   const channelTitle = data.metadata?.channelMetadataRenderer?.title || "チャンネル名取得不可";
 
-  res.send(`
+  let list = `
     <html>
     <head>${CSS}</head>
     <body>
@@ -712,28 +692,29 @@ app.post("/channel-videos", async (req, res) => {
       <div id="main-content" class="main-content">
         <h2>${channelTitle} の動画一覧</h2>
         <div class="card-grid">
-          ${list60.map(v => `
-            <form action="/watch" method="post">
-              <input type="hidden" name="id" value="${v.id}">
-              <button style="all:unset;cursor:pointer;">
-                <div class="card">
-                  <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-                  <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
-                </div>
-              </button>
-            </form>
-          `).join("")}
+  `;
+
+  list += list60.map(v => `
+    <div class="card">
+      <form action="/watch" method="post" style="display:inline;">
+        <input type="hidden" name="id" value="${v.id}">
+        <button style="all:unset;cursor:pointer;">
+          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
+          <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
+        </button>
+      </form>
+    </div>
+  `).join("");
+
+  list += `
         </div>
       </div>
       ${SIDEBAR_JS}
     </body>
     </html>
-  `);
-});
+  `;
 
-// GET対策
-app.get("/channel-videos", (req, res) => {
-  res.send("POSTでアクセスしてください");
+  res.send(list);
 });
 
 // --------------------------------------
