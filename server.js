@@ -164,7 +164,7 @@ const CSS = `
 const SIDEBAR_HTML = `
 <div id="sidebar" class="sidebar">
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
- <form action="/channel-search" method="POST" class="sidebar-form"><button type="submit" class="sidebar-link"><span class="sidebar-icon">📺</span><span class="sidebar-text">チャンネル検索</span></button></form>
+  <form action="/channel-search" method="POST" style="margin:0;"><button style="all:unset;display:flex;align-items:center;gap:12px;padding:12px 18px;width:100%;cursor:pointer;"><span class="sidebar-icon">📺</span><span class="sidebar-text">チャンネル検索</span></button></form>
   <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/admin"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">管理者ページ</span></a>
