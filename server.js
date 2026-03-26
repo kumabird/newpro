@@ -577,7 +577,7 @@ app.get("/channel-search", (req, res) => {
 // --------------------------------------
 // チャンネル検索結果（60件）
 // --------------------------------------
-app.get("/channel-search/result", async (req, res) => {
+app.post("/channel-search/result", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
