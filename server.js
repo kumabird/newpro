@@ -1159,6 +1159,47 @@ app.get("/music", (req, res) => {
 });
 
 // --------------------------------------
+// 動画ストリームプロキシ（CORS回避・直接再生用）
+// --------------------------------------
+app.get("/proxy-stream", async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.status(400).send("url required");
+
+  // URLの簡単なバリデーション（httpのみ許可）
+  if (!/^https?:\/\//.test(url)) return res.status(400).send("invalid url");
+
+  try {
+    const range = req.headers.range;
+    const headers = { "User-Agent": "Mozilla/5.0" };
+    if (range) headers["Range"] = range;
+
+    const upstream = await fetch(url, {
+      headers,
+      signal: AbortSignal.timeout(10000)
+    });
+
+    const status = upstream.status; // 200 or 206
+    const contentType = upstream.headers.get("content-type") || "video/mp4";
+    const contentLength = upstream.headers.get("content-length");
+    const contentRange = upstream.headers.get("content-range");
+
+    const resHeaders = {
+      "Content-Type": contentType,
+      "Accept-Ranges": "bytes",
+      "Access-Control-Allow-Origin": "*"
+    };
+    if (contentLength) resHeaders["Content-Length"] = contentLength;
+    if (contentRange) resHeaders["Content-Range"] = contentRange;
+
+    res.writeHead(status, resHeaders);
+    upstream.body.pipe(res);
+  } catch (e) {
+    console.error("proxy-stream error:", e);
+    res.status(502).send("stream error");
+  }
+});
+
+// --------------------------------------
 // サーバー起動
 // --------------------------------------
 app.listen(PORT, () => {
