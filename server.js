@@ -431,7 +431,7 @@ app.post("/watch", async (req, res) => {
   }
 
   if (user) {
-    await saveHistory(user, "watch", id, title);
+    saveHistory;(user, "watch", id, title).catch(console.error);
   }
 
   // 関連動画HTML
