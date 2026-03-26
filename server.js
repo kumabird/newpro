@@ -368,6 +368,22 @@ async function getInvidiousApis() {
 // サーバー起動時に取得
 getInvidiousApis();
 
+async function loadLastInstance() {
+  try {
+    const result = await pool.query(
+      "SELECT value FROM settings WHERE key = 'lastApi'"
+    );
+    if (result.rows.length > 0) {
+      lastWorkingInstance = result.rows[0].value;
+      console.log("復元されたAPI:", lastWorkingInstance);
+    }
+  } catch (e) {
+    console.error("API復元失敗:", e);
+  }
+}
+
+loadLastInstance();
+
 // --------------------------------------
 // Invidiousから動画ストリームURLを取得
 // --------------------------------------
