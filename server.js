@@ -580,7 +580,7 @@ app.post("/watch", async (req, res) => {
 
             <video id="mainVideo" controls preload="auto" playsinline
                    poster="https://i.ytimg.com/vi/${id}/maxresdefault.jpg">
-              <source id="videoSrc" src="/stream/${id}" type="video/mp4">
+              <source id="videoSrc" src="${streamUrl}" type="video/mp4">
             </video>
 
             <div style="margin-top:12px;">
@@ -1146,40 +1146,6 @@ app.get("/music", (req, res) => {
   res.redirect("https://musicviewer.onrender.com/");
 });
 
-// --------------------------------------
-// ストリームプロキシ
-// --------------------------------------
-app.get("/stream/:videoId", async (req, res) => {
-  const { videoId } = req.params;
-  if (!/^[a-zA-Z0-9_-]{11}$/.test(videoId)) return res.status(400).send("Invalid ID");
-
-  let streamUrl;
-  try {
-    ({ streamUrl } = await getStreamUrl(videoId));
-  } catch (e) {
-    return res.status(503).send("Stream unavailable");
-  }
-
-  const range = req.headers.range;
-  const headers = { "User-Agent": "Mozilla/5.0" };
-  if (range) headers["Range"] = range;
-
-  try {
-    const upstream = await fetch(streamUrl, { headers });
-    
-    res.status(upstream.status);
-    // 必要なヘッダーだけ転送
-    ["content-type", "content-length", "content-range", "accept-ranges"].forEach(h => {
-      const val = upstream.headers.get(h);
-      if (val) res.setHeader(h, val);
-    });
-    res.setHeader("Cache-Control", "no-cache");
-    
-    upstream.body.pipe(res);
-  } catch (e) {
-    res.status(500).send("Proxy error");
-  }
-});
 // --------------------------------------
 // サーバー起動
 // --------------------------------------
