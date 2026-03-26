@@ -581,6 +581,20 @@ app.post("/watch", async (req, res) => {
         </div>
       </div>
       ${SIDEBAR_JS}
+      <script>
+function addFav(id, title) {
+  fetch("/favorite/add", {
+    method: "POST",
+    headers: {"Content-Type":"application/json"},
+    body: JSON.stringify({
+      videoId: id,
+      title: title
+    })
+  })
+  .then(() => alert("追加しました"))
+  .catch(() => alert("失敗しました"));
+}
+</script>
     </body>
     </html>
   `);
