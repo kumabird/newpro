@@ -509,9 +509,12 @@ app.post("/watch", async (req, res) => {
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
             <div class="channel-info">
-              <a href="/channel-videos?id=${channelId}" style="color:#3498db;font-weight:bold;">
-                📺 ${channelName}
-              </a>
+              <form action="/channel-videos" method="POST" style="display:inline;">
+  <input type="hidden" name="id" value="${channelId}">
+  <button style="all:unset;cursor:pointer;color:#3498db;font-weight:bold;">
+    📺 ${channelName}
+  </button>
+</form>
             </div>
 
             <!-- ★ iframeなし・直接再生 -->
