@@ -626,7 +626,7 @@ app.post("/channel-search/result", async (req, res) => {
         <h2>チャンネル検索結果: ${q}（${region === "jp" ? "日本" : "全世界"}）</h2>
         <div class="card-grid">
           ${list60.map(c => `
-            <div class="card" onclick="location.href='/channel-videos?id=${c.id}'" style="cursor:pointer;">
+            <div class="card" onclick="postChannel('${c.id}')" style="cursor:pointer;">
               <img class="thumb" src="${c.icon}">
               <div style="margin-top:10px;font-weight:bold;">${c.title}</div>
             </div>
