@@ -470,7 +470,7 @@ app.post("/watch", async (req, res) => {
   }
 
   if (user) {
-    saveHistory;(user, "watch", id, title).catch(console.error);
+    saveHistory(user, "watch", id, title).catch(console.error);
   }
 
   // 関連動画HTML
