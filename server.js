@@ -336,7 +336,7 @@ function buildSidebar(platform, currentPath = "") {
 <div id="sidebar" class="sidebar">
   <div class="platform-switcher">
     <button class="platform-btn yt-btn${!isNico ? " active" : ""}" onclick="switchPlatform('yt')">
-      <span class="p-icon">▶️</span><span class="p-label">YouTube</span>
+      <span class="p-icon">▶</span><span class="p-label">YouTube</span>
     </button>
     <button class="platform-btn nico-btn${isNico ? " active" : ""}" onclick="switchPlatform('nico')">
       <span class="p-icon">🎬</span><span class="p-label">ニコニコ動画</span>
