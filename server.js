@@ -368,6 +368,76 @@ app.post("/search", async (req, res) => {
 });
 
 // --------------------------------------
+// ハードコードフォールバックインスタンス一覧
+// （inv.json が取得できなかった場合や補完用）
+// --------------------------------------
+const FALLBACK_INSTANCES = [
+  // --- 比較的安定しているインスタンス ---
+  "https://inv.nadeko.net",
+  "https://yewtu.be",
+  "https://invidious.privacyredirect.com",
+  "https://invidious.fdn.fr",
+  "https://invidious.flokinet.to",
+  "https://invidious.nerdvpn.de",
+  "https://invidious.privacydev.net",
+  "https://invidious.projectsegfau.lt",
+  "https://invidious.tiekoetter.com",
+  "https://invidious.perennialte.ch",
+  "https://inv.tux.pizza",
+  "https://invidious.io.lol",
+  "https://invidious.reallyaweso.me",
+  "https://invidious.asir.dev",
+  "https://invidious.protokolla.fi",
+  "https://yt.artemislena.eu",
+  "https://invidious.lunar.icu",
+  "https://invidious.drgns.space",
+  "https://invidious.slipfox.xyz",
+  "https://vid.puffyan.us",
+  // --- 追加インスタンス ---
+  "https://invidious.jing.rocks",
+  "https://invidious.esmailelbob.xyz",
+  "https://invidious.sethforprivacy.com",
+  "https://invidious.namazso.eu",
+  "https://invidious.silkky.cloud",
+  "https://invidious.exonip.de",
+  "https://invidious.rhyshl.live",
+  "https://invidious.mastodon.host",
+  "https://invidious.nixnet.xyz",
+  "https://invidious.048596.xyz",
+  "https://invidious.moomoo.me",
+  "https://inv.riverside.rocks",
+  "https://invidious.kavin.rocks",
+  "https://invidious.snopyta.org",
+  "https://vid.mint.lgbt",
+  "https://invidious.weblibre.org",
+  "https://invidious.tinfoil-hat.net",
+  "https://invidious.tube",
+  "https://invidious.3o7z6yfxhbw7n3za.onion",
+  "https://anontube.lvkaszus.pl",
+  "https://iv.melmac.space",
+  "https://iv.ggtyler.dev",
+  "https://invidious.private.coffee",
+  "https://invidious.darkness.services",
+  "https://invidious.materialio.us",
+  "https://invidious.incogniweb.net",
+  "https://invidious.adminforge.de",
+  "https://invidious.ducks.party",
+  "https://invidious.lidarshield.cloud",
+  "https://invidious.einfachzocken.eu",
+  "https://youtube.owacon.moe",
+  "https://invidious.nikkosphere.com",
+  "https://inv.us.projectsegfau.lt",
+  "https://inv.in.projectsegfau.lt",
+  "https://invidious.no-logs.com",
+  "https://invidious.deta.dev",
+  "https://invidious.tux.pizza",
+  "https://inv.bp.projectsegfau.lt",
+  "https://invidious.h4ks.com",
+  "https://invidious.dieaktuellen.de",
+  "https://invidious.gotenks.me",
+];
+
+// --------------------------------------
 // Invidiousインスタンスリストを取得
 // --------------------------------------
 let invidiousApis = null;
@@ -377,11 +447,14 @@ async function getInvidiousApis() {
     const res = await fetch("https://raw.githubusercontent.com/wakame02/wktopu/refs/heads/main/inv.json", {
       signal: AbortSignal.timeout(5000)
     });
-    invidiousApis = await res.json();
+    const fetched = await res.json();
+    // フォールバックと結合して重複除去
+    const merged = [...new Set([...fetched, ...FALLBACK_INSTANCES])];
+    invidiousApis = merged;
     console.log("Invidiousリスト取得成功:", invidiousApis.length, "件");
   } catch (e) {
-    console.error("Invidiousリスト取得失敗:", e);
-    invidiousApis = [];
+    console.error("Invidiousリスト取得失敗、フォールバック使用:", e);
+    invidiousApis = [...FALLBACK_INSTANCES];
   }
 }
 
@@ -413,18 +486,49 @@ async function getStreamUrl(videoId) {
 
   const tryInstance = async (instance) => {
     const res = await fetch(`${instance}/api/v1/videos/${videoId}`, {
-      signal: AbortSignal.timeout(4000)
+      signal: AbortSignal.timeout(8000)
     });
     if (!res.ok) throw new Error("bad status: " + res.status);
 
     const data = await res.json();
-    if (!data.formatStreams || data.formatStreams.length === 0) throw new Error("no stream");
 
-    const streamUrl = data.formatStreams.slice().reverse()[0].url;
+    // formatStreams から動画URLを取得（音声+映像の混合ストリーム）
+    let rawStreamUrl = null;
+    if (data.formatStreams && data.formatStreams.length > 0) {
+      const preferredQualities = ["720p", "480p", "360p", "240p", "144p"];
+      let chosen = null;
+      for (const q of preferredQualities) {
+        chosen = data.formatStreams.find(s => s.qualityLabel === q);
+        if (chosen) break;
+      }
+      if (!chosen) chosen = data.formatStreams[data.formatStreams.length - 1];
+      rawStreamUrl = chosen?.url || null;
+    }
 
+    // formatStreams がない場合は adaptiveFormats の映像ストリームを試みる
+    if (!rawStreamUrl && data.adaptiveFormats && data.adaptiveFormats.length > 0) {
+      const videoFormats = data.adaptiveFormats.filter(s =>
+        s.type && s.type.startsWith("video/") && s.url
+      );
+      // 720p → 480p → 360p → 先頭
+      const preferredQualities = ["720p", "480p", "360p", "240p"];
+      let chosen = null;
+      for (const q of preferredQualities) {
+        chosen = videoFormats.find(s => s.qualityLabel === q);
+        if (chosen) break;
+      }
+      if (!chosen && videoFormats.length > 0) chosen = videoFormats[0];
+      rawStreamUrl = chosen?.url || null;
+    }
+
+    if (!rawStreamUrl) throw new Error("no playable stream");
+
+    const streamUrl = "/proxy?url=" + encodeURIComponent(rawStreamUrl) + "&instance=" + encodeURIComponent(instance);
+
+    // 音声トラック（adaptiveFormats から m4a / audio 系）
     const audioUrl = (data.adaptiveFormats || [])
-      .filter(s => s.container === "m4a")
-      .map(s => s.url)[0] || null;
+      .filter(s => s.url && (s.container === "m4a" || (s.type && s.type.startsWith("audio/"))))
+      .map(s => "/proxy?url=" + encodeURIComponent(s.url) + "&instance=" + encodeURIComponent(instance))[0] || null;
 
     return {
       streamUrl,
@@ -717,6 +821,52 @@ app.post("/watch", async (req, res) => {
 });
 
 // --------------------------------------
+// ストリームプロキシ
+// ブラウザからのクロスオリジン問題を回避するためサーバー経由でリレー
+// --------------------------------------
+app.get("/proxy", async (req, res) => {
+  const targetUrl = req.query.url;
+  if (!targetUrl) return res.status(400).send("url required");
+
+  // 安全チェック：invidiousドメインのみ許可
+  let parsed;
+  try {
+    parsed = new URL(targetUrl);
+  } catch {
+    return res.status(400).send("invalid url");
+  }
+
+  // Rangeヘッダーを転送（動画シークに必要）
+  const headers = {};
+  if (req.headers.range) headers["Range"] = req.headers.range;
+
+  try {
+    const upstream = await fetch(targetUrl, {
+      headers,
+      signal: AbortSignal.timeout(30000)
+    });
+
+    // レスポンスヘッダーを転送
+    const contentType = upstream.headers.get("content-type") || "video/mp4";
+    const contentLength = upstream.headers.get("content-length");
+    const contentRange = upstream.headers.get("content-range");
+    const acceptRanges = upstream.headers.get("accept-ranges");
+
+    res.status(upstream.status);
+    res.setHeader("Content-Type", contentType);
+    if (contentLength) res.setHeader("Content-Length", contentLength);
+    if (contentRange) res.setHeader("Content-Range", contentRange);
+    if (acceptRanges) res.setHeader("Accept-Ranges", acceptRanges);
+    res.setHeader("Cache-Control", "public, max-age=3600");
+
+    upstream.body.pipe(res);
+  } catch (e) {
+    console.error("プロキシエラー:", e);
+    res.status(502).send("proxy error");
+  }
+});
+
+// --------------------------------------
 // チャンネル検索（GET）
 // --------------------------------------
 app.get("/channel-search", (req, res) => {
@@ -773,14 +923,30 @@ app.post("/channel-search/result", async (req, res) => {
     return res.send("YouTubeへの接続がタイムアウトしました。再度お試しください。");
   }
 
-  const jsonText = html.match(/var ytInitialData = (.*?);<\/script>/s);
-  if (!jsonText) return res.send("データを取得できませんでした");
-
   let data;
   try {
-    data = JSON.parse(jsonText[1]);
-  } catch {
-    return res.send("データの解析に失敗しました");
+    const patterns = [
+      /ytInitialData\s*=\s*(\{)/,
+      /window\["ytInitialData"\]\s*=\s*(\{)/,
+    ];
+    let startIdx = -1;
+    for (const pat of patterns) {
+      const m = html.match(pat);
+      if (m) {
+        startIdx = html.indexOf(m[0]) + m[0].length - 1;
+        break;
+      }
+    }
+    if (startIdx === -1) return res.send("データを取得できませんでした");
+
+    let depth = 0, endIdx = startIdx;
+    for (let i = startIdx; i < html.length; i++) {
+      if (html[i] === "{") depth++;
+      else if (html[i] === "}") { depth--; if (depth === 0) { endIdx = i; break; } }
+    }
+    data = JSON.parse(html.slice(startIdx, endIdx + 1));
+  } catch (e) {
+    return res.send("データの解析に失敗しました: " + e.message);
   }
 
   const channels = [];
@@ -826,6 +992,7 @@ app.post("/channel-search/result", async (req, res) => {
 
 // --------------------------------------
 // チャンネル動画一覧（GET & POST 両対応）
+// ★ YouTube の ytInitialData を再帰的に全件スキャン
 // --------------------------------------
 async function handleChannelVideos(req, res) {
   const user = req.cookies.user;
@@ -838,50 +1005,112 @@ async function handleChannelVideos(req, res) {
 
   let html;
   try {
-    html = await fetch(url, { signal: AbortSignal.timeout(8000) }).then(r => r.text());
+    html = await fetch(url, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept-Language": "ja,en;q=0.9"
+      },
+      signal: AbortSignal.timeout(12000)
+    }).then(r => r.text());
   } catch (e) {
     return res.send("YouTubeへの接続がタイムアウトしました。再度お試しください。");
   }
 
-  const jsonText =
-    html.match(/ytInitialData"\]\s*=\s*(\{.*?\});/) ||
-    html.match(/var ytInitialData = (\{.*?\});/) ||
-    html.match(/window\["ytInitialData"\]\s*=\s*(\{.*?\});/);
-
-  if (!jsonText) return res.send("データを取得できませんでした");
-
+  // ytInitialData をブラケットカウントで正確に切り出す
   let data;
   try {
-    data = JSON.parse(jsonText[1]);
-  } catch {
-    return res.send("データの解析に失敗しました");
-  }
-
-  function findGridItems(obj) {
-    if (!obj || typeof obj !== "object") return null;
-    if (obj.gridRenderer?.items) return obj.gridRenderer.items;
-    if (obj.richGridRenderer?.contents) return obj.richGridRenderer.contents;
-    for (const key in obj) {
-      const found = findGridItems(obj[key]);
-      if (found) return found;
+    const patterns = [
+      /ytInitialData\s*=\s*(\{)/,
+      /window\["ytInitialData"\]\s*=\s*(\{)/,
+    ];
+    let startIdx = -1;
+    for (const pat of patterns) {
+      const m = html.match(pat);
+      if (m) {
+        startIdx = html.indexOf(m[0]) + m[0].length - 1;
+        break;
+      }
     }
-    return null;
+    if (startIdx === -1) return res.send("データを取得できませんでした（ytInitialData が見つかりません）");
+
+    let depth = 0, endIdx = startIdx;
+    for (let i = startIdx; i < html.length; i++) {
+      if (html[i] === "{") depth++;
+      else if (html[i] === "}") {
+        depth--;
+        if (depth === 0) { endIdx = i; break; }
+      }
+    }
+    data = JSON.parse(html.slice(startIdx, endIdx + 1));
+  } catch (e) {
+    return res.send("データの解析に失敗しました: " + e.message);
   }
 
-  const grid = findGridItems(data) || [];
-  const videos = grid
-    .map(v => v.gridVideoRenderer || v.richItemRenderer?.content?.videoRenderer)
-    .filter(v => v && v.videoId)
-    .map(v => ({
-      id: v.videoId,
-      title:
-        v.title?.simpleText ||
-        v.title?.runs?.map(r => r.text).join("") ||
-        "No Title"
-    }));
+  // ★ 動画を再帰的にすべて収集する（gridVideoRenderer / videoRenderer 両方対応）
+  const videoMap = new Map(); // videoId をキーにして重複除去
 
-  const list60 = videos.slice(0, 60);
+  function collectVideos(obj, depth) {
+    if (!obj || typeof obj !== "object" || depth > 40) return;
+
+    if (Array.isArray(obj)) {
+      for (const item of obj) collectVideos(item, depth + 1);
+      return;
+    }
+
+    // gridVideoRenderer（旧チャンネルページ）
+    if (obj.gridVideoRenderer?.videoId) {
+      const v = obj.gridVideoRenderer;
+      if (!videoMap.has(v.videoId)) {
+        videoMap.set(v.videoId, {
+          id: v.videoId,
+          title: v.title?.simpleText || v.title?.runs?.map(r => r.text).join("") || "No Title"
+        });
+      }
+    }
+
+    // videoRenderer（汎用・richItemRenderer 内など）
+    if (obj.videoRenderer?.videoId) {
+      const v = obj.videoRenderer;
+      if (!videoMap.has(v.videoId)) {
+        videoMap.set(v.videoId, {
+          id: v.videoId,
+          title: v.title?.runs?.map(r => r.text).join("") || v.title?.simpleText || "No Title"
+        });
+      }
+    }
+
+    // すべてのキーを再帰
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val && typeof val === "object") {
+        collectVideos(val, depth + 1);
+      }
+    }
+  }
+
+  collectVideos(data, 0);
+
+  const videos = [...videoMap.values()].slice(0, 60);
   const channelTitle = data.metadata?.channelMetadataRenderer?.title || "チャンネル名取得不可";
+
+  if (videos.length === 0) {
+    return res.send(`
+      <html>
+      <head>${CSS}</head>
+      <body>
+        ${SIDEBAR_HTML}
+        <div id="main-content" class="main-content">
+          <h2>${channelTitle} の動画一覧</h2>
+          <p style="text-align:center;color:#999;padding:40px;">
+            動画が見つかりませんでした。チャンネルが非公開または動画がない可能性があります。
+          </p>
+          <p style="text-align:center;"><a href="javascript:history.back()" style="color:#3498db;">← 戻る</a></p>
+        </div>
+        ${SIDEBAR_JS}
+      </body>
+      </html>
+    `);
+  }
 
   let list = `
     <html>
@@ -889,15 +1118,15 @@ async function handleChannelVideos(req, res) {
     <body>
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
-        <h2>${channelTitle} の動画一覧</h2>
+        <h2>${channelTitle} の動画一覧（${videos.length}件）</h2>
         <div class="card-grid">
   `;
 
-  list += list60.map(v => `
+  list += videos.map(v => `
     <div class="card">
       <form action="/watch" method="post" style="display:inline;">
         <input type="hidden" name="id" value="${v.id}">
-        <button style="all:unset;cursor:pointer;">
+        <button style="all:unset;cursor:pointer;display:block;width:100%;">
           <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
           <div style="margin-top:10px;font-weight:bold;">${v.title}</div>
         </button>
