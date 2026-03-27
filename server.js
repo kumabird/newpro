@@ -73,8 +73,18 @@ const CSS = `
     background: #eaf4ff;
   }
 
+  .sidebar a.nico-link:hover {
+    background: #fff3e6;
+  }
+
   .sidebar-icon {
     font-size: 20px;
+  }
+
+  .sidebar-divider {
+    border: none;
+    border-top: 1px solid #eee;
+    margin: 6px 10px;
   }
 
   .main-content {
@@ -107,9 +117,16 @@ const CSS = `
     box-shadow: 0 6px 16px rgba(0,0,0,0.15);
   }
 
+  .card.nico-card {
+    border-left: 3px solid #e6242b;
+  }
+
   .thumb {
     width: 100%;
     border-radius: 10px;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+    background: #eee;
   }
 
   .center-box {
@@ -128,6 +145,7 @@ const CSS = `
     border-radius: 8px;
     border: 1px solid #ccc;
     margin-bottom: 15px;
+    box-sizing: border-box;
   }
 
   button {
@@ -142,6 +160,14 @@ const CSS = `
     background: #2d89c6;
   }
 
+  .nico-btn {
+    background: #e6242b !important;
+  }
+
+  .nico-btn:hover {
+    background: #c41e24 !important;
+  }
+
   .region-select {
     width: 100%;
     padding: 12px 14px;
@@ -151,10 +177,81 @@ const CSS = `
     margin-bottom: 15px;
     background: white;
     cursor: pointer;
+    box-sizing: border-box;
   }
 
   .region-select:hover {
     border-color: #3498db;
+  }
+
+  /* プラットフォームタブ */
+  .platform-tabs {
+    display: flex;
+    gap: 8px;
+    max-width: 800px;
+    margin: 0 auto 16px;
+  }
+
+  .platform-tab {
+    flex: 1;
+    padding: 10px 16px;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 15px;
+    text-align: center;
+    border: 2px solid #ddd;
+    background: white;
+    transition: all 0.2s;
+  }
+
+  .platform-tab.yt.active {
+    background: #ff0000;
+    color: white;
+    border-color: #ff0000;
+  }
+
+  .platform-tab.nico.active {
+    background: #e6242b;
+    color: white;
+    border-color: #e6242b;
+  }
+
+  .platform-tab:hover {
+    border-color: #999;
+  }
+
+  .platform-section {
+    display: none;
+  }
+
+  .platform-section.active {
+    display: block;
+  }
+
+  /* ニコニコバッジ */
+  .nico-badge {
+    display: inline-block;
+    background: #e6242b;
+    color: white;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: bold;
+  }
+
+  .yt-badge {
+    display: inline-block;
+    background: #ff0000;
+    color: white;
+    font-size: 11px;
+    padding: 1px 6px;
+    border-radius: 4px;
+    margin-left: 6px;
+    vertical-align: middle;
+    font-weight: bold;
   }
 
   /* 設定ページ */
@@ -224,13 +321,17 @@ const CSS = `
 `;
 
 // --------------------------------------
-// サイドバー HTML
+// サイドバー HTML（ニコニコリンク追加）
 // --------------------------------------
 const SIDEBAR_HTML = `
 <div id="sidebar" class="sidebar">
   <a href="/"><span class="sidebar-icon">🏠</span> <span class="sidebar-text">ホーム</span></a>
   <a href="/channel-search"><span class="sidebar-icon">📺</span> <span class="sidebar-text">チャンネル検索</span></a>
   <a href="/music"><span class="sidebar-icon">♫</span> <span class="sidebar-text">Music</span></a>
+  <hr class="sidebar-divider">
+  <a href="/nico" class="nico-link"><span class="sidebar-icon">🎬</span> <span class="sidebar-text">ニコニコ</span></a>
+  <a href="/nico/ranking" class="nico-link"><span class="sidebar-icon">🏆</span> <span class="sidebar-text">ニコ動ランキング</span></a>
+  <hr class="sidebar-divider">
   <a href="/favorites"><span class="sidebar-icon">⭐</span> <span class="sidebar-text">お気に入り</span></a>
   <a href="/history"><span class="sidebar-icon">🕘</span> <span class="sidebar-text">履歴</span></a>
   <a href="/settings"><span class="sidebar-icon">⚙️</span> <span class="sidebar-text">設定</span></a>
@@ -287,8 +388,11 @@ function loadUsers() {
   return JSON.parse(fs.readFileSync("users.json", "utf8"));
 }
 
-async function saveHistory(user, keyword, videoId, title) {
-  const params = [user, keyword, videoId, title];
+// source: "yt" | "nico"
+async function saveHistory(user, keyword, videoId, title, source = "yt") {
+  // ニコニコは video_id に "nico:" プレフィックスを付けて保存
+  const storedId = source === "nico" ? `nico:${videoId}` : videoId;
+  const params = [user, keyword, storedId, title];
   await Promise.allSettled([
     pool.query(
       "INSERT INTO history (user_id, query, video_id, title) VALUES ($1, $2, $3, $4)",
@@ -313,6 +417,99 @@ function formatDateJP(date) {
   const weekday = weekdays[d.getDay()];
   return `${year}/${month}/${day} ${hours}:${minutes}:${seconds} (${weekday})`;
 }
+
+// --------------------------------------
+// サムネイル URL 取得（YouTube / ニコニコ 両対応）
+// --------------------------------------
+function getThumbUrl(videoId, size = "mq") {
+  if (videoId.startsWith("nico:")) {
+    const nicoId = videoId.replace("nico:", "");
+    const numId = nicoId.replace(/^[a-zA-Z]+/, "");
+    return `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}`;
+  }
+  const sizeMap = { hq: "hqdefault", mq: "mqdefault", max: "maxresdefault" };
+  return `https://i.ytimg.com/vi/${videoId}/${sizeMap[size] || "mqdefault"}.jpg`;
+}
+
+// 履歴・お気に入りの視聴リンク生成（YouTube / ニコニコ 両対応）
+function buildHistoryCard(item) {
+  const isNico = item.video_id.startsWith("nico:");
+  const cleanId = isNico ? item.video_id.replace("nico:", "") : item.video_id;
+  const thumb = getThumbUrl(item.video_id);
+  const badge = isNico
+    ? `<span class="nico-badge">ニコニコ</span>`
+    : `<span class="yt-badge">YouTube</span>`;
+
+  const clickHandler = isNico
+    ? `postNicoWatch('${cleanId}')`
+    : `postWatch('${cleanId}')`;
+
+  return `
+    <div class="card" style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
+      <img src="${thumb}"
+           style="width:120px;height:68px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eee;"
+           onerror="this.src='/static/no-thumb.png'">
+      <div>
+        <div style="font-size:12px;color:#999;">${formatDateJP(item.created_at)} ${badge}</div>
+        <a href="#" onclick="${clickHandler}" style="font-weight:bold;color:#2c3e50;text-decoration:none;">
+          ${item.title}
+        </a>
+      </div>
+    </div>
+  `;
+}
+
+function buildFavCard(v) {
+  const isNico = v.video_id.startsWith("nico:");
+  const cleanId = isNico ? v.video_id.replace("nico:", "") : v.video_id;
+  const thumb = getThumbUrl(v.video_id, "hq");
+  const action = isNico ? "/nico/watch" : "/watch";
+  const badge = isNico
+    ? `<span class="nico-badge">ニコニコ</span>`
+    : `<span class="yt-badge">YouTube</span>`;
+
+  return `
+    <div class="card${isNico ? " nico-card" : ""}">
+      <form action="${action}" method="post">
+        <input type="hidden" name="id" value="${cleanId}">
+        <button style="all:unset;cursor:pointer;width:100%;">
+          <img class="thumb" src="${thumb}"
+               onerror="this.src='https://nicovideo.cdn.nimg.jp/thumbnails/${cleanId.replace(/^[a-zA-Z]+/,"")}/${cleanId.replace(/^[a-zA-Z]+/,"")}'">
+          <div style="margin-top:8px;font-weight:bold;">${v.title} ${badge}</div>
+        </button>
+      </form>
+    </div>
+  `;
+}
+
+const WATCH_NAV_JS = `
+<script>
+function postWatch(id) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/watch";
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "id";
+  input.value = id;
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+}
+function postNicoWatch(id) {
+  const form = document.createElement("form");
+  form.method = "POST";
+  form.action = "/nico/watch";
+  const input = document.createElement("input");
+  input.type = "hidden";
+  input.name = "id";
+  input.value = id;
+  form.appendChild(input);
+  document.body.appendChild(form);
+  form.submit();
+}
+</script>
+`;
 
 // --------------------------------------
 // ログイン
@@ -345,7 +542,7 @@ app.post("/login", (req, res) => {
 });
 
 // --------------------------------------
-// ホーム
+// ホーム（YouTube / ニコニコ タブ選択）
 // --------------------------------------
 app.get("/", (req, res) => {
   const user = req.cookies.user;
@@ -353,14 +550,27 @@ app.get("/", (req, res) => {
 
   res.send(`
     <html>
-    <head>${CSS}</head>
+    <head>
+      ${CSS}
+    </head>
     <body>
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <h2>動画検索</h2>
-        <div style="max-width:800px;margin:0 auto;">
+
+        <div class="platform-tabs">
+          <div class="platform-tab yt active" id="tab-yt" onclick="switchTab('yt')">
+            ▶ YouTube
+          </div>
+          <div class="platform-tab nico" id="tab-nico" onclick="switchTab('nico')">
+            🎬 ニコニコ動画
+          </div>
+        </div>
+
+        <!-- YouTube 検索フォーム -->
+        <div class="platform-section active" id="sec-yt" style="max-width:800px;margin:0 auto;">
           <form action="/search" method="post">
-            <input type="text" name="q" placeholder="検索ワードを入力">
+            <input type="text" name="q" placeholder="YouTubeで検索">
             <select name="region" class="region-select">
               <option value="jp">日本のみ</option>
               <option value="global">全世界</option>
@@ -368,12 +578,428 @@ app.get("/", (req, res) => {
             <button type="submit">動画を検索</button>
           </form>
         </div>
+
+        <!-- ニコニコ 検索フォーム -->
+        <div class="platform-section" id="sec-nico" style="max-width:800px;margin:0 auto;">
+          <form action="/nico/search" method="post">
+            <input type="text" name="q" placeholder="ニコニコ動画で検索">
+            <select name="sort" class="region-select">
+              <option value="-viewCounter">再生数順</option>
+              <option value="-commentCounter">コメント数順</option>
+              <option value="-mylistCounter">マイリスト順</option>
+              <option value="-startTime">投稿日時順（新しい）</option>
+            </select>
+            <button type="submit" class="nico-btn">🎬 ニコニコで検索</button>
+          </form>
+          <div style="text-align:center;margin-top:10px;">
+            <a href="/nico/ranking" style="color:#e6242b;font-size:14px;">🏆 ニコニコランキングを見る</a>
+          </div>
+        </div>
+      </div>
+      ${SIDEBAR_JS}
+      <script>
+        function switchTab(tab) {
+          document.getElementById("tab-yt").classList.remove("active");
+          document.getElementById("tab-nico").classList.remove("active");
+          document.getElementById("sec-yt").classList.remove("active");
+          document.getElementById("sec-nico").classList.remove("active");
+          document.getElementById("tab-" + tab).classList.add("active");
+          document.getElementById("sec-" + tab).classList.add("active");
+          localStorage.setItem("homeTab", tab);
+        }
+        // タブ状態を復元
+        const saved = localStorage.getItem("homeTab");
+        if (saved === "nico") switchTab("nico");
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// ======================================
+// ■ ニコニコ動画 機能
+// ======================================
+
+// ニコニコ動画検索（Snapshot Search API v2）
+async function searchNiconico(query, sort = "-viewCounter") {
+  const url = `https://snapshot.search.nicovideo.jp/api/v2/snapshot/video/contents/search?` +
+    `q=${encodeURIComponent(query)}&targets=title,description,tags` +
+    `&fields=contentId,title,thumbnailUrl,viewCounter,commentCounter,lengthSeconds` +
+    `&_limit=60&_sort=${sort}`;
+
+  const res = await fetch(url, {
+    headers: { "User-Agent": "NicoViewer/1.0 (private use)" },
+    signal: AbortSignal.timeout(8000)
+  });
+
+  if (!res.ok) throw new Error("Niconico API error: " + res.status);
+  const data = await res.json();
+  return data.data || [];
+}
+
+// ニコニコランキング取得（RSSスクレイピング）
+async function getNicoRanking(genre = "all", term = "24h") {
+  // genre: all, game, anime, music, science, etc.
+  // term: 24h, week, month, total
+  const url = `https://www.nicovideo.jp/ranking/genre/${genre}?term=${term}&rss=2.0&lang=ja-jp`;
+  const res = await fetch(url, {
+    headers: { "User-Agent": "NicoViewer/1.0" },
+    signal: AbortSignal.timeout(8000)
+  });
+  const xml = await res.text();
+
+  const items = [];
+  const itemMatches = xml.matchAll(/<item>([\s\S]*?)<\/item>/g);
+  for (const m of itemMatches) {
+    const block = m[1];
+    const titleMatch = block.match(/<title><!\[CDATA\[(.*?)\]\]><\/title>/);
+    const linkMatch  = block.match(/<link>(.*?)<\/link>/);
+    if (!titleMatch || !linkMatch) continue;
+    const title = titleMatch[1].replace(/^\d+位：/, "").trim();
+    const link  = linkMatch[1].trim();
+    const idMatch = link.match(/\/watch\/(sm\d+|nm\d+|so\d+)/);
+    if (!idMatch) continue;
+    const id = idMatch[1];
+    const numId = id.replace(/^[a-zA-Z]+/, "");
+    items.push({ id, title, thumb: `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}` });
+    if (items.length >= 60) break;
+  }
+  return items;
+}
+
+// ニコニコ動画タイトル取得（履歴保存用）
+async function getNicoVideoTitle(id) {
+  try {
+    const url = `https://ext.nicovideo.jp/api/getthumbinfo/${id}`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    const xml = await res.text();
+    const m = xml.match(/<title>(.*?)<\/title>/);
+    return m ? m[1] : id;
+  } catch (e) {
+    return id;
+  }
+}
+
+// ニコニコ動画検索ページ（GET）
+app.get("/nico", (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+  res.redirect("/?tab=nico");
+});
+
+// ニコニコ動画検索結果（POST）
+app.post("/nico/search", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const q    = req.body.q;
+  const sort = req.body.sort || "-viewCounter";
+  if (!q) return res.send("検索ワードがありません");
+
+  let videos = [];
+  let error  = null;
+
+  try {
+    videos = await searchNiconico(q, sort);
+  } catch (e) {
+    error = e.message;
+  }
+
+  const sortLabel = {
+    "-viewCounter":    "再生数順",
+    "-commentCounter": "コメント数順",
+    "-mylistCounter":  "マイリスト順",
+    "-startTime":      "投稿日時順"
+  }[sort] || sort;
+
+  const cards = videos.map(v => {
+    const numId = v.contentId.replace(/^[a-zA-Z]+/, "");
+    const thumb = v.thumbnailUrl || `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}`;
+    const views = v.viewCounter != null ? `👁 ${Number(v.viewCounter).toLocaleString()}` : "";
+    return `
+      <form action="/nico/watch" method="post" style="display:inline;">
+        <input type="hidden" name="id" value="${v.contentId}">
+        <button style="all:unset;cursor:pointer;width:100%;">
+          <div class="card nico-card">
+            <img class="thumb" src="${thumb}" onerror="this.style.background='#eee'">
+            <div style="margin-top:8px;font-weight:bold;font-size:14px;">${v.title}</div>
+            <div style="font-size:12px;color:#999;margin-top:4px;">${views}</div>
+          </div>
+        </button>
+      </form>
+    `;
+  }).join("");
+
+  const errorHTML = error
+    ? `<div style="text-align:center;color:#e74c3c;padding:20px;">
+        ⚠️ 検索に失敗しました: ${error}<br>
+        <small>ニコニコのAPIが利用できない可能性があります。しばらく時間をおいて再度お試しください。</small>
+       </div>`
+    : (videos.length === 0 ? `<div style="text-align:center;color:#999;padding:40px;">動画が見つかりませんでした</div>` : "");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <h2 style="color:#e6242b;">🎬 ニコニコ検索結果: ${q}（${sortLabel}）</h2>
+        <div style="text-align:center;margin-bottom:16px;">
+          <a href="/" style="color:#e6242b;font-size:14px;">← 検索に戻る</a>
+          &nbsp;|&nbsp;
+          <a href="https://www.nicovideo.jp/search/${encodeURIComponent(q)}" target="_blank"
+             style="color:#e6242b;font-size:14px;">ニコニコで開く ↗</a>
+        </div>
+        ${errorHTML}
+        <div class="card-grid">${cards}</div>
       </div>
       ${SIDEBAR_JS}
     </body>
     </html>
   `);
 });
+
+// ニコニコランキングページ
+app.get("/nico/ranking", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const genre = req.query.genre || "all";
+  const term  = req.query.term  || "24h";
+
+  const genreOptions = [
+    { v: "all",     l: "総合" },
+    { v: "game",    l: "ゲーム" },
+    { v: "anime",   l: "アニメ" },
+    { v: "music",   l: "音楽" },
+    { v: "sing",    l: "歌ってみた" },
+    { v: "play",    l: "演奏してみた" },
+    { v: "dance",   l: "踊ってみた" },
+    { v: "vocaloid",l: "VOCALOID" },
+    { v: "niconico-indies", l: "ニコニコインディーズ" },
+    { v: "tech",    l: "技術・工作" },
+    { v: "science", l: "解説・講座" },
+    { v: "sport",   l: "スポーツ" },
+  ];
+
+  const termOptions = [
+    { v: "24h",   l: "24時間" },
+    { v: "week",  l: "週間" },
+    { v: "month", l: "月間" },
+    { v: "total", l: "合計" },
+  ];
+
+  let videos = [];
+  let error  = null;
+  try {
+    videos = await getNicoRanking(genre, term);
+  } catch (e) {
+    error = e.message;
+  }
+
+  const genreSelect = genreOptions.map(o =>
+    `<option value="${o.v}"${genre === o.v ? " selected" : ""}>${o.l}</option>`
+  ).join("");
+
+  const termSelect = termOptions.map(o =>
+    `<option value="${o.v}"${term === o.v ? " selected" : ""}>${o.l}</option>`
+  ).join("");
+
+  const cards = videos.map((v, i) => `
+    <form action="/nico/watch" method="post" style="display:inline;">
+      <input type="hidden" name="id" value="${v.id}">
+      <button style="all:unset;cursor:pointer;width:100%;">
+        <div class="card nico-card" style="position:relative;">
+          <div style="position:absolute;top:8px;left:8px;background:#e6242b;color:white;
+               font-weight:bold;font-size:13px;padding:2px 8px;border-radius:6px;">
+            ${i + 1}位
+          </div>
+          <img class="thumb" src="${v.thumb}" onerror="this.style.background='#eee'">
+          <div style="margin-top:8px;font-weight:bold;font-size:14px;">${v.title}</div>
+        </div>
+      </button>
+    </form>
+  `).join("");
+
+  res.send(`
+    <html>
+    <head>${CSS}</head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <h2 style="color:#e6242b;">🏆 ニコニコランキング</h2>
+
+        <form action="/nico/ranking" method="get"
+              style="max-width:800px;margin:0 auto 20px;display:flex;gap:10px;flex-wrap:wrap;">
+          <select name="genre" class="region-select" style="flex:1;min-width:140px;">
+            ${genreSelect}
+          </select>
+          <select name="term" class="region-select" style="flex:1;min-width:120px;">
+            ${termSelect}
+          </select>
+          <button type="submit" class="nico-btn" style="width:auto;padding:12px 20px;margin-bottom:15px;">
+            🔄 更新
+          </button>
+        </form>
+
+        ${error
+          ? `<div style="text-align:center;color:#e74c3c;padding:20px;">⚠️ ${error}</div>`
+          : (videos.length === 0
+              ? `<div style="text-align:center;color:#999;padding:40px;">データを取得できませんでした</div>`
+              : "")}
+
+        <div class="card-grid">${cards}</div>
+      </div>
+      ${SIDEBAR_JS}
+    </body>
+    </html>
+  `);
+});
+
+// ニコニコ動画視聴（埋め込みプレイヤー）
+app.post("/nico/watch", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+
+  const id = req.body.id;
+  if (!id) return res.send("動画IDがありません");
+  if (!/^(sm|nm|so|ax)\d+$/.test(id)) return res.send("動画IDが正しくありません");
+
+  // タイトル取得
+  const title = await getNicoVideoTitle(id);
+
+  // 履歴保存
+  saveHistory(user, "watch", id, title, "nico").catch(console.error);
+
+  const embedUrl = `https://embed.nicovideo.jp/watch/${id}?autoplay=1&oldScript=1&referer=&from=0&allowProgrammaticFullScreen=1`;
+  const numId = id.replace(/^[a-zA-Z]+/, "");
+  const thumb = `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}`;
+
+  res.send(`
+    <html>
+    <head>
+      ${CSS}
+      <style>
+        .watch-layout {
+          display: flex;
+          gap: 24px;
+          max-width: 1280px;
+          margin: 0 auto;
+          padding: 20px;
+          align-items: flex-start;
+        }
+        .watch-player { flex: 1; min-width: 0; }
+        .iframe-wrap {
+          position: relative;
+          width: 100%;
+          aspect-ratio: 16/9;
+        }
+        .iframe-wrap iframe {
+          position: absolute;
+          top: 0; left: 0;
+          width: 100%; height: 100%;
+          border-radius: 12px;
+          border: none;
+          background: #000;
+        }
+        .action-bar { display:flex; gap:10px; margin-bottom:12px; flex-wrap:wrap; }
+        .action-bar button, .action-bar a {
+          width:auto; padding:8px 14px; font-size:13px; border-radius:6px; margin-bottom:0;
+          text-decoration:none; display:inline-flex; align-items:center; gap:4px;
+        }
+        @media (max-width:900px) { .watch-layout { flex-direction:column; } }
+      </style>
+    </head>
+    <body>
+      ${SIDEBAR_HTML}
+      <div id="main-content" class="main-content">
+        <div class="watch-layout">
+          <div class="watch-player">
+            <h2 style="font-size:18px;margin-bottom:8px;">
+              <span class="nico-badge">ニコニコ</span> ${title}
+            </h2>
+
+            <div class="action-bar">
+              <button onclick="addNicoFav('${id}', \`${title.replace(/`/g, "\\`")}\`)"
+                style="background:#f1c40f;color:#000;">
+                ⭐ お気に入り追加
+              </button>
+              <a href="https://www.nicovideo.jp/watch/${id}" target="_blank"
+                 style="background:#e6242b;color:white;">
+                🎬 ニコニコで開く ↗
+              </a>
+            </div>
+
+            <div class="iframe-wrap">
+              <iframe src="${embedUrl}"
+                allowfullscreen
+                allow="autoplay; fullscreen; encrypted-media"
+                referrerpolicy="no-referrer">
+              </iframe>
+            </div>
+
+            <div style="margin-top:12px;">
+              <a href="/" style="color:#3498db;">← ホームへ戻る</a>
+              &nbsp;|&nbsp;
+              <a href="/nico/ranking" style="color:#e6242b;">🏆 ランキング</a>
+            </div>
+          </div>
+        </div>
+      </div>
+      ${SIDEBAR_JS}
+      <script>
+        function addNicoFav(id, title) {
+          fetch("/nico/favorite/add", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ videoId: id, title: title })
+          })
+          .then(r => r.json())
+          .then(d => {
+            if (d.ok) alert("お気に入りに追加しました");
+            else if (d.duplicate) alert("すでにお気に入り登録済みです");
+            else alert("エラーが発生しました");
+          })
+          .catch(() => alert("通信エラー"));
+        }
+      </script>
+    </body>
+    </html>
+  `);
+});
+
+// ニコニコお気に入り追加
+app.post("/nico/favorite/add", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.status(401).json({ ok: false, error: "unauthorized" });
+
+  const { videoId, title } = req.body;
+  if (!videoId || !title) return res.status(400).json({ ok: false, error: "missing params" });
+
+  const storedId = `nico:${videoId}`;
+
+  try {
+    const existing = await pool.query(
+      "SELECT 1 FROM favorites WHERE user_id = $1 AND video_id = $2",
+      [user, storedId]
+    );
+    if (existing.rows.length > 0) {
+      return res.json({ ok: false, duplicate: true });
+    }
+    await pool.query(
+      "INSERT INTO favorites (user_id, video_id, title) VALUES ($1, $2, $3)",
+      [user, storedId, title]
+    );
+    res.json({ ok: true });
+  } catch (e) {
+    console.error("ニコニコお気に入り追加エラー:", e);
+    res.json({ ok: false, error: e.message });
+  }
+});
+
+// ======================================
+// ■ YouTube 機能（既存）
+// ======================================
 
 // --------------------------------------
 // Invidiousインスタンスリスト（WKT方式）
@@ -393,11 +1019,10 @@ async function getInvidiousApis() {
   }
 }
 
-// サーバー起動時に取得
 getInvidiousApis();
 
 // --------------------------------------
-// WKT方式: ggvideo（ランダムリフレッシュ＋全インスタンス総当り）
+// WKT方式: ggvideo
 // --------------------------------------
 const MAX_API_WAIT_TIME = 3000;
 const MAX_TOTAL_TIME = 10000;
@@ -405,7 +1030,6 @@ const MAX_TOTAL_TIME = 10000;
 async function ggvideo(videoId) {
   const startTime = Date.now();
 
-  // WKT同様: 20回ループし、ランダム(1/20確率)でAPI再取得
   for (let i = 0; i < 20; i++) {
     if (Math.floor(Math.random() * 20) === 0) {
       await getInvidiousApis();
@@ -449,29 +1073,22 @@ async function ggvideo(videoId) {
   throw new Error("動画を取得する方法が見つかりません");
 }
 
-// --------------------------------------
-// WKT方式: getYouTube（ストリームURL取得）
-// --------------------------------------
 async function getYouTube(videoId) {
   const videoInfo = await ggvideo(videoId);
   const formatStreams = videoInfo.formatStreams || [];
 
-  // WKT同様: reverseして最初（最高画質）
   let streamUrl = [...formatStreams].reverse().map(s => s.url)[0];
 
   const audioStreams = videoInfo.adaptiveFormats || [];
 
-  // 高画質webm
   const highstreamUrl = audioStreams
     .filter(s => s.container === "webm" && s.resolution === "1080p")
     .map(s => s.url)[0] || null;
 
-  // m4a音声（MEDIUM品質）
   const audioUrl = audioStreams
     .filter(s => s.container === "m4a" && s.audioQuality === "AUDIO_QUALITY_MEDIUM")
     .map(s => s.url)[0] || null;
 
-  // 解像度付きwebmリスト
   const streamUrls = audioStreams
     .filter(s => s.container === "webm" && s.resolution)
     .map(s => ({ url: s.url, resolution: s.resolution }));
@@ -511,7 +1128,6 @@ async function getEduParams() {
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (res.ok) {
         cachedEduParams = await res.text();
-        // 5分後にキャッシュ削除
         setTimeout(() => { cachedEduParams = null; }, 5 * 60 * 1000);
         return cachedEduParams;
       }
@@ -519,11 +1135,11 @@ async function getEduParams() {
       console.error(`edu.text取得失敗(${url}):`, e.message);
     }
   }
-  return ""; // フォールバック
+  return "";
 }
 
 // --------------------------------------
-// 動画検索（60件）
+// YouTube 動画検索（60件）
 // --------------------------------------
 app.post("/search", async (req, res) => {
   const user = req.cookies.user;
@@ -627,12 +1243,18 @@ app.get("/settings", (req, res) => {
       <div id="main-content" class="main-content">
         <div class="settings-box">
           <h2>⚙️ 設定</h2>
-          <h3>再生方法を選択してください。設定はブラウザのCookieに保存されます。</h3>
+          <h3>YouTube 再生方法を選択してください。設定はブラウザのCookieに保存されます。</h3>
           ${modeCards}
           <button onclick="saveSettings()" style="margin-top:10px;background:#27ae60;">
             💾 設定を保存
           </button>
           <div id="msg" style="margin-top:12px;color:#27ae60;font-size:14px;display:none;"></div>
+          <hr style="margin:24px 0;border:none;border-top:1px solid #eee;">
+          <h3 style="color:#e6242b;">🎬 ニコニコ動画について</h3>
+          <p style="font-size:14px;color:#666;line-height:1.6;">
+            ニコニコ動画は埋め込みプレイヤーで再生します。<br>
+            一部の動画はニコニコアカウントでのログインが必要な場合があります。
+          </p>
         </div>
       </div>
       ${SIDEBAR_JS}
@@ -664,7 +1286,7 @@ app.get("/settings", (req, res) => {
 });
 
 // ======================================
-// 動画視聴（メインルート） ← ここを全部置き換え
+// YouTube 動画視聴（メインルート）
 // ======================================
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
@@ -675,18 +1297,13 @@ app.post("/watch", async (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
 
-  // === 新規追加：embedモードは直接レンダリング（URLにIDを残さない）===
   if (mode === "edu" || mode === "nocookie") {
     return handleEmbedWatchDirect(res, id, mode, user);
   }
 
-  // normal モード
   return handleNormalWatch(req, res, id);
 });
 
-// ======================================
-// 新規追加：embedモード共通ハンドラ（IDをURLに露出させない）
-// ======================================
 async function handleEmbedWatchDirect(res, id, mode, user) {
   let videosrc;
   if (mode === "edu") {
@@ -714,7 +1331,7 @@ async function handleEmbedWatchDirect(res, id, mode, user) {
     channelId = data.channelId;
     related = data.related;
     if (user) {
-      saveHistory(user, "watch", id, title).catch(console.error);
+      saveHistory(user, "watch", id, title, "yt").catch(console.error);
     }
   } catch (e) {
     console.error(`${mode}用情報取得失敗（埋め込みは継続）:`, e.message);
@@ -722,6 +1339,7 @@ async function handleEmbedWatchDirect(res, id, mode, user) {
 
   res.send(buildEmbedPage(id, videosrc, title, channelName, channelId, related, mode));
 }
+
 // --------------------------------------
 // 通常再生（Invidiousストリーム）
 // --------------------------------------
@@ -738,7 +1356,7 @@ async function handleNormalWatch(req, res, id) {
   const { streamUrl, audioUrl, title, channelName, channelId, related } = videoData;
 
   if (user) {
-    saveHistory(user, "watch", id, title).catch(console.error);
+    saveHistory(user, "watch", id, title, "yt").catch(console.error);
   }
 
   const relatedHTML = related.length > 0
@@ -827,7 +1445,6 @@ async function handleNormalWatch(req, res, id) {
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <div class="watch-layout">
-          <!-- 左：プレイヤー -->
           <div class="watch-player">
             <h2 style="font-size:18px;margin-bottom:8px;">${title}</h2>
             <div class="action-bar">
@@ -860,7 +1477,6 @@ async function handleNormalWatch(req, res, id) {
             </div>
           </div>
 
-          <!-- 右：関連動画 -->
           <div class="watch-related">
             <h3>関連動画</h3>
             ${relatedHTML}
@@ -909,7 +1525,6 @@ app.get("/watch/edu/:id", async (req, res) => {
 
   const videosrc = `https://www.youtubeeducation.com/embed/${id}${eduParams}`;
 
-  // タイトル等を取得（失敗しても埋め込みだけ表示）
   let title = "動画";
   let channelName = "";
   let channelId = "";
@@ -920,7 +1535,7 @@ app.get("/watch/edu/:id", async (req, res) => {
     channelName = data.channelName;
     channelId = data.channelId;
     related = data.related;
-    if (user) saveHistory(user, "watch", id, title).catch(console.error);
+    if (user) saveHistory(user, "watch", id, title, "yt").catch(console.error);
   } catch (e) {
     console.error("edu用情報取得失敗（埋め込みは継続）:", e.message);
   }
@@ -950,7 +1565,7 @@ app.get("/watch/nocookie/:id", async (req, res) => {
     channelName = data.channelName;
     channelId = data.channelId;
     related = data.related;
-    if (user) saveHistory(user, "watch", id, title).catch(console.error);
+    if (user) saveHistory(user, "watch", id, title, "yt").catch(console.error);
   } catch (e) {
     console.error("nocookie用情報取得失敗（埋め込みは継続）:", e.message);
   }
@@ -959,7 +1574,7 @@ app.get("/watch/nocookie/:id", async (req, res) => {
 });
 
 // --------------------------------------
-// 埋め込みページ共通ビルダー
+// 埋め込みページ共通ビルダー（YouTube）
 // --------------------------------------
 function buildEmbedPage(id, videosrc, title, channelName, channelId, related, mode) {
   const modeLabel = mode === "edu" ? "edu（YouTube Education）" : "nocookie（YouTube NoCookie）";
@@ -1290,7 +1905,7 @@ app.get("/channel-videos", handleChannelVideos);
 app.post("/channel-videos", handleChannelVideos);
 
 // --------------------------------------
-// お気に入り機能
+// お気に入り機能（YouTube + ニコニコ 両対応）
 // --------------------------------------
 app.get("/favorites", async (req, res) => {
   const user = req.cookies.user;
@@ -1301,17 +1916,7 @@ app.get("/favorites", async (req, res) => {
     [user]
   );
 
-  const list = result.rows.map(v => `
-    <div class="card">
-      <form action="/watch" method="post">
-        <input type="hidden" name="id" value="${v.video_id}">
-        <button style="all:unset;cursor:pointer;">
-          <img class="thumb" src="https://i.ytimg.com/vi/${v.video_id}/hqdefault.jpg">
-          <div>${v.title}</div>
-        </button>
-      </form>
-    </div>
-  `).join("");
+  const list = result.rows.map(v => buildFavCard(v)).join("");
 
   res.send(`
     <html>
@@ -1319,7 +1924,7 @@ app.get("/favorites", async (req, res) => {
     <body>
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
-        <h2>お気に入り</h2>
+        <h2>⭐ お気に入り</h2>
         <div class="card-grid">${list}</div>
       </div>
       ${SIDEBAR_JS}
@@ -1356,7 +1961,7 @@ app.post("/favorite/add", async (req, res) => {
 });
 
 // --------------------------------------
-// 履歴ページ
+// 履歴ページ（YouTube + ニコニコ 両対応）
 // --------------------------------------
 app.get("/history", async (req, res) => {
   const user = req.cookies.user;
@@ -1385,37 +1990,13 @@ app.get("/history", async (req, res) => {
         <br>
   `;
 
-  html += data.map(item => `
-    <div class="card" style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
-      <img src="https://i.ytimg.com/vi/${item.video_id}/mqdefault.jpg"
-           style="width:120px;height:68px;border-radius:8px;object-fit:cover;flex-shrink:0;">
-      <div>
-        <div style="font-size:12px;color:#999;">${formatDateJP(item.created_at)}</div>
-        <a href="#" onclick="postWatch('${item.video_id}')" style="font-weight:bold;color:#2c3e50;">
-          ${item.title}
-        </a>
-      </div>
-    </div>
-  `).join("");
+  html += data.map(item => buildHistoryCard(item)).join("");
 
   html += `
         <br><center><a href="/">ホームへ戻る</a></center>
       </div>
       ${SIDEBAR_JS}
-      <script>
-      function postWatch(id) {
-        const form = document.createElement("form");
-        form.method = "POST";
-        form.action = "/watch";
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "id";
-        input.value = id;
-        form.appendChild(input);
-        document.body.appendChild(form);
-        form.submit();
-      }
-      </script>
+      ${WATCH_NAV_JS}
     </body>
     </html>
   `;
@@ -1431,7 +2012,7 @@ app.post("/history/delete", async (req, res) => {
 });
 
 // --------------------------------------
-// 管理者ページ
+// 管理者ページ（YouTube + ニコニコ 両対応）
 // --------------------------------------
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
 
@@ -1491,18 +2072,29 @@ app.post("/admin", async (req, res) => {
   for (const userName in historyByUser) {
     const data = historyByUser[userName];
     allHistoryHTML += `<h3>${userName}</h3>`;
-    allHistoryHTML += data.map(item => `
-      <div class="card" style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
-        <img src="https://i.ytimg.com/vi/${item.video_id}/mqdefault.jpg"
-             style="width:120px;height:68px;border-radius:8px;object-fit:cover;flex-shrink:0;">
-        <div>
-          <div style="font-size:12px;color:#999;">${formatDateJP(item.created_at)}</div>
-          <a href="#" onclick="postWatch('${item.video_id}')" style="font-weight:bold;color:#2c3e50;">
-            ${item.title}
-          </a>
+    allHistoryHTML += data.map(item => {
+      const isNico = item.video_id.startsWith("nico:");
+      const cleanId = isNico ? item.video_id.replace("nico:", "") : item.video_id;
+      const thumb = getThumbUrl(item.video_id);
+      const badge = isNico
+        ? `<span class="nico-badge">ニコニコ</span>`
+        : `<span class="yt-badge">YouTube</span>`;
+      const clickFn = isNico
+        ? `postNicoWatch('${cleanId}')`
+        : `postWatch('${cleanId}')`;
+      return `
+        <div class="card" style="margin-bottom:12px;display:flex;gap:12px;align-items:center;">
+          <img src="${thumb}"
+               style="width:120px;height:68px;border-radius:8px;object-fit:cover;flex-shrink:0;background:#eee;">
+          <div>
+            <div style="font-size:12px;color:#999;">${formatDateJP(item.created_at)} ${badge}</div>
+            <a href="#" onclick="${clickFn}" style="font-weight:bold;color:#2c3e50;text-decoration:none;">
+              ${item.title}
+            </a>
+          </div>
         </div>
-      </div>
-    `).join("");
+      `;
+    }).join("");
 
     deleteButtonsHTML += `
       <form method="POST" action="/admin/delete-user">
@@ -1530,7 +2122,9 @@ app.post("/admin", async (req, res) => {
       ${SIDEBAR_HTML}
       <div id="main-content" class="main-content">
         <h2>管理者ページ</h2>
-        <p style="color:#e74c3c;font-size:13px;text-align:center;">※ユーザーが自分の履歴を削除しても、この画面の記録は消えません</p>
+        <p style="color:#e74c3c;font-size:13px;text-align:center;">
+          ※ユーザーが自分の履歴を削除しても、この画面の記録は消えません
+        </p>
         <div class="tabs">
           <div class="tab active" id="tab-all" onclick="openTab('all')">全履歴</div>
           <div class="tab" id="tab-delete" onclick="openTab('delete')">記録削除</div>
@@ -1552,6 +2146,18 @@ app.post("/admin", async (req, res) => {
             const form = document.createElement("form");
             form.method = "POST";
             form.action = "/watch";
+            const input = document.createElement("input");
+            input.type = "hidden";
+            input.name = "id";
+            input.value = id;
+            form.appendChild(input);
+            document.body.appendChild(form);
+            form.submit();
+          }
+          function postNicoWatch(id) {
+            const form = document.createElement("form");
+            form.method = "POST";
+            form.action = "/nico/watch";
             const input = document.createElement("input");
             input.type = "hidden";
             input.name = "id";
