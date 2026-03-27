@@ -663,34 +663,65 @@ app.get("/settings", (req, res) => {
   `);
 });
 
-// --------------------------------------
-// 動画視聴（メインルート）
-// playbackModeクッキーで分岐
-// --------------------------------------
+// ======================================
+// 動画視聴（メインルート） ← ここを全部置き換え
+// ======================================
 app.post("/watch", async (req, res) => {
   const id = req.body.id;
   if (!id) return res.send("動画IDがありません");
   if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.send("動画IDが正しくありません");
 
   const mode = req.cookies.playbackMode || "normal";
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
 
-  if (mode === "edu") return res.redirect(`/watch/edu/${id}`);
-  if (mode === "nocookie") return res.redirect(`/watch/nocookie/${id}`);
+  // === 新規追加：embedモードは直接レンダリング（URLにIDを残さない）===
+  if (mode === "edu" || mode === "nocookie") {
+    return handleEmbedWatchDirect(res, id, mode, user);
+  }
 
   // normal モード
   return handleNormalWatch(req, res, id);
 });
 
-// GETでも動画IDを受け取れるようにしておく（リダイレクト用）
-app.get("/watch/:id", async (req, res) => {
-  const id = req.params.id;
-  if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.send("動画IDが正しくありません");
-  const mode = req.cookies.playbackMode || "normal";
-  if (mode === "edu") return res.redirect(`/watch/edu/${id}`);
-  if (mode === "nocookie") return res.redirect(`/watch/nocookie/${id}`);
-  return handleNormalWatch(req, res, id);
-});
+// ======================================
+// 新規追加：embedモード共通ハンドラ（IDをURLに露出させない）
+// ======================================
+async function handleEmbedWatchDirect(res, id, mode, user) {
+  let videosrc;
+  if (mode === "edu") {
+    let eduParams = "";
+    try {
+      eduParams = await getEduParams();
+    } catch (e) {
+      console.error("edu params取得失敗:", e.message);
+    }
+    videosrc = `https://www.youtubeeducation.com/embed/${id}${eduParams}`;
+  } else if (mode === "nocookie") {
+    videosrc = `https://www.youtube-nocookie.com/embed/${id}`;
+  } else {
+    return res.send("不明な再生モードです");
+  }
 
+  let title = "動画";
+  let channelName = "";
+  let channelId = "";
+  let related = [];
+  try {
+    const data = await getYouTube(id);
+    title = data.title;
+    channelName = data.channelName;
+    channelId = data.channelId;
+    related = data.related;
+    if (user) {
+      saveHistory(user, "watch", id, title).catch(console.error);
+    }
+  } catch (e) {
+    console.error(`${mode}用情報取得失敗（埋め込みは継続）:`, e.message);
+  }
+
+  res.send(buildEmbedPage(id, videosrc, title, channelName, channelId, related, mode));
+}
 // --------------------------------------
 // 通常再生（Invidiousストリーム）
 // --------------------------------------
