@@ -386,12 +386,17 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
 `;
 
 function page(title, platform, body, currentPath = "", extraJS = "") {
+  let fixedTitle = "Video Viewer";
+
+  if (platform === "yt") fixedTitle = "YouTube Viewer";
+  if (platform === "nico") fixedTitle = "Niconico Viewer";
+
   return `<!DOCTYPE html>
 <html lang="ja">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${title}</title>
+<title>${fixedTitle}</title>
 ${buildCSS(platform)}
 </head>
 <body>
