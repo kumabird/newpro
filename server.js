@@ -559,7 +559,7 @@ app.get("/signup", (req, res) => {
   <!-- 同意チェック -->
   <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#555;margin-bottom:20px;cursor:pointer;">
     <input type="checkbox" id="agree-check" style="width:auto;margin-top:2px;flex-shrink:0;" onchange="document.getElementById('signup-btn').disabled=!this.checked;">
-    <span>上記の利用規約を読み、内容に同意します（視聴履歴が管理者に記録・監視されることを含む）</span>
+    <span>上記の利用規約を読み、内容に同意します</span>
   </label>
 
   <!-- 登録フォーム -->
