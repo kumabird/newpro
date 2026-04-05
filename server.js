@@ -441,9 +441,12 @@ async function ensureUsersTable() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
+      reg_ip TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
+  // 既存テーブルにカラムがなければ追加
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reg_ip TEXT`);
 }
 ensureUsersTable().catch(console.error);
 
@@ -592,10 +595,19 @@ app.post("/signup", async (req, res) => {
   if (pass.length < 6) return redirect("パスワードは6文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
+  // IPアドレス取得（Renderなどリバースプロキシ経由を考慮）
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+
   try {
+    // 同じIPから既に登録済みか確認
+    const ipCheck = await pool.query("SELECT username FROM users WHERE reg_ip=$1", [ip]);
+    if (ipCheck.rows.length > 0) {
+      return redirect(`このネットワークからは既にアカウント（${ipCheck.rows[0].username}）が登録されています`);
+    }
+
     await pool.query(
-      "INSERT INTO users (username, password) VALUES ($1, $2)",
-      [user, pass]
+      "INSERT INTO users (username, password, reg_ip) VALUES ($1, $2, $3)",
+      [user, pass, ip]
     );
     res.redirect("/login?msg=" + encodeURIComponent("アカウントを作成しました。ログインしてください"));
   } catch (e) {
@@ -1404,7 +1416,7 @@ app.post("/admin", async (req, res) => {
   // ユーザー一覧
   let usersHTML = "";
   try {
-    const usersResult = await pool.query("SELECT id, username, created_at FROM users ORDER BY created_at DESC");
+    const usersResult = await pool.query("SELECT id, username, reg_ip, created_at FROM users ORDER BY created_at DESC");
     if (usersResult.rows.length === 0) {
       usersHTML = `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
     } else {
@@ -1414,6 +1426,7 @@ app.post("/admin", async (req, res) => {
     <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
       <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
       <th style="text-align:left;padding:10px 12px;">登録日時</th>
+      <th style="text-align:left;padding:10px 12px;">登録IP</th>
       <th style="text-align:center;padding:10px 12px;">操作</th>
     </tr>
   </thead>
@@ -1421,12 +1434,14 @@ app.post("/admin", async (req, res) => {
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;font-weight:bold;">👑 ${ADMIN_USER} <span style="font-size:11px;background:#e74c3c;color:white;padding:1px 7px;border-radius:10px;margin-left:6px;">管理者</span></td>
       <td style="padding:10px 12px;color:#888;">環境変数</td>
+      <td style="padding:10px 12px;color:#888;">—</td>
       <td style="padding:10px 12px;text-align:center;">—</td>
     </tr>
     ${usersResult.rows.map(u => `
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;">👤 ${u.username}</td>
       <td style="padding:10px 12px;color:#888;">${formatDateJP(u.created_at)}</td>
+      <td style="padding:10px 12px;color:#888;font-size:12px;font-family:monospace;">${u.reg_ip || "—"}</td>
       <td style="padding:10px 12px;text-align:center;">
         <form method="POST" action="/admin/delete-account" style="display:inline;">
           <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
