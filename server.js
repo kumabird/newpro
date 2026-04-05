@@ -328,6 +328,7 @@ function buildSidebar(platform, currentPath = "") {
     <hr class="sidebar-divider">
     <a href="/favorites"${al("/favorites")}><span class="sidebar-icon">⭐</span><span class="sidebar-text">お気に入り</span></a>
     <a href="/history"${al("/history")}><span class="sidebar-icon">🕘</span><span class="sidebar-text">履歴</span></a>
+    <a href="/settings"${al("/settings")}><span class="sidebar-icon">⚙️</span><span class="sidebar-text">設定</span></a>
     <a href="/admin"><span class="sidebar-icon">🛡️</span><span class="sidebar-text">管理者ページ</span></a>
   `;
 
@@ -487,15 +488,21 @@ app.get("/login", (req, res) => {
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>`
     : "";
+  const ok = req.query.ok
+    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${req.query.ok}</p>`
+    : "";
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ログイン</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>🎬 ログイン</h2>
-  ${msg}
+  ${msg}${ok}
   <form method="POST" action="/login">
     <input type="text"     name="user" placeholder="ユーザー名" required>
     <input type="password" name="pass" placeholder="パスワード"   required>
     <button class="btn btn-primary btn-full" type="submit">ログイン</button>
   </form>
+  <div style="text-align:center;margin-top:10px;">
+    <a href="/reset-password" style="font-size:13px;color:#888;text-decoration:underline;">パスワードを忘れましたか？</a>
+  </div>
   <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid #eee;">
     <p style="font-size:13px;color:#888;margin-bottom:10px;">アカウントをまだお持ちでないですか？</p>
     <a href="/signup" class="btn btn-green btn-full">📝 新規アカウント登録</a>
@@ -559,14 +566,14 @@ app.get("/signup", (req, res) => {
   <!-- 同意チェック -->
   <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#555;margin-bottom:20px;cursor:pointer;">
     <input type="checkbox" id="agree-check" style="width:auto;margin-top:2px;flex-shrink:0;" onchange="document.getElementById('signup-btn').disabled=!this.checked;">
-    <span>上記の利用規約を読み、内容に同意します</span>
+    <span>上記の利用規約を読み、内容に同意します（視聴履歴が管理者に記録・監視されることを含む）</span>
   </label>
 
   <!-- 登録フォーム -->
   <form method="POST" action="/signup">
     <input type="text"     name="user" placeholder="ユーザー名（半角英数字）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="pass" placeholder="パスワード（6文字以上）" required
+    <input type="password" name="pass" placeholder="パスワード（4文字以上）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
     <input type="password" name="pass2" placeholder="パスワード（確認）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
@@ -592,7 +599,7 @@ app.post("/signup", async (req, res) => {
   if (!user || !pass || !pass2) return redirect("全ての項目を入力してください");
   if (!/^[a-zA-Z0-9_]{1,30}$/.test(user)) return redirect("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
   if (user === ADMIN_USER) return redirect("そのユーザー名は使用できません");
-  if (pass.length < 6) return redirect("パスワードは6文字以上にしてください");
+  if (pass.length < 4) return redirect("パスワードは4文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
   // IPアドレス取得（Renderなどリバースプロキシ経由を考慮）
@@ -614,6 +621,66 @@ app.post("/signup", async (req, res) => {
     if (e.code === "23505") return redirect("そのユーザー名は既に使用されています");
     console.error("signup error:", e);
     return redirect("登録に失敗しました。しばらく後にお試しください");
+  }
+});
+
+// ======================================
+// ■ パスワードリセット
+// ======================================
+app.get("/reset-password", (req, res) => {
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+  const ok = req.query.ok
+    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${req.query.ok}</p>` : "";
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>パスワードリセット</title>${buildCSS("yt")}</head><body>
+<div class="center-box">
+  <h2>🔑 パスワードリセット</h2>
+  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
+    アカウント登録時と同じネットワーク（IPアドレス）からのみリセットできます。
+  </p>
+  ${msg}${ok}
+  <form method="POST" action="/reset-password">
+    <input type="text"     name="user"     placeholder="ユーザー名" required
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
+    <button class="btn btn-primary btn-full" type="submit"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
+      🔒 パスワードをリセット
+    </button>
+  </form>
+  <div style="text-align:center;margin-top:16px;">
+    <a href="/login" style="font-size:13px;color:#888;">← ログインに戻る</a>
+  </div>
+</div>
+</body></html>`);
+});
+
+app.post("/reset-password", async (req, res) => {
+  const { user, newpass, newpass2 } = req.body;
+  const redir = (msg) => res.redirect("/reset-password?" + new URLSearchParams({msg}).toString());
+  const ok    = (o)   => res.redirect("/login?" + new URLSearchParams({ok: o}).toString());
+
+  if (!user || !newpass || !newpass2) return redir("全ての項目を入力してください");
+  if (newpass.length < 4) return redir("パスワードは4文字以上にしてください");
+  if (newpass !== newpass2) return redir("パスワードが一致しません");
+
+  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
+
+  try {
+    const result = await pool.query("SELECT username, reg_ip FROM users WHERE username=$1", [user]);
+    if (result.rows.length === 0) return redir("ユーザーが見つかりません");
+    const stored = result.rows[0];
+    if (!stored.reg_ip || stored.reg_ip !== ip) {
+      return redir("登録時と異なるネットワークからはリセットできません");
+    }
+    await pool.query("UPDATE users SET password=$1 WHERE username=$2", [newpass, user]);
+    return ok("パスワードをリセットしました。新しいパスワードでログインしてください");
+  } catch(e) {
+    console.error("reset-password error:", e);
+    return redir("リセットに失敗しました");
   }
 });
 
@@ -912,7 +979,14 @@ app.get("/watch/nocookie/:id", async (req, res) => {
 app.get("/settings", (req, res) => {
   const user = req.cookies.user;
   if (!user) return res.redirect("/login");
+  const platform = getPlatform(req);
   const currentMode = req.cookies.playbackMode || "normal";
+  const pwMsg = req.query.pwmsg
+    ? `<p style="color:#e74c3c;font-size:13px;margin-top:8px;">${req.query.pwmsg}</p>`
+    : req.query.pwok
+    ? `<p style="color:#27ae60;font-size:13px;margin-top:8px;">${req.query.pwok}</p>`
+    : "";
+  const isAdmin = user === ADMIN_USER;
   const modes = [
     { value:"normal",   icon:"🎬", label:"通常",                    desc:"Invidiousを通じてストリームを取得して再生します。" },
     { value:"edu",      icon:"🎓", label:"edu (YouTube Education)", desc:"フィルタリング環境でも視聴できる場合があります。" },
@@ -929,13 +1003,35 @@ app.get("/settings", (req, res) => {
       </label>
     </div>
   `).join("");
+
+  const pwSection = isAdmin ? `
+<div style="margin-top:28px;padding-top:24px;border-top:1px solid #eee;">
+  <h3 style="font-size:16px;color:#2c3e50;margin-bottom:4px;">🔑 管理者パスワードは環境変数で管理</h3>
+  <p style="font-size:13px;color:#888;">管理者アカウントのパスワードは環境変数 <code>ADMIN_PASS</code> で変更してください。</p>
+</div>` : `
+<div style="margin-top:28px;padding-top:24px;border-top:1px solid #eee;">
+  <h3 style="font-size:16px;color:#2c3e50;margin-bottom:12px;">🔑 パスワード変更</h3>
+  <form method="POST" action="/settings/change-password">
+    <input type="password" name="current" placeholder="現在のパスワード" required
+      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
+    <input type="password" name="newpass" placeholder="新しいパスワード（4文字以上）" required
+      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
+    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
+      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
+    <button class="btn btn-primary" type="submit">🔒 パスワードを変更</button>
+  </form>
+  ${pwMsg}
+</div>`;
+
   const body = `
 <div class="settings-box">
-  <h2>⚙️ YouTube 再生設定</h2>
-  <p style="font-size:14px;color:#666;margin-bottom:20px;">再生方法を選択してください。Cookieに保存されます。</p>
+  <h2>⚙️ 設定</h2>
+  <h3 style="font-size:16px;color:#2c3e50;margin-bottom:12px;">🎬 YouTube 再生設定</h3>
+  <p style="font-size:14px;color:#666;margin-bottom:16px;">再生方法を選択してください。Cookieに保存されます。</p>
   ${cards}
   <button class="btn btn-green" onclick="saveSettings()" style="margin-top:8px;">💾 保存</button>
   <div id="msg" style="margin-top:12px;color:#27ae60;font-size:14px;display:none;"></div>
+  ${pwSection}
 </div>
 <script>
 function selectMode(val){
@@ -953,7 +1049,30 @@ function saveSettings(){
 }
 </script>
 `;
-  res.send(page("設定", "yt", body, "/settings"));
+  res.send(page("設定", platform, body, "/settings"));
+});
+
+app.post("/settings/change-password", async (req, res) => {
+  const user = req.cookies.user;
+  if (!user) return res.redirect("/login");
+  if (user === ADMIN_USER) return res.redirect("/settings");
+  const { current, newpass, newpass2 } = req.body;
+  const redir = (pwmsg) => res.redirect("/settings?" + new URLSearchParams({pwmsg}).toString());
+  const ok    = (pwok)  => res.redirect("/settings?" + new URLSearchParams({pwok}).toString());
+
+  if (!current || !newpass || !newpass2) return redir("全ての項目を入力してください");
+  if (newpass.length < 4) return redir("新しいパスワードは4文字以上にしてください");
+  if (newpass !== newpass2) return redir("新しいパスワードが一致しません");
+
+  try {
+    const result = await pool.query("SELECT 1 FROM users WHERE username=$1 AND password=$2", [user, current]);
+    if (result.rows.length === 0) return redir("現在のパスワードが違います");
+    await pool.query("UPDATE users SET password=$1 WHERE username=$2", [newpass, user]);
+    return ok("✅ パスワードを変更しました");
+  } catch(e) {
+    console.error("change-password error:", e);
+    return redir("変更に失敗しました");
+  }
 });
 
 // ======================================
@@ -1401,11 +1520,17 @@ app.get("/admin", (req, res) => {
 `;
     return res.send(page("管理者ログイン", getPlatform(req), body));
   }
-  res.send(`<form id="f" method="POST" action="/admin"><input type="hidden" name="pass" value="${ADMIN_PASSWORD}"></form><script>document.getElementById("f").submit();</script>`);
+  const extraParams = new URLSearchParams();
+  if(req.query.addmsg) extraParams.set("addmsg", req.query.addmsg);
+  if(req.query.addok)  extraParams.set("addok",  req.query.addok);
+  const actionUrl = "/admin" + (extraParams.toString() ? "?" + extraParams.toString() : "");
+  res.send(`<form id="f" method="POST" action="${actionUrl}"><input type="hidden" name="pass" value="${ADMIN_PASSWORD}"></form><script>document.getElementById("f").submit();</script>`);
 });
 
 app.post("/admin", async (req, res) => {
   const pass=req.body.pass; if(pass!==ADMIN_PASSWORD) return res.send("パスワードが違います");
+  const addmsg = req.query.addmsg || "";
+  const addok  = req.query.addok  || "";
   const result=await pool.query("SELECT user_id,query,video_id,title,created_at FROM admin_history ORDER BY created_at DESC");
   const byUser={};
   for(const row of result.rows){
@@ -1415,12 +1540,41 @@ app.post("/admin", async (req, res) => {
 
   // ユーザー一覧
   let usersHTML = "";
+  const adminRegMsg = req.query.addmsg
+    ? `<p style="color:#e74c3c;font-size:13px;margin-top:6px;">${req.query.addmsg}</p>`
+    : req.query.addok
+    ? `<p style="color:#27ae60;font-size:13px;margin-top:6px;">${req.query.addok}</p>`
+    : "";
+  const adminRegForm = `
+<div style="background:#f8f9fa;border-radius:10px;padding:18px 20px;margin-bottom:24px;border:1px solid #e0e0e0;">
+  <h3 style="font-size:15px;margin:0 0 12px;color:#2c3e50;">➕ 管理者からユーザーを登録</h3>
+  <form method="POST" action="/admin/add-user" style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;">
+    <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+    <div style="flex:1;min-width:140px;">
+      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">ユーザー名</label>
+      <input type="text" name="username" placeholder="半角英数字" required
+        style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
+    </div>
+    <div style="flex:1;min-width:140px;">
+      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">パスワード</label>
+      <input type="text" name="password" placeholder="4文字以上" required
+        style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
+    </div>
+    <div style="flex:1;min-width:140px;">
+      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">登録IP（任意）</label>
+      <input type="text" name="reg_ip" placeholder="空白でIP制限なし"
+        style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
+    </div>
+    <button class="btn btn-green" type="submit" style="white-space:nowrap;margin-bottom:0;">✅ 登録</button>
+  </form>
+  ${adminRegMsg}
+</div>`;
   try {
     const usersResult = await pool.query("SELECT id, username, reg_ip, created_at FROM users ORDER BY created_at DESC");
     if (usersResult.rows.length === 0) {
-      usersHTML = `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
+      usersHTML = adminRegForm + `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
     } else {
-      usersHTML = `
+      usersHTML = adminRegForm + `
 <table style="width:100%;border-collapse:collapse;font-size:14px;">
   <thead>
     <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
@@ -1516,6 +1670,31 @@ app.post("/admin/delete-account", async (req, res) => {
   if(username===ADMIN_USER) return res.send("管理者アカウントは削除できません");
   await pool.query("DELETE FROM users WHERE username=$1",[username]);
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+app.post("/admin/add-user", async (req, res) => {
+  const { pass, username, password, reg_ip } = req.body;
+  if (pass !== ADMIN_PASSWORD) return res.send("パスワードが違います");
+  const redir = (addmsg) => res.redirect(`/admin?pass=${ADMIN_PASSWORD}&` + new URLSearchParams({addmsg}).toString() + "#tab-users");
+  const ok    = (addok)  => res.redirect(`/admin?pass=${ADMIN_PASSWORD}&` + new URLSearchParams({addok}).toString() + "#tab-users");
+
+  if (!username || !password) return redir("ユーザー名とパスワードは必須です");
+  if (!/^[a-zA-Z0-9_]{1,30}$/.test(username)) return redir("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
+  if (username === ADMIN_USER) return redir("そのユーザー名は使用できません");
+  if (password.length < 4) return redir("パスワードは4文字以上にしてください");
+
+  try {
+    const ipVal = reg_ip && reg_ip.trim() ? reg_ip.trim() : null;
+    await pool.query(
+      "INSERT INTO users (username, password, reg_ip) VALUES ($1, $2, $3)",
+      [username, password, ipVal]
+    );
+    return ok(`✅ ${username} を登録しました`);
+  } catch(e) {
+    if (e.code === "23505") return redir("そのユーザー名は既に使用されています");
+    console.error("admin/add-user error:", e);
+    return redir("登録に失敗しました");
+  }
 });
 
 // ======================================
