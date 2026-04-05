@@ -1,6 +1,5 @@
 import express from "express";
 import fetch from "node-fetch";
-import fs from "fs";
 import cookieParser from "cookie-parser";
 
 const app = express();
@@ -413,10 +412,40 @@ ${extraJS}
 // ======================================
 // ■ ユーティリティ
 // ======================================
-function loadUsers() {
-  if (!fs.existsSync("users.json")) return [];
-  return JSON.parse(fs.readFileSync("users.json", "utf8"));
+
+// 管理者は環境変数から読み込む（users.jsonは廃止）
+const ADMIN_USER = process.env.ADMIN_USER || "hinata";
+const ADMIN_PASS = process.env.ADMIN_PASS || "changeme_admin";
+
+async function findUser(user, pass) {
+  // 管理者は環境変数で照合
+  if (user === ADMIN_USER) {
+    return pass === ADMIN_PASS ? { user, isAdmin: true } : null;
+  }
+  // 一般ユーザーはDBから照合
+  try {
+    const result = await pool.query(
+      "SELECT username FROM users WHERE username=$1 AND password=$2",
+      [user, pass]
+    );
+    return result.rows.length > 0 ? { user, isAdmin: false } : null;
+  } catch (e) {
+    console.error("DB findUser error:", e);
+    return null;
+  }
 }
+
+async function ensureUsersTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT NOT NULL,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+}
+ensureUsersTable().catch(console.error);
 
 function getPlatform(req) {
   return req.cookies.platform === "nico" ? "nico" : "yt";
@@ -452,22 +481,30 @@ function getThumbUrl(videoId, size = "mq") {
 // ■ ログイン / ログアウト
 // ======================================
 app.get("/login", (req, res) => {
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>`
+    : "";
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ログイン</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>🎬 ログイン</h2>
+  ${msg}
   <form method="POST" action="/login">
     <input type="text"     name="user" placeholder="ユーザー名" required>
     <input type="password" name="pass" placeholder="パスワード"   required>
     <button class="btn btn-primary btn-full" type="submit">ログイン</button>
   </form>
+  <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid #eee;">
+    <p style="font-size:13px;color:#888;margin-bottom:10px;">アカウントをまだお持ちでないですか？</p>
+    <a href="/signup" class="btn btn-green btn-full">📝 新規アカウント登録</a>
+  </div>
 </div>
 </body></html>`);
 });
 
-app.post("/login", (req, res) => {
+app.post("/login", async (req, res) => {
   const { user, pass } = req.body;
-  const found = loadUsers().find(u => u.user === user && u.pass === pass);
-  if (!found) return res.send("ユーザー名またはパスワードが違います");
+  const found = await findUser(user, pass);
+  if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   res.cookie("user", user, { httpOnly: true });
   res.redirect("/");
 });
@@ -475,6 +512,97 @@ app.post("/login", (req, res) => {
 app.get("/logout", (req, res) => {
   res.clearCookie("user");
   res.redirect("/login");
+});
+
+// ======================================
+// ■ サインアップ
+// ======================================
+app.get("/signup", (req, res) => {
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>`
+    : "";
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>アカウント登録</title>${buildCSS("yt")}</head><body>
+<div style="max-width:480px;margin:40px auto;background:white;padding:30px;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.12);">
+  <h2 style="text-align:center;color:#2c3e50;">📝 アカウント登録</h2>
+  ${msg}
+
+  <!-- 利用規約 -->
+  <div style="border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:20px;background:#fafafa;">
+    <h3 style="font-size:15px;margin-top:0;color:#2c3e50;">📋 利用規約</h3>
+    <div style="height:220px;overflow-y:auto;font-size:13px;line-height:1.8;color:#555;padding-right:6px;">
+      <p><strong>第1条（本サービスについて）</strong><br>
+      本サービスは、YouTube・ニコニコ動画の動画を閲覧するためのプライベートビューアです。管理者の承認のもと、招待されたユーザーのみが利用できます。</p>
+
+      <p><strong>第2条（履歴の記録・監視）</strong><br>
+      本サービスでは、ユーザーの視聴履歴（閲覧した動画のタイトル・動画ID・検索キーワード・日時）を自動的に記録します。記録された履歴は管理者が閲覧・管理できます。ユーザー自身が履歴を削除した後も、管理者用の記録は保持されます。</p>
+
+      <p><strong>第3条（禁止事項）</strong><br>
+      以下の行為を禁止します。<br>
+      ・アカウント情報の第三者への共有・譲渡<br>
+      ・本サービスへの不正アクセスや改ざん<br>
+      ・サービスの安定運用を妨げる行為</p>
+
+      <p><strong>第4条（アカウントの停止）</strong><br>
+      管理者は、利用規約に違反したと判断した場合、予告なくアカウントを停止することができます。</p>
+
+      <p><strong>第5条（免責事項）</strong><br>
+      本サービスの利用によって生じた損害について、運営者は一切の責任を負いません。</p>
+
+      <p><strong>第6条（規約の変更）</strong><br>
+      本規約はサービスの運営上必要に応じて変更されることがあります。</p>
+    </div>
+  </div>
+
+  <!-- 同意チェック -->
+  <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#555;margin-bottom:20px;cursor:pointer;">
+    <input type="checkbox" id="agree-check" style="width:auto;margin-top:2px;flex-shrink:0;" onchange="document.getElementById('signup-btn').disabled=!this.checked;">
+    <span>上記の利用規約を読み、内容に同意します（視聴履歴が管理者に記録・監視されることを含む）</span>
+  </label>
+
+  <!-- 登録フォーム -->
+  <form method="POST" action="/signup">
+    <input type="text"     name="user" placeholder="ユーザー名（半角英数字）" required
+           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="pass" placeholder="パスワード（6文字以上）" required
+           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="pass2" placeholder="パスワード（確認）" required
+           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
+    <button id="signup-btn" class="btn btn-green btn-full" type="submit" disabled
+            style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#27ae60;color:white;opacity:0.5;transition:opacity 0.2s;">
+      ✅ 同意して登録
+    </button>
+  </form>
+  <div style="text-align:center;margin-top:16px;">
+    <a href="/login" style="font-size:13px;color:#888;">← ログインに戻る</a>
+  </div>
+</div>
+<style>
+  #signup-btn:not(:disabled) { opacity: 1 !important; }
+</style>
+</body></html>`);
+});
+
+app.post("/signup", async (req, res) => {
+  const { user, pass, pass2 } = req.body;
+  const redirect = (msg) => res.redirect("/signup?msg=" + encodeURIComponent(msg));
+
+  if (!user || !pass || !pass2) return redirect("全ての項目を入力してください");
+  if (!/^[a-zA-Z0-9_]{1,30}$/.test(user)) return redirect("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
+  if (user === ADMIN_USER) return redirect("そのユーザー名は使用できません");
+  if (pass.length < 6) return redirect("パスワードは6文字以上にしてください");
+  if (pass !== pass2) return redirect("パスワードが一致しません");
+
+  try {
+    await pool.query(
+      "INSERT INTO users (username, password) VALUES ($1, $2)",
+      [user, pass]
+    );
+    res.redirect("/login?msg=" + encodeURIComponent("アカウントを作成しました。ログインしてください"));
+  } catch (e) {
+    if (e.code === "23505") return redirect("そのユーザー名は既に使用されています");
+    console.error("signup error:", e);
+    return redirect("登録に失敗しました。しばらく後にお試しください");
+  }
 });
 
 // ======================================
@@ -1248,7 +1376,7 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
 app.get("/admin", (req, res) => {
   const user=req.cookies.user, pass=req.query.pass;
   if(!user) return res.redirect("/login");
-  if(user!=="hinata") return res.send("アクセス権がありません");
+  if(user!==ADMIN_USER) return res.send("アクセス権がありません");
   if(pass!==ADMIN_PASSWORD){
     const body=`
 <div class="center-box">
@@ -1272,6 +1400,51 @@ app.post("/admin", async (req, res) => {
     if(!byUser[row.user_id]) byUser[row.user_id]=[];
     byUser[row.user_id].push(row);
   }
+
+  // ユーザー一覧
+  let usersHTML = "";
+  try {
+    const usersResult = await pool.query("SELECT id, username, created_at FROM users ORDER BY created_at DESC");
+    if (usersResult.rows.length === 0) {
+      usersHTML = `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
+    } else {
+      usersHTML = `
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+  <thead>
+    <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
+      <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
+      <th style="text-align:left;padding:10px 12px;">登録日時</th>
+      <th style="text-align:center;padding:10px 12px;">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:10px 12px;font-weight:bold;">👑 ${ADMIN_USER} <span style="font-size:11px;background:#e74c3c;color:white;padding:1px 7px;border-radius:10px;margin-left:6px;">管理者</span></td>
+      <td style="padding:10px 12px;color:#888;">環境変数</td>
+      <td style="padding:10px 12px;text-align:center;">—</td>
+    </tr>
+    ${usersResult.rows.map(u => `
+    <tr style="border-bottom:1px solid #eee;">
+      <td style="padding:10px 12px;">👤 ${u.username}</td>
+      <td style="padding:10px 12px;color:#888;">${formatDateJP(u.created_at)}</td>
+      <td style="padding:10px 12px;text-align:center;">
+        <form method="POST" action="/admin/delete-account" style="display:inline;">
+          <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
+          <input type="hidden" name="username" value="${u.username}">
+          <button class="btn btn-danger" style="font-size:12px;padding:5px 12px;margin:0;"
+            onclick="return confirm('${u.username} のアカウントを削除しますか？')">
+            🗑 削除
+          </button>
+        </form>
+      </td>
+    </tr>`).join("")}
+  </tbody>
+</table>`;
+    }
+  } catch(e) {
+    usersHTML = `<p style="color:#e74c3c;">ユーザー一覧の取得に失敗しました: ${e.message}</p>`;
+  }
+
   let allHTML="", delHTML="";
   for(const userName in byUser){
     allHTML+=`<h3 style="margin-top:24px;padding-bottom:6px;border-bottom:1px solid #eee;">${userName}</h3>`;
@@ -1303,9 +1476,11 @@ app.post("/admin", async (req, res) => {
 <div class="tabs">
   <button class="tab active" id="tab-all" onclick="openTab('all')">全履歴</button>
   <button class="tab" id="tab-del" onclick="openTab('del')">記録削除</button>
+  <button class="tab" id="tab-users" onclick="openTab('users')">👥 ユーザー一覧</button>
 </div>
 <div class="tab-content active" id="content-all">${allHTML}</div>
 <div class="tab-content" id="content-del">${delHTML}</div>
+<div class="tab-content" id="content-users">${usersHTML}</div>
 <script>
 function openTab(n){document.querySelectorAll(".tab").forEach(t=>t.classList.remove("active"));document.querySelectorAll(".tab-content").forEach(c=>c.classList.remove("active"));document.getElementById("tab-"+n).classList.add("active");document.getElementById("content-"+n).classList.add("active");}
 function postWatch(id){const f=document.createElement("form");f.method="POST";f.action="/watch";const i=document.createElement("input");i.type="hidden";i.name="id";i.value=id;f.appendChild(i);document.body.appendChild(f);f.submit();}
@@ -1318,6 +1493,13 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
 app.post("/admin/delete-user", async (req, res) => {
   const {pass,user}=req.body; if(pass!==ADMIN_PASSWORD) return res.send("パスワードが違います");
   await pool.query("DELETE FROM admin_history WHERE user_id=$1",[user]);
+  res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
+});
+
+app.post("/admin/delete-account", async (req, res) => {
+  const {pass, username}=req.body; if(pass!==ADMIN_PASSWORD) return res.send("パスワードが違います");
+  if(username===ADMIN_USER) return res.send("管理者アカウントは削除できません");
+  await pool.query("DELETE FROM users WHERE username=$1",[username]);
   res.redirect(`/admin?pass=${ADMIN_PASSWORD}`);
 });
 
