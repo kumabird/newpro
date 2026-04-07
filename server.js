@@ -442,14 +442,58 @@ async function ensureUsersTable() {
       id SERIAL PRIMARY KEY,
       username TEXT UNIQUE NOT NULL,
       password TEXT NOT NULL,
-      reg_ip TEXT,
+      email TEXT,
       created_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
-  // 既存テーブルにカラムがなければ追加
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS reg_ip TEXT`);
+  // 既存テーブルへのカラム追加（マイグレーション）
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
+  // reg_ip カラムが残っている場合も許容（削除はしない）
+
+  // パスワードリセット用トークンテーブル
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reset_tokens (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      token TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
 }
 ensureUsersTable().catch(console.error);
+
+// ======================================
+// ■ メール送信ユーティリティ（Resend API）
+// ======================================
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const MAIL_FROM     = process.env.MAIL_FROM || "noreply@example.com";
+
+async function sendResetEmail(toEmail, username, code) {
+  if (!RESEND_API_KEY) {
+    console.warn("[reset] RESEND_API_KEY が未設定のためメール送信をスキップします");
+    return;
+  }
+  const body = {
+    from: MAIL_FROM,
+    to: [toEmail],
+    subject: "【Video Viewer】パスワードリセット確認コード",
+    text: `${username} さん\n\n以下の6桁コードを入力してパスワードをリセットしてください。\n\nコード: ${code}\n\n※このコードは15分間のみ有効です。\n※心当たりがない場合は無視してください。`
+  };
+  const res = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${RESEND_API_KEY}`
+    },
+    body: JSON.stringify(body)
+  });
+  if (!res.ok) {
+    const err = await res.text();
+    throw new Error(`Resend API error: ${res.status} ${err}`);
+  }
+}
 
 function getPlatform(req) {
   return req.cookies.platform === "nico" ? "nico" : "yt";
@@ -571,9 +615,11 @@ app.get("/signup", (req, res) => {
 
   <!-- 登録フォーム -->
   <form method="POST" action="/signup">
-    <input type="text"     name="user" placeholder="ユーザー名（半角英数字）" required
+    <input type="text"     name="user"  placeholder="ユーザー名（半角英数字）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="pass" placeholder="パスワード（4文字以上）" required
+    <input type="email"    name="email" placeholder="メールアドレス（パスワードリセット用）" required
+           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="pass"  placeholder="パスワード（4文字以上）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
     <input type="password" name="pass2" placeholder="パスワード（確認）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
@@ -593,28 +639,20 @@ app.get("/signup", (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { user, pass, pass2 } = req.body;
+  const { user, email, pass, pass2 } = req.body;
   const redirect = (msg) => res.redirect("/signup?msg=" + encodeURIComponent(msg));
 
-  if (!user || !pass || !pass2) return redirect("全ての項目を入力してください");
+  if (!user || !email || !pass || !pass2) return redirect("全ての項目を入力してください");
   if (!/^[a-zA-Z0-9_]{1,30}$/.test(user)) return redirect("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
   if (user === ADMIN_USER) return redirect("そのユーザー名は使用できません");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return redirect("有効なメールアドレスを入力してください");
   if (pass.length < 4) return redirect("パスワードは4文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
-  // IPアドレス取得（Renderなどリバースプロキシ経由を考慮）
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
-
   try {
-    // 同じIPから既に登録済みか確認
-    const ipCheck = await pool.query("SELECT username FROM users WHERE reg_ip=$1", [ip]);
-    if (ipCheck.rows.length > 0) {
-      return redirect(`このネットワークからは既にアカウント（${ipCheck.rows[0].username}）が登録されています`);
-    }
-
     await pool.query(
-      "INSERT INTO users (username, password, reg_ip) VALUES ($1, $2, $3)",
-      [user, pass, ip]
+      "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
+      [user, pass, email.toLowerCase().trim()]
     );
     res.redirect("/login?msg=" + encodeURIComponent("アカウントを作成しました。ログインしてください"));
   } catch (e) {
@@ -625,8 +663,10 @@ app.post("/signup", async (req, res) => {
 });
 
 // ======================================
-// ■ パスワードリセット
+// ■ パスワードリセット（メール認証・6桁コード・15分有効）
 // ======================================
+
+// STEP 1: ユーザー名入力 → コード送信
 app.get("/reset-password", (req, res) => {
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
@@ -636,19 +676,15 @@ app.get("/reset-password", (req, res) => {
 <div class="center-box">
   <h2>🔑 パスワードリセット</h2>
   <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    アカウント登録時と同じネットワーク（IPアドレス）からのみリセットできます。
+    登録済みのメールアドレスに6桁の確認コードを送信します。
   </p>
   ${msg}${ok}
-  <form method="POST" action="/reset-password">
-    <input type="text"     name="user"     placeholder="ユーザー名" required
-      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required
-      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
+  <form method="POST" action="/reset-password/send">
+    <input type="text" name="user" placeholder="ユーザー名" required
       style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
     <button class="btn btn-primary btn-full" type="submit"
       style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
-      🔒 パスワードをリセット
+      📧 確認コードを送信
     </button>
   </form>
   <div style="text-align:center;margin-top:16px;">
@@ -658,29 +694,151 @@ app.get("/reset-password", (req, res) => {
 </body></html>`);
 });
 
-app.post("/reset-password", async (req, res) => {
-  const { user, newpass, newpass2 } = req.body;
+app.post("/reset-password/send", async (req, res) => {
+  const { user } = req.body;
   const redir = (msg) => res.redirect("/reset-password?" + new URLSearchParams({msg}).toString());
-  const ok    = (o)   => res.redirect("/login?" + new URLSearchParams({ok: o}).toString());
 
-  if (!user || !newpass || !newpass2) return redir("全ての項目を入力してください");
+  if (!user) return redir("ユーザー名を入力してください");
+
+  try {
+    const result = await pool.query("SELECT username, email FROM users WHERE username=$1", [user]);
+    if (result.rows.length === 0) return redir("ユーザーが見つかりません");
+    const { username, email } = result.rows[0];
+    if (!email) return redir("このアカウントにはメールアドレスが登録されていません。管理者にお問い合わせください");
+
+    // 既存の未使用トークンを無効化
+    await pool.query("UPDATE reset_tokens SET used=TRUE WHERE username=$1 AND used=FALSE", [username]);
+
+    // 6桁コード生成（ゼロパディング）
+    const code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15分後
+
+    await pool.query(
+      "INSERT INTO reset_tokens (username, token, expires_at) VALUES ($1, $2, $3)",
+      [username, code, expiresAt]
+    );
+
+    await sendResetEmail(email, username, code);
+
+    // メールアドレスをマスク表示（例: ab****@example.com）
+    const [localPart, domain] = email.split("@");
+    const masked = localPart.slice(0, 2) + "****@" + domain;
+
+    res.redirect("/reset-password/verify?" + new URLSearchParams({ user: username, hint: masked }).toString());
+  } catch(e) {
+    console.error("reset/send error:", e);
+    redir("コードの送信に失敗しました。しばらく後にお試しください");
+  }
+});
+
+// STEP 2: コード入力
+app.get("/reset-password/verify", (req, res) => {
+  const { user, hint } = req.query;
+  if (!user) return res.redirect("/reset-password");
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>コード入力</title>${buildCSS("yt")}</head><body>
+<div class="center-box">
+  <h2>📧 確認コードを入力</h2>
+  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
+    <strong>${hint || "登録済みメールアドレス"}</strong> に送信した<br>6桁のコードを入力してください。<br>
+    <span style="color:#e74c3c;">※15分以内に入力してください</span>
+  </p>
+  ${msg}
+  <form method="POST" action="/reset-password/verify">
+    <input type="hidden" name="user" value="${user}">
+    <input type="text" name="code" placeholder="6桁のコード" required maxlength="6"
+      style="width:100%;padding:14px;font-size:22px;letter-spacing:10px;text-align:center;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;"
+      autocomplete="one-time-code" inputmode="numeric">
+    <button class="btn btn-primary btn-full" type="submit"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
+      ✅ コードを確認
+    </button>
+  </form>
+  <div style="text-align:center;margin-top:12px;">
+    <a href="/reset-password" style="font-size:13px;color:#888;">← コードを再送信する</a>
+  </div>
+</div>
+</body></html>`);
+});
+
+app.post("/reset-password/verify", async (req, res) => {
+  const { user, code } = req.body;
+  const redir = (msg) => res.redirect("/reset-password/verify?" + new URLSearchParams({ user, msg }).toString());
+
+  if (!user || !code) return res.redirect("/reset-password");
+
+  try {
+    const result = await pool.query(
+      "SELECT id, expires_at, used FROM reset_tokens WHERE username=$1 AND token=$2 ORDER BY created_at DESC LIMIT 1",
+      [user, code.trim()]
+    );
+    if (result.rows.length === 0) return redir("コードが正しくありません");
+    const row = result.rows[0];
+    if (row.used) return redir("このコードは既に使用済みです");
+    if (new Date() > new Date(row.expires_at)) return redir("コードの有効期限が切れています。再送信してください");
+
+    // 認証OK → 新パスワード入力画面へ（セッション代わりにトークンIDをクエリパラムで渡す）
+    res.redirect("/reset-password/new?" + new URLSearchParams({ user, tid: row.id }).toString());
+  } catch(e) {
+    console.error("reset/verify error:", e);
+    redir("確認に失敗しました");
+  }
+});
+
+// STEP 3: 新パスワード入力
+app.get("/reset-password/new", (req, res) => {
+  const { user, tid } = req.query;
+  if (!user || !tid) return res.redirect("/reset-password");
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>新しいパスワード</title>${buildCSS("yt")}</head><body>
+<div class="center-box">
+  <h2>🔒 新しいパスワードを設定</h2>
+  ${msg}
+  <form method="POST" action="/reset-password/new">
+    <input type="hidden" name="user" value="${user}">
+    <input type="hidden" name="tid"  value="${tid}">
+    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
+    <button class="btn btn-primary btn-full" type="submit"
+      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
+      🔑 パスワードをリセット
+    </button>
+  </form>
+</div>
+</body></html>`);
+});
+
+app.post("/reset-password/new", async (req, res) => {
+  const { user, tid, newpass, newpass2 } = req.body;
+  const redir = (msg) => res.redirect("/reset-password/new?" + new URLSearchParams({ user, tid, msg }).toString());
+
+  if (!user || !tid || !newpass || !newpass2) return redir("全ての項目を入力してください");
   if (newpass.length < 4) return redir("パスワードは4文字以上にしてください");
   if (newpass !== newpass2) return redir("パスワードが一致しません");
 
-  const ip = (req.headers["x-forwarded-for"] || req.socket.remoteAddress || "").split(",")[0].trim();
-
   try {
-    const result = await pool.query("SELECT username, reg_ip FROM users WHERE username=$1", [user]);
-    if (result.rows.length === 0) return redir("ユーザーが見つかりません");
-    const stored = result.rows[0];
-    if (!stored.reg_ip || stored.reg_ip !== ip) {
-      return redir("登録時と異なるネットワークからはリセットできません");
-    }
+    // トークン再検証（有効期限・使用済みチェック）
+    const result = await pool.query(
+      "SELECT expires_at, used FROM reset_tokens WHERE id=$1 AND username=$2",
+      [tid, user]
+    );
+    if (result.rows.length === 0) return res.redirect("/reset-password?msg=" + encodeURIComponent("セッションが無効です。最初からやり直してください"));
+    const row = result.rows[0];
+    if (row.used) return res.redirect("/reset-password?msg=" + encodeURIComponent("このセッションは既に使用済みです"));
+    if (new Date() > new Date(row.expires_at)) return res.redirect("/reset-password?msg=" + encodeURIComponent("セッションの有効期限が切れています。最初からやり直してください"));
+
+    // パスワード更新 & トークン無効化
     await pool.query("UPDATE users SET password=$1 WHERE username=$2", [newpass, user]);
-    return ok("パスワードをリセットしました。新しいパスワードでログインしてください");
+    await pool.query("UPDATE reset_tokens SET used=TRUE WHERE id=$1", [tid]);
+
+    res.redirect("/login?" + new URLSearchParams({ ok: "パスワードをリセットしました。新しいパスワードでログインしてください" }).toString());
   } catch(e) {
-    console.error("reset-password error:", e);
-    return redir("リセットに失敗しました");
+    console.error("reset/new error:", e);
+    redir("リセットに失敗しました");
   }
 });
 
@@ -1561,8 +1719,8 @@ app.post("/admin", async (req, res) => {
         style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
     </div>
     <div style="flex:1;min-width:140px;">
-      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">登録IP（任意）</label>
-      <input type="text" name="reg_ip" placeholder="空白でIP制限なし"
+      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">メールアドレス（任意）</label>
+      <input type="email" name="email" placeholder="空白でも登録可"
         style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
     </div>
     <button class="btn btn-green" type="submit" style="white-space:nowrap;margin-bottom:0;">✅ 登録</button>
@@ -1570,7 +1728,7 @@ app.post("/admin", async (req, res) => {
   ${adminRegMsg}
 </div>`;
   try {
-    const usersResult = await pool.query("SELECT id, username, reg_ip, created_at FROM users ORDER BY created_at DESC");
+    const usersResult = await pool.query("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC");
     if (usersResult.rows.length === 0) {
       usersHTML = adminRegForm + `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
     } else {
@@ -1580,7 +1738,7 @@ app.post("/admin", async (req, res) => {
     <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
       <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
       <th style="text-align:left;padding:10px 12px;">登録日時</th>
-      <th style="text-align:left;padding:10px 12px;">登録IP</th>
+      <th style="text-align:left;padding:10px 12px;">メールアドレス</th>
       <th style="text-align:center;padding:10px 12px;">操作</th>
     </tr>
   </thead>
@@ -1595,7 +1753,7 @@ app.post("/admin", async (req, res) => {
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;">👤 ${u.username}</td>
       <td style="padding:10px 12px;color:#888;">${formatDateJP(u.created_at)}</td>
-      <td style="padding:10px 12px;color:#888;font-size:12px;font-family:monospace;">${u.reg_ip || "—"}</td>
+      <td style="padding:10px 12px;color:#888;font-size:12px;">${u.email || "—"}</td>
       <td style="padding:10px 12px;text-align:center;">
         <form method="POST" action="/admin/delete-account" style="display:inline;">
           <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
@@ -1673,7 +1831,7 @@ app.post("/admin/delete-account", async (req, res) => {
 });
 
 app.post("/admin/add-user", async (req, res) => {
-  const { pass, username, password, reg_ip } = req.body;
+  const { pass, username, password, email } = req.body;
   if (pass !== ADMIN_PASSWORD) return res.send("パスワードが違います");
   const redir = (addmsg) => res.redirect(`/admin?pass=${ADMIN_PASSWORD}&` + new URLSearchParams({addmsg}).toString() + "#tab-users");
   const ok    = (addok)  => res.redirect(`/admin?pass=${ADMIN_PASSWORD}&` + new URLSearchParams({addok}).toString() + "#tab-users");
@@ -1684,10 +1842,10 @@ app.post("/admin/add-user", async (req, res) => {
   if (password.length < 4) return redir("パスワードは4文字以上にしてください");
 
   try {
-    const ipVal = reg_ip && reg_ip.trim() ? reg_ip.trim() : null;
+    const emailVal = email && email.trim() ? email.trim().toLowerCase() : null;
     await pool.query(
-      "INSERT INTO users (username, password, reg_ip) VALUES ($1, $2, $3)",
-      [username, password, ipVal]
+      "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
+      [username, password, emailVal]
     );
     return ok(`✅ ${username} を登録しました`);
   } catch(e) {
