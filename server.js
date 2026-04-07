@@ -916,7 +916,7 @@ app.post("/auth/complete", async (req, res) => {
 });
 
 // ======================================
-// ■ サインアップ（メール確認コードあり）
+// ■ サインアップ（メール確認なし・即時登録）
 // ======================================
 app.get("/signup", (req, res) => {
   const msg = req.query.msg
@@ -970,7 +970,7 @@ app.get("/signup", (req, res) => {
   <form method="POST" action="/signup">
     <input type="text"     name="user"  placeholder="ユーザー名（半角英数字）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="email"    name="email" placeholder="メールアドレス（確認コード送信先）" required
+    <input type="email"    name="email" placeholder="メールアドレス（パスワードリセット用・任意）"
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
     <input type="password" name="pass"  placeholder="パスワード（4文字以上）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
@@ -979,7 +979,7 @@ app.get("/signup", (req, res) => {
     ${recaptchaWidget()}
     <button id="signup-btn" class="btn btn-green btn-full" type="submit" disabled
             style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#27ae60;color:white;opacity:0.5;transition:opacity 0.2s;">
-      📧 確認コードを送信して登録へ
+      ✅ 同意して登録
     </button>
   </form>
   <div style="text-align:center;margin-top:16px;">
@@ -998,129 +998,39 @@ app.post("/signup", async (req, res) => {
   const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
   if (!captchaOk) return redirect("reCAPTCHAの確認に失敗しました。もう一度お試しください");
 
-  if (!user || !email || !pass || !pass2) return redirect("全ての項目を入力してください");
+  if (!user || !pass || !pass2) return redirect("ユーザー名とパスワードを入力してください");
   if (!/^[a-zA-Z0-9_]{1,30}$/.test(user)) return redirect("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
   if (user === ADMIN_USER) return redirect("そのユーザー名は使用できません");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return redirect("有効なメールアドレスを入力してください");
   if (pass.length < 4) return redirect("パスワードは4文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
-  // ユーザー名・メール重複チェック
+  // メールアドレスは任意・入力された場合のみ形式チェック
+  const normalizedEmail = (email && email.trim()) ? email.trim().toLowerCase() : null;
+  if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+    return redirect("有効なメールアドレスを入力してください");
+  }
+
   try {
+    // ユーザー名重複チェック
     const dupUser = await pool.query("SELECT 1 FROM users WHERE username=$1", [user]);
     if (dupUser.rows.length > 0) return redirect("そのユーザー名は既に使用されています");
-    const dupEmail = await pool.query("SELECT 1 FROM users WHERE email=$1", [email.toLowerCase().trim()]);
-    if (dupEmail.rows.length > 0) return redirect("そのメールアドレスは既に使用されています");
-  } catch (e) {
-    console.error("signup dup check error:", e);
-    return redirect("サーバーエラーが発生しました");
-  }
 
-  // メール確認コードを生成・送信
-  const code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
-  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
-  const normalizedEmail = email.toLowerCase().trim();
-
-  try {
-    // 既存の未使用コードを無効化
-    await pool.query("UPDATE email_verify_codes SET used=TRUE WHERE email=$1 AND used=FALSE", [normalizedEmail]);
-    await pool.query(
-      "INSERT INTO email_verify_codes (email, code, username, password, expires_at) VALUES ($1,$2,$3,$4,$5)",
-      [normalizedEmail, code, user, pass, expiresAt]
-    );
-
-    if (RESEND_API_KEY) {
-      await sendMail(
-        normalizedEmail,
-        "【Video Viewer】メールアドレス確認コード",
-        `${user} さん\n\n以下の6桁コードを入力してアカウント登録を完了してください。\n\nコード: ${code}\n\n※このコードは15分間のみ有効です。\n※心当たりがない場合は無視してください。`
-      );
-    } else {
-      // メール未設定時はセッションにコードを保存（開発用）
-      req.session.devCode = code;
-      console.warn("[signup] メール未設定。確認コード:", code);
+    // メールアドレス重複チェック（入力された場合のみ）
+    if (normalizedEmail) {
+      const dupEmail = await pool.query("SELECT 1 FROM users WHERE email=$1", [normalizedEmail]);
+      if (dupEmail.rows.length > 0) return redirect("そのメールアドレスは既に使用されています");
     }
 
-    res.redirect("/signup/verify?" + new URLSearchParams({ user, hint: maskEmail(normalizedEmail) }).toString());
-  } catch (e) {
-    console.error("signup send code error:", e);
-    redirect("確認コードの送信に失敗しました。しばらく後にお試しください");
-  }
-});
-
-// ======================================
-// ■ サインアップ メール確認コード入力
-// ======================================
-app.get("/signup/verify", (req, res) => {
-  const { user, hint } = req.query;
-  if (!user) return res.redirect("/signup");
-  const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
-    : "";
-
-  // 開発時（メール未設定）の場合はコードをページに表示
-  const devNote = !RESEND_API_KEY && req.session.devCode
-    ? `<div style="background:#fffbcc;border:1px solid #f0c040;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;">
-        🔧 開発モード：確認コード = <strong>${req.session.devCode}</strong>
-       </div>`
-    : "";
-
-  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>メール確認</title>${buildCSS("yt")}</head><body>
-<div class="center-box">
-  <h2>📧 メールアドレスの確認</h2>
-  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    <strong>${escHtml(hint || "登録メールアドレス")}</strong> に送信した<br>
-    6桁のコードを入力してください。<br>
-    <span style="color:#e74c3c;">※15分以内に入力してください</span>
-  </p>
-  ${devNote}
-  ${msg}
-  <form method="POST" action="/signup/verify">
-    <input type="hidden" name="user" value="${escHtml(user)}">
-    <input class="code-input" type="text" name="code" placeholder="000000"
-           required maxlength="6" autocomplete="one-time-code" inputmode="numeric">
-    <button class="btn btn-green btn-full" type="submit">✅ 確認して登録完了</button>
-  </form>
-  <div style="text-align:center;margin-top:12px;">
-    <a href="/signup" style="font-size:13px;color:#888;">← やり直す</a>
-  </div>
-</div>
-</body></html>`);
-});
-
-app.post("/signup/verify", async (req, res) => {
-  const { user, code } = req.body;
-  if (!user || !code) return res.redirect("/signup");
-  const redir = (msg) => res.redirect("/signup/verify?" + new URLSearchParams({ user, msg }).toString());
-
-  try {
-    const result = await pool.query(
-      `SELECT id, password, email, expires_at, used
-       FROM email_verify_codes
-       WHERE username=$1 AND code=$2
-       ORDER BY created_at DESC LIMIT 1`,
-      [user, code.trim()]
-    );
-    if (result.rows.length === 0) return redir("コードが正しくありません");
-    const row = result.rows[0];
-    if (row.used) return redir("このコードは既に使用済みです");
-    if (new Date() > new Date(row.expires_at)) return redir("コードの有効期限が切れています。最初からやり直してください");
-
-    // コードを使用済みに
-    await pool.query("UPDATE email_verify_codes SET used=TRUE WHERE id=$1", [row.id]);
-
-    // ユーザー登録
+    // 即時登録
     await pool.query(
       "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
-      [user, row.password, row.email]
+      [user, pass, normalizedEmail]
     );
-
-    req.session.devCode = null;
     res.redirect("/login?" + new URLSearchParams({ ok: "アカウントを作成しました。ログインしてください" }).toString());
   } catch (e) {
-    if (e.code === "23505") return redir("そのユーザー名は既に登録されています");
-    console.error("signup/verify error:", e);
-    redir("登録に失敗しました。しばらく後にお試しください");
+    if (e.code === "23505") return redirect("そのユーザー名は既に使用されています");
+    console.error("signup error:", e);
+    return redirect("登録に失敗しました。しばらく後にお試しください");
   }
 });
 
