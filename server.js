@@ -1,6 +1,8 @@
 import express from "express";
 import fetch from "node-fetch";
 import cookieParser from "cookie-parser";
+import session from "express-session";
+import { randomBytes } from "crypto";
 
 const app = express();
 app.disable("x-powered-by");
@@ -10,6 +12,12 @@ const PORT = process.env.PORT || 3000;
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(express.json());
+app.use(session({
+  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
+  resave: false,
+  saveUninitialized: false,
+  cookie: { httpOnly: true, maxAge: 10 * 60 * 1000 } // 10分で期限切れ
+}));
 
 import pkg from "pg";
 const { Pool } = pkg;
@@ -20,7 +28,29 @@ const pool = new Pool({
 });
 
 // ======================================
-// ■ CSS（プラットフォームごとにアクセントカラーを切り替え）
+// ■ 環境変数
+// ======================================
+const ADMIN_USER     = process.env.ADMIN_USER     || "hinata";
+const ADMIN_PASS     = process.env.ADMIN_PASS     || "changeme_admin";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
+
+const RECAPTCHA_SITE_KEY   = process.env.RECAPTCHA_SITE_KEY   || "";
+const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || "";
+
+const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || "";
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
+
+const MICROSOFT_CLIENT_ID     = process.env.MICROSOFT_CLIENT_ID     || "";
+const MICROSOFT_CLIENT_SECRET = process.env.MICROSOFT_CLIENT_SECRET || "";
+
+// アプリのベースURL（コールバックURIに使用）
+const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
+
+const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
+const MAIL_FROM     = process.env.MAIL_FROM     || "noreply@example.com";
+
+// ======================================
+// ■ CSS
 // ======================================
 function buildCSS(platform = "yt") {
   const isNico = platform === "nico";
@@ -48,7 +78,6 @@ function buildCSS(platform = "yt") {
 
   h2 { margin-bottom: 20px; color: #2c3e50; text-align: center; }
 
-  /* ── サイドバー ── */
   .sidebar {
     position: fixed;
     top: 0; left: 0;
@@ -64,7 +93,6 @@ function buildCSS(platform = "yt") {
   }
   .sidebar.open { width: 230px; }
 
-  /* プラットフォームスイッチャー */
   .platform-switcher {
     padding: 8px 5px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
@@ -91,12 +119,7 @@ function buildCSS(platform = "yt") {
     transition: background 0.18s, color 0.18s;
     text-align: left;
   }
-  .platform-btn .p-icon {
-    font-size: 20px;
-    flex-shrink: 0;
-    width: 28px;
-    text-align: center;
-  }
+  .platform-btn .p-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
   .platform-btn .p-label { opacity: 0; transition: opacity 0.2s; }
   .sidebar.open .platform-btn .p-label { opacity: 1; }
 
@@ -105,7 +128,6 @@ function buildCSS(platform = "yt") {
   .platform-btn.yt-btn:not(.active):hover   { background: rgba(255,0,0,0.2); color: white; }
   .platform-btn.nico-btn:not(.active):hover { background: rgba(230,36,43,0.2); color: white; }
 
-  /* ナビリンク */
   .sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 5px; }
 
   .sidebar a {
@@ -124,28 +146,14 @@ function buildCSS(platform = "yt") {
   .sidebar a:hover       { background: rgba(255,255,255,0.1); color: white; }
   .sidebar a.active-link { background: rgba(255,255,255,0.15); color: white; }
 
-  .sidebar-icon {
-    font-size: 19px;
-    flex-shrink: 0;
-    width: 28px;
-    text-align: center;
-  }
+  .sidebar-icon { font-size: 19px; flex-shrink: 0; width: 28px; text-align: center; }
   .sidebar-text { opacity: 0; transition: opacity 0.2s; }
   .sidebar.open .sidebar-text { opacity: 1; }
 
-  .sidebar-divider {
-    border: none;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    margin: 5px 4px;
-  }
+  .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 4px; }
 
-  .sidebar-footer {
-    padding: 6px 5px 10px;
-    border-top: 1px solid rgba(255,255,255,0.1);
-    flex-shrink: 0;
-  }
+  .sidebar-footer { padding: 6px 5px 10px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
 
-  /* ── メインコンテンツ ── */
   .main-content {
     margin-left: 74px;
     padding: 24px;
@@ -154,7 +162,6 @@ function buildCSS(platform = "yt") {
   }
   .main-content.shift { margin-left: 250px; }
 
-  /* ── カード ── */
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -177,20 +184,20 @@ function buildCSS(platform = "yt") {
     background: #eee; display: block;
   }
 
-  /* ── フォーム ── */
   .center-box {
-    max-width: 380px; margin: 80px auto;
+    max-width: 400px; margin: 60px auto;
     background: white; padding: 30px;
     border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   }
 
-  input[type=text], input[type=password], select.form-select {
+  input[type=text], input[type=password], input[type=email], select.form-select {
     width: 100%; padding: 12px 14px;
     font-size: 15px; border-radius: 8px;
     border: 1px solid #ccc; margin-bottom: 12px;
     background: white; display: block;
   }
-  input[type=text]:focus, input[type=password]:focus, select.form-select:focus {
+  input[type=text]:focus, input[type=password]:focus,
+  input[type=email]:focus, select.form-select:focus {
     outline: none; border-color: var(--accent);
   }
 
@@ -208,14 +215,39 @@ function buildCSS(platform = "yt") {
   .btn-green   { background: #27ae60; color: white; }
   .btn-full    { width: 100%; justify-content: center; }
 
-  /* 検索ボックス */
+  /* OAuthボタン */
+  .btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
+    border-radius: 8px; border: 1px solid #dadce0; background: white;
+    color: #3c4043; cursor: pointer; text-decoration: none;
+    transition: background 0.15s, box-shadow 0.15s; margin-bottom: 10px;
+  }
+  .btn-google:hover { background: #f8f8f8; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+
+  .btn-microsoft {
+    display: flex; align-items: center; justify-content: center; gap: 10px;
+    width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
+    border-radius: 8px; border: none; background: #0078d4;
+    color: white; cursor: pointer; text-decoration: none;
+    transition: background 0.15s; margin-bottom: 10px;
+  }
+  .btn-microsoft:hover { background: #106ebe; }
+
+  .divider-text {
+    display: flex; align-items: center; gap: 12px;
+    color: #aaa; font-size: 13px; margin: 16px 0;
+  }
+  .divider-text::before, .divider-text::after {
+    content: ""; flex: 1; border-top: 1px solid #e0e0e0;
+  }
+
   .search-wrap {
     max-width: 700px; margin: 0 auto 24px;
     background: white; border-radius: 14px;
     padding: 24px 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
   }
 
-  /* ページヘッダー */
   .page-header {
     display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
   }
@@ -229,7 +261,6 @@ function buildCSS(platform = "yt") {
   .platform-badge.yt   { background: #ff0000; }
   .platform-badge.nico { background: #e6242b; }
 
-  /* 視聴ページ */
   .watch-layout {
     display: flex; gap: 24px; max-width: 1280px; margin: 0 auto; align-items: flex-start;
   }
@@ -247,7 +278,6 @@ function buildCSS(platform = "yt") {
   .channel-info:hover { color: var(--accent); }
   @media (max-width:900px) { .watch-layout { flex-direction:column; } .watch-related { width:100%; } }
 
-  /* 設定 */
   .settings-box {
     max-width:540px; margin:0 auto;
     background:white; padding:32px;
@@ -269,7 +299,6 @@ function buildCSS(platform = "yt") {
     font-size:11px; padding:2px 8px; border-radius:20px; margin-left:8px; vertical-align:middle;
   }
 
-  /* 履歴 */
   .history-card {
     background:white; border-radius:10px; padding:12px; margin-bottom:8px;
     display:flex; gap:12px; align-items:center;
@@ -280,7 +309,6 @@ function buildCSS(platform = "yt") {
     object-fit:cover; flex-shrink:0; background:#eee;
   }
 
-  /* 管理者 */
   .tabs { display:flex; gap:8px; margin-bottom:20px; }
   .tab {
     padding:10px 20px; border-radius:8px;
@@ -293,13 +321,23 @@ function buildCSS(platform = "yt") {
   .badge-nico { display:inline-block; background:#e6242b; color:white; font-size:10px; padding:1px 5px; border-radius:3px; margin-left:4px; font-weight:bold; }
   .badge-yt   { display:inline-block; background:#ff0000; color:white; font-size:10px; padding:1px 5px; border-radius:3px; margin-left:4px; font-weight:bold; }
 
-  /* ランキングバッジ */
   .rank-badge {
     position:absolute; top:8px; left:8px;
     background:var(--accent); color:white;
     font-weight:bold; font-size:13px;
     padding:2px 8px; border-radius:6px;
   }
+
+  /* コード入力 */
+  .code-input {
+    width: 100%; padding: 14px; font-size: 28px;
+    letter-spacing: 14px; text-align: center;
+    border-radius: 8px; border: 2px solid #ccc;
+    margin-bottom: 16px; box-sizing: border-box;
+    font-weight: bold; color: #2c3e50;
+    transition: border-color 0.2s;
+  }
+  .code-input:focus { outline: none; border-color: var(--accent); }
 </style>
 `;
 }
@@ -387,7 +425,6 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
 
 function page(title, platform, body, currentPath = "", extraJS = "") {
   let fixedTitle = "Video Viewer";
-
   if (platform === "yt") fixedTitle = "YouTube Viewer";
   if (platform === "nico") fixedTitle = "Niconico Viewer";
 
@@ -411,19 +448,92 @@ ${extraJS}
 }
 
 // ======================================
+// ■ reCAPTCHA 検証
+// ======================================
+async function verifyRecaptcha(token) {
+  if (!RECAPTCHA_SECRET_KEY) return true; // 未設定時はスキップ
+  if (!token) return false;
+  try {
+    const res = await fetch("https://www.google.com/recaptcha/api/siteverify", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: `secret=${encodeURIComponent(RECAPTCHA_SECRET_KEY)}&response=${encodeURIComponent(token)}`,
+      signal: AbortSignal.timeout(5000)
+    });
+    const data = await res.json();
+    return data.success === true;
+  } catch (e) {
+    console.error("reCAPTCHA verify error:", e);
+    return false;
+  }
+}
+
+// reCAPTCHAウィジェットHTML（サイトキーが設定されている場合のみ）
+function recaptchaWidget() {
+  if (!RECAPTCHA_SITE_KEY) return "";
+  return `
+<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}" style="margin-bottom:12px;transform:scale(0.95);transform-origin:0 0;"></div>
+`;
+}
+
+// ======================================
+// ■ DBセットアップ
+// ======================================
+async function ensureUsersTable() {
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password TEXT,
+      email TEXT,
+      oauth_provider TEXT,
+      oauth_id TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+  // マイグレーション：既存テーブルへのカラム追加
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT`);
+  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
+
+  // パスワードをNULL許容に（OAuthユーザーはパスワード不要）
+  await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
+
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS reset_tokens (
+      id SERIAL PRIMARY KEY,
+      username TEXT NOT NULL,
+      token TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // メール確認コードテーブル
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS email_verify_codes (
+      id SERIAL PRIMARY KEY,
+      email TEXT NOT NULL,
+      code TEXT NOT NULL,
+      username TEXT NOT NULL,
+      password TEXT NOT NULL,
+      expires_at TIMESTAMPTZ NOT NULL,
+      used BOOLEAN DEFAULT FALSE,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+}
+ensureUsersTable().catch(console.error);
+
+// ======================================
 // ■ ユーティリティ
 // ======================================
-
-// 管理者は環境変数から読み込む（users.jsonは廃止）
-const ADMIN_USER = process.env.ADMIN_USER || "hinata";
-const ADMIN_PASS = process.env.ADMIN_PASS || "changeme_admin";
-
 async function findUser(user, pass) {
-  // 管理者は環境変数で照合
   if (user === ADMIN_USER) {
     return pass === ADMIN_PASS ? { user, isAdmin: true } : null;
   }
-  // 一般ユーザーはDBから照合
   try {
     const result = await pool.query(
       "SELECT username FROM users WHERE username=$1 AND password=$2",
@@ -436,58 +546,18 @@ async function findUser(user, pass) {
   }
 }
 
-async function ensureUsersTable() {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS users (
-      id SERIAL PRIMARY KEY,
-      username TEXT UNIQUE NOT NULL,
-      password TEXT NOT NULL,
-      email TEXT,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-  // 既存テーブルへのカラム追加（マイグレーション）
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
-  // reg_ip カラムが残っている場合も許容（削除はしない）
-
-  // パスワードリセット用トークンテーブル
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS reset_tokens (
-      id SERIAL PRIMARY KEY,
-      username TEXT NOT NULL,
-      token TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      used BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-}
-ensureUsersTable().catch(console.error);
-
-// ======================================
-// ■ メール送信ユーティリティ（Resend API）
-// ======================================
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const MAIL_FROM     = process.env.MAIL_FROM || "noreply@example.com";
-
-async function sendResetEmail(toEmail, username, code) {
+async function sendMail(to, subject, text) {
   if (!RESEND_API_KEY) {
-    console.warn("[reset] RESEND_API_KEY が未設定のためメール送信をスキップします");
+    console.warn("[mail] RESEND_API_KEY 未設定、スキップ:", subject);
     return;
   }
-  const body = {
-    from: MAIL_FROM,
-    to: [toEmail],
-    subject: "【Video Viewer】パスワードリセット確認コード",
-    text: `${username} さん\n\n以下の6桁コードを入力してパスワードをリセットしてください。\n\nコード: ${code}\n\n※このコードは15分間のみ有効です。\n※心当たりがない場合は無視してください。`
-  };
   const res = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": `Bearer ${RESEND_API_KEY}`
     },
-    body: JSON.stringify(body)
+    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, text })
   });
   if (!res.ok) {
     const err = await res.text();
@@ -526,22 +596,28 @@ function getThumbUrl(videoId, size = "mq") {
 }
 
 // ======================================
-// ■ ログイン / ログアウト
+// ■ ログイン
 // ======================================
 app.get("/login", (req, res) => {
   const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>`
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
     : "";
   const ok = req.query.ok
-    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${req.query.ok}</p>`
+    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${escHtml(req.query.ok)}</p>`
     : "";
+
+  const oauthButtons = buildOAuthButtons("login");
+
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ログイン</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>🎬 ログイン</h2>
   ${msg}${ok}
+  ${oauthButtons}
+  ${oauthButtons ? '<div class="divider-text">または</div>' : ""}
   <form method="POST" action="/login">
     <input type="text"     name="user" placeholder="ユーザー名" required>
-    <input type="password" name="pass" placeholder="パスワード"   required>
+    <input type="password" name="pass" placeholder="パスワード" required>
+    ${recaptchaWidget()}
     <button class="btn btn-primary btn-full" type="submit">ログイン</button>
   </form>
   <div style="text-align:center;margin-top:10px;">
@@ -557,6 +633,9 @@ app.get("/login", (req, res) => {
 
 app.post("/login", async (req, res) => {
   const { user, pass } = req.body;
+  const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
+  if (!captchaOk) return res.redirect("/login?msg=" + encodeURIComponent("reCAPTCHAの確認に失敗しました。もう一度お試しください"));
+
   const found = await findUser(user, pass);
   if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   res.cookie("user", user, { httpOnly: true });
@@ -565,20 +644,298 @@ app.post("/login", async (req, res) => {
 
 app.get("/logout", (req, res) => {
   res.clearCookie("user");
+  req.session.destroy(() => {});
   res.redirect("/login");
 });
 
 // ======================================
-// ■ サインアップ
+// ■ OAuthボタンHTML生成
+// ======================================
+function buildOAuthButtons(mode) {
+  const parts = [];
+  if (GOOGLE_CLIENT_ID) {
+    const label = mode === "login" ? "Googleでログイン" : "Googleで登録";
+    parts.push(`<a href="/auth/google?mode=${mode}" class="btn-google">
+      <svg width="18" height="18" viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/><path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/><path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/><path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.18 1.48-4.97 2.31-8.16 2.31-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/></svg>
+      ${label}
+    </a>`);
+  }
+  if (MICROSOFT_CLIENT_ID) {
+    const label = mode === "login" ? "Microsoftでログイン" : "Microsoftで登録";
+    parts.push(`<a href="/auth/microsoft?mode=${mode}" class="btn-microsoft">
+      <svg width="18" height="18" viewBox="0 0 21 21"><rect x="1" y="1" width="9" height="9" fill="#f25022"/><rect x="11" y="1" width="9" height="9" fill="#7fba00"/><rect x="1" y="11" width="9" height="9" fill="#00a4ef"/><rect x="11" y="11" width="9" height="9" fill="#ffb900"/></svg>
+      ${label}
+    </a>`);
+  }
+  return parts.join("");
+}
+
+// ======================================
+// ■ Google OAuth
+// ======================================
+app.get("/auth/google", (req, res) => {
+  if (!GOOGLE_CLIENT_ID) return res.redirect("/login?msg=" + encodeURIComponent("Google認証は設定されていません"));
+  const mode = req.query.mode === "signup" ? "signup" : "login";
+  const state = randomBytes(16).toString("hex");
+  req.session.oauthState = state;
+  req.session.oauthMode  = mode;
+
+  const params = new URLSearchParams({
+    client_id:     GOOGLE_CLIENT_ID,
+    redirect_uri:  `${APP_BASE_URL}/auth/google/callback`,
+    response_type: "code",
+    scope:         "openid email profile",
+    state,
+    access_type:   "online",
+    prompt:        "select_account"
+  });
+  res.redirect("https://accounts.google.com/o/oauth2/v2/auth?" + params.toString());
+});
+
+app.get("/auth/google/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return res.redirect("/login?msg=" + encodeURIComponent("Google認証がキャンセルされました"));
+  if (!code || state !== req.session.oauthState) {
+    return res.redirect("/login?msg=" + encodeURIComponent("認証エラーが発生しました。再度お試しください"));
+  }
+
+  const mode = req.session.oauthMode || "login";
+  req.session.oauthState = null;
+  req.session.oauthMode  = null;
+
+  try {
+    // トークン取得
+    const tokenRes = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id:     GOOGLE_CLIENT_ID,
+        client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri:  `${APP_BASE_URL}/auth/google/callback`,
+        grant_type:    "authorization_code"
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!tokenRes.ok) throw new Error("token exchange failed: " + tokenRes.status);
+    const tokenData = await tokenRes.json();
+
+    // ユーザー情報取得
+    const userRes = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!userRes.ok) throw new Error("userinfo fetch failed");
+    const profile = await userRes.json();
+
+    await handleOAuthLogin(req, res, "google", profile.sub, profile.email, profile.name, mode);
+  } catch (e) {
+    console.error("Google OAuth error:", e);
+    res.redirect("/login?msg=" + encodeURIComponent("Googleログインに失敗しました: " + e.message));
+  }
+});
+
+// ======================================
+// ■ Microsoft OAuth
+// ======================================
+app.get("/auth/microsoft", (req, res) => {
+  if (!MICROSOFT_CLIENT_ID) return res.redirect("/login?msg=" + encodeURIComponent("Microsoft認証は設定されていません"));
+  const mode = req.query.mode === "signup" ? "signup" : "login";
+  const state = randomBytes(16).toString("hex");
+  req.session.oauthState = state;
+  req.session.oauthMode  = mode;
+
+  const params = new URLSearchParams({
+    client_id:     MICROSOFT_CLIENT_ID,
+    redirect_uri:  `${APP_BASE_URL}/auth/microsoft/callback`,
+    response_type: "code",
+    scope:         "openid email profile User.Read",
+    state,
+    response_mode: "query",
+    prompt:        "select_account"
+  });
+  res.redirect("https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + params.toString());
+});
+
+app.get("/auth/microsoft/callback", async (req, res) => {
+  const { code, state, error } = req.query;
+  if (error) return res.redirect("/login?msg=" + encodeURIComponent("Microsoft認証がキャンセルされました"));
+  if (!code || state !== req.session.oauthState) {
+    return res.redirect("/login?msg=" + encodeURIComponent("認証エラーが発生しました。再度お試しください"));
+  }
+
+  const mode = req.session.oauthMode || "login";
+  req.session.oauthState = null;
+  req.session.oauthMode  = null;
+
+  try {
+    // トークン取得
+    const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        code,
+        client_id:     MICROSOFT_CLIENT_ID,
+        client_secret: MICROSOFT_CLIENT_SECRET,
+        redirect_uri:  `${APP_BASE_URL}/auth/microsoft/callback`,
+        grant_type:    "authorization_code"
+      }),
+      signal: AbortSignal.timeout(8000)
+    });
+    if (!tokenRes.ok) throw new Error("token exchange failed: " + tokenRes.status);
+    const tokenData = await tokenRes.json();
+
+    // ユーザー情報取得
+    const userRes = await fetch("https://graph.microsoft.com/v1.0/me", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      signal: AbortSignal.timeout(5000)
+    });
+    if (!userRes.ok) throw new Error("graph fetch failed");
+    const profile = await userRes.json();
+
+    const email = profile.mail || profile.userPrincipalName || null;
+    await handleOAuthLogin(req, res, "microsoft", profile.id, email, profile.displayName, mode);
+  } catch (e) {
+    console.error("Microsoft OAuth error:", e);
+    res.redirect("/login?msg=" + encodeURIComponent("Microsoftログインに失敗しました: " + e.message));
+  }
+});
+
+// ======================================
+// ■ OAuth共通ログイン処理
+// ======================================
+async function handleOAuthLogin(req, res, provider, oauthId, email, displayName, mode) {
+  // 既存のOAuthアカウントを検索
+  const existing = await pool.query(
+    "SELECT username FROM users WHERE oauth_provider=$1 AND oauth_id=$2",
+    [provider, oauthId]
+  );
+
+  if (existing.rows.length > 0) {
+    // ログイン成功
+    const username = existing.rows[0].username;
+    res.cookie("user", username, { httpOnly: true });
+    return res.redirect("/");
+  }
+
+  // 新規ユーザーの場合
+  if (mode === "login") {
+    // loginモードで未登録ならサインアップへ誘導
+    return res.redirect("/login?msg=" + encodeURIComponent("アカウントが見つかりません。新規登録してください"));
+  }
+
+  // メールアドレスで既存ユーザーと重複チェック
+  if (email) {
+    const emailCheck = await pool.query("SELECT username FROM users WHERE email=$1", [email.toLowerCase().trim()]);
+    if (emailCheck.rows.length > 0) {
+      // 既存のメールアドレスのユーザーにOAuth情報を紐付け
+      const username = emailCheck.rows[0].username;
+      await pool.query(
+        "UPDATE users SET oauth_provider=$1, oauth_id=$2 WHERE username=$3",
+        [provider, oauthId, username]
+      );
+      res.cookie("user", username, { httpOnly: true });
+      return res.redirect("/");
+    }
+  }
+
+  // ユーザー名候補を作成（表示名 → 英数字のみ）
+  let baseUsername = (displayName || "user").replace(/[^a-zA-Z0-9_]/g, "").slice(0, 20) || "user";
+  let username = baseUsername;
+  let suffix = 1;
+  while (true) {
+    const dup = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
+    if (dup.rows.length === 0) break;
+    username = baseUsername + suffix;
+    suffix++;
+  }
+
+  // セッションにOAuth情報を保存してユーザー名確認画面へ
+  req.session.pendingOAuth = { provider, oauthId, email, suggestedUsername: username };
+  res.redirect("/auth/complete");
+}
+
+// ======================================
+// ■ OAuthアカウント作成完了画面
+// ======================================
+app.get("/auth/complete", (req, res) => {
+  const pending = req.session.pendingOAuth;
+  if (!pending) return res.redirect("/signup");
+
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
+    : "";
+  const providerName = pending.provider === "google" ? "Google" : "Microsoft";
+
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>アカウント作成</title>${buildCSS("yt")}</head><body>
+<div class="center-box">
+  <h2>✅ アカウント作成</h2>
+  <p style="text-align:center;font-size:14px;color:#555;margin-bottom:20px;">
+    ${providerName}アカウントで初回ログインです。<br>ご利用になるユーザー名を確認・変更してください。
+  </p>
+  ${msg}
+  <form method="POST" action="/auth/complete">
+    <label style="font-size:13px;color:#888;display:block;margin-bottom:4px;">ユーザー名</label>
+    <input type="text" name="username" value="${escHtml(pending.suggestedUsername)}"
+           required maxlength="30" style="margin-bottom:16px;"
+           placeholder="半角英数字・アンダースコア">
+    <button class="btn btn-green btn-full" type="submit">🚀 この名前で始める</button>
+  </form>
+  <div style="text-align:center;margin-top:12px;">
+    <a href="/login" style="font-size:13px;color:#888;">← キャンセル</a>
+  </div>
+</div>
+</body></html>`);
+});
+
+app.post("/auth/complete", async (req, res) => {
+  const pending = req.session.pendingOAuth;
+  if (!pending) return res.redirect("/signup");
+
+  const username = (req.body.username || "").trim();
+  const redir = (msg) => res.redirect("/auth/complete?" + new URLSearchParams({ msg }).toString());
+
+  if (!username) return redir("ユーザー名を入力してください");
+  if (!/^[a-zA-Z0-9_]{1,30}$/.test(username)) return redir("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
+  if (username === ADMIN_USER) return redir("そのユーザー名は使用できません");
+
+  try {
+    const emailVal = pending.email ? pending.email.toLowerCase().trim() : null;
+    await pool.query(
+      "INSERT INTO users (username, password, email, oauth_provider, oauth_id) VALUES ($1, NULL, $2, $3, $4)",
+      [username, emailVal, pending.provider, pending.oauthId]
+    );
+    req.session.pendingOAuth = null;
+    res.cookie("user", username, { httpOnly: true });
+    res.redirect("/");
+  } catch (e) {
+    if (e.code === "23505") return redir("そのユーザー名は既に使用されています。別の名前をお試しください");
+    console.error("auth/complete error:", e);
+    redir("アカウント作成に失敗しました");
+  }
+});
+
+// ======================================
+// ■ サインアップ（メール確認コードあり）
 // ======================================
 app.get("/signup", (req, res) => {
   const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>`
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
     : "";
+
+  const oauthButtons = buildOAuthButtons("signup");
+
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>アカウント登録</title>${buildCSS("yt")}</head><body>
 <div style="max-width:480px;margin:40px auto;background:white;padding:30px;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.12);">
   <h2 style="text-align:center;color:#2c3e50;">📝 アカウント登録</h2>
   ${msg}
+
+  ${oauthButtons ? `
+  <div style="margin-bottom:20px;">
+    ${oauthButtons}
+  </div>
+  <div class="divider-text">またはメールアドレスで登録</div>
+  ` : ""}
 
   <!-- 利用規約 -->
   <div style="border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:20px;background:#fafafa;">
@@ -586,22 +943,17 @@ app.get("/signup", (req, res) => {
     <div style="height:220px;overflow-y:auto;font-size:13px;line-height:1.8;color:#555;padding-right:6px;">
       <p><strong>第1条（本サービスについて）</strong><br>
       本サービスは、YouTube・ニコニコ動画の動画を閲覧するためのプライベートビューアです。管理者の承認のもと、招待されたユーザーのみが利用できます。</p>
-
       <p><strong>第2条（履歴の記録・監視）</strong><br>
       本サービスでは、ユーザーの視聴履歴（閲覧した動画のタイトル・動画ID・検索キーワード・日時）を自動的に記録します。記録された履歴は管理者が閲覧・管理できます。ユーザー自身が履歴を削除した後も、管理者用の記録は保持されます。</p>
-
       <p><strong>第3条（禁止事項）</strong><br>
       以下の行為を禁止します。<br>
       ・アカウント情報の第三者への共有・譲渡<br>
       ・本サービスへの不正アクセスや改ざん<br>
       ・サービスの安定運用を妨げる行為</p>
-
       <p><strong>第4条（アカウントの停止）</strong><br>
       管理者は、利用規約に違反したと判断した場合、予告なくアカウントを停止することができます。</p>
-
       <p><strong>第5条（免責事項）</strong><br>
       本サービスの利用によって生じた損害について、運営者は一切の責任を負いません。</p>
-
       <p><strong>第6条（規約の変更）</strong><br>
       本規約はサービスの運営上必要に応じて変更されることがあります。</p>
     </div>
@@ -609,7 +961,8 @@ app.get("/signup", (req, res) => {
 
   <!-- 同意チェック -->
   <label style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#555;margin-bottom:20px;cursor:pointer;">
-    <input type="checkbox" id="agree-check" style="width:auto;margin-top:2px;flex-shrink:0;" onchange="document.getElementById('signup-btn').disabled=!this.checked;">
+    <input type="checkbox" id="agree-check" style="width:auto;margin-top:2px;flex-shrink:0;"
+           onchange="document.getElementById('signup-btn').disabled=!this.checked;">
     <span>上記の利用規約を読み、内容に同意します</span>
   </label>
 
@@ -617,30 +970,33 @@ app.get("/signup", (req, res) => {
   <form method="POST" action="/signup">
     <input type="text"     name="user"  placeholder="ユーザー名（半角英数字）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="email"    name="email" placeholder="メールアドレス（パスワードリセット用）" required
+    <input type="email"    name="email" placeholder="メールアドレス（確認コード送信先）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
     <input type="password" name="pass"  placeholder="パスワード（4文字以上）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
     <input type="password" name="pass2" placeholder="パスワード（確認）" required
            style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
+    ${recaptchaWidget()}
     <button id="signup-btn" class="btn btn-green btn-full" type="submit" disabled
             style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#27ae60;color:white;opacity:0.5;transition:opacity 0.2s;">
-      ✅ 同意して登録
+      📧 確認コードを送信して登録へ
     </button>
   </form>
   <div style="text-align:center;margin-top:16px;">
     <a href="/login" style="font-size:13px;color:#888;">← ログインに戻る</a>
   </div>
 </div>
-<style>
-  #signup-btn:not(:disabled) { opacity: 1 !important; }
-</style>
+<style>#signup-btn:not(:disabled){opacity:1!important;}</style>
 </body></html>`);
 });
 
 app.post("/signup", async (req, res) => {
   const { user, email, pass, pass2 } = req.body;
   const redirect = (msg) => res.redirect("/signup?msg=" + encodeURIComponent(msg));
+
+  // reCAPTCHA
+  const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
+  if (!captchaOk) return redirect("reCAPTCHAの確認に失敗しました。もう一度お試しください");
 
   if (!user || !email || !pass || !pass2) return redirect("全ての項目を入力してください");
   if (!/^[a-zA-Z0-9_]{1,30}$/.test(user)) return redirect("ユーザー名は半角英数字・アンダースコアのみ（30文字以内）");
@@ -649,29 +1005,133 @@ app.post("/signup", async (req, res) => {
   if (pass.length < 4) return redirect("パスワードは4文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
+  // ユーザー名・メール重複チェック
   try {
+    const dupUser = await pool.query("SELECT 1 FROM users WHERE username=$1", [user]);
+    if (dupUser.rows.length > 0) return redirect("そのユーザー名は既に使用されています");
+    const dupEmail = await pool.query("SELECT 1 FROM users WHERE email=$1", [email.toLowerCase().trim()]);
+    if (dupEmail.rows.length > 0) return redirect("そのメールアドレスは既に使用されています");
+  } catch (e) {
+    console.error("signup dup check error:", e);
+    return redirect("サーバーエラーが発生しました");
+  }
+
+  // メール確認コードを生成・送信
+  const code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
+  const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+  const normalizedEmail = email.toLowerCase().trim();
+
+  try {
+    // 既存の未使用コードを無効化
+    await pool.query("UPDATE email_verify_codes SET used=TRUE WHERE email=$1 AND used=FALSE", [normalizedEmail]);
+    await pool.query(
+      "INSERT INTO email_verify_codes (email, code, username, password, expires_at) VALUES ($1,$2,$3,$4,$5)",
+      [normalizedEmail, code, user, pass, expiresAt]
+    );
+
+    if (RESEND_API_KEY) {
+      await sendMail(
+        normalizedEmail,
+        "【Video Viewer】メールアドレス確認コード",
+        `${user} さん\n\n以下の6桁コードを入力してアカウント登録を完了してください。\n\nコード: ${code}\n\n※このコードは15分間のみ有効です。\n※心当たりがない場合は無視してください。`
+      );
+    } else {
+      // メール未設定時はセッションにコードを保存（開発用）
+      req.session.devCode = code;
+      console.warn("[signup] メール未設定。確認コード:", code);
+    }
+
+    res.redirect("/signup/verify?" + new URLSearchParams({ user, hint: maskEmail(normalizedEmail) }).toString());
+  } catch (e) {
+    console.error("signup send code error:", e);
+    redirect("確認コードの送信に失敗しました。しばらく後にお試しください");
+  }
+});
+
+// ======================================
+// ■ サインアップ メール確認コード入力
+// ======================================
+app.get("/signup/verify", (req, res) => {
+  const { user, hint } = req.query;
+  if (!user) return res.redirect("/signup");
+  const msg = req.query.msg
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
+    : "";
+
+  // 開発時（メール未設定）の場合はコードをページに表示
+  const devNote = !RESEND_API_KEY && req.session.devCode
+    ? `<div style="background:#fffbcc;border:1px solid #f0c040;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-size:13px;">
+        🔧 開発モード：確認コード = <strong>${req.session.devCode}</strong>
+       </div>`
+    : "";
+
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>メール確認</title>${buildCSS("yt")}</head><body>
+<div class="center-box">
+  <h2>📧 メールアドレスの確認</h2>
+  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
+    <strong>${escHtml(hint || "登録メールアドレス")}</strong> に送信した<br>
+    6桁のコードを入力してください。<br>
+    <span style="color:#e74c3c;">※15分以内に入力してください</span>
+  </p>
+  ${devNote}
+  ${msg}
+  <form method="POST" action="/signup/verify">
+    <input type="hidden" name="user" value="${escHtml(user)}">
+    <input class="code-input" type="text" name="code" placeholder="000000"
+           required maxlength="6" autocomplete="one-time-code" inputmode="numeric">
+    <button class="btn btn-green btn-full" type="submit">✅ 確認して登録完了</button>
+  </form>
+  <div style="text-align:center;margin-top:12px;">
+    <a href="/signup" style="font-size:13px;color:#888;">← やり直す</a>
+  </div>
+</div>
+</body></html>`);
+});
+
+app.post("/signup/verify", async (req, res) => {
+  const { user, code } = req.body;
+  if (!user || !code) return res.redirect("/signup");
+  const redir = (msg) => res.redirect("/signup/verify?" + new URLSearchParams({ user, msg }).toString());
+
+  try {
+    const result = await pool.query(
+      `SELECT id, password, email, expires_at, used
+       FROM email_verify_codes
+       WHERE username=$1 AND code=$2
+       ORDER BY created_at DESC LIMIT 1`,
+      [user, code.trim()]
+    );
+    if (result.rows.length === 0) return redir("コードが正しくありません");
+    const row = result.rows[0];
+    if (row.used) return redir("このコードは既に使用済みです");
+    if (new Date() > new Date(row.expires_at)) return redir("コードの有効期限が切れています。最初からやり直してください");
+
+    // コードを使用済みに
+    await pool.query("UPDATE email_verify_codes SET used=TRUE WHERE id=$1", [row.id]);
+
+    // ユーザー登録
     await pool.query(
       "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
-      [user, pass, email.toLowerCase().trim()]
+      [user, row.password, row.email]
     );
-    res.redirect("/login?msg=" + encodeURIComponent("アカウントを作成しました。ログインしてください"));
+
+    req.session.devCode = null;
+    res.redirect("/login?" + new URLSearchParams({ ok: "アカウントを作成しました。ログインしてください" }).toString());
   } catch (e) {
-    if (e.code === "23505") return redirect("そのユーザー名は既に使用されています");
-    console.error("signup error:", e);
-    return redirect("登録に失敗しました。しばらく後にお試しください");
+    if (e.code === "23505") return redir("そのユーザー名は既に登録されています");
+    console.error("signup/verify error:", e);
+    redir("登録に失敗しました。しばらく後にお試しください");
   }
 });
 
 // ======================================
 // ■ パスワードリセット（メール認証・6桁コード・15分有効）
 // ======================================
-
-// STEP 1: ユーザー名入力 → コード送信
 app.get("/reset-password", (req, res) => {
   const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
   const ok = req.query.ok
-    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${req.query.ok}</p>` : "";
+    ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${escHtml(req.query.ok)}</p>` : "";
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>パスワードリセット</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>🔑 パスワードリセット</h2>
@@ -680,12 +1140,8 @@ app.get("/reset-password", (req, res) => {
   </p>
   ${msg}${ok}
   <form method="POST" action="/reset-password/send">
-    <input type="text" name="user" placeholder="ユーザー名" required
-      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
-    <button class="btn btn-primary btn-full" type="submit"
-      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
-      📧 確認コードを送信
-    </button>
+    <input type="text" name="user" placeholder="ユーザー名" required>
+    <button class="btn btn-primary btn-full" type="submit">📧 確認コードを送信</button>
   </form>
   <div style="text-align:center;margin-top:16px;">
     <a href="/login" style="font-size:13px;color:#888;">← ログインに戻る</a>
@@ -696,8 +1152,7 @@ app.get("/reset-password", (req, res) => {
 
 app.post("/reset-password/send", async (req, res) => {
   const { user } = req.body;
-  const redir = (msg) => res.redirect("/reset-password?" + new URLSearchParams({msg}).toString());
-
+  const redir = (msg) => res.redirect("/reset-password?" + new URLSearchParams({ msg }).toString());
   if (!user) return redir("ユーザー名を入力してください");
 
   try {
@@ -706,54 +1161,46 @@ app.post("/reset-password/send", async (req, res) => {
     const { username, email } = result.rows[0];
     if (!email) return redir("このアカウントにはメールアドレスが登録されていません。管理者にお問い合わせください");
 
-    // 既存の未使用トークンを無効化
     await pool.query("UPDATE reset_tokens SET used=TRUE WHERE username=$1 AND used=FALSE", [username]);
-
-    // 6桁コード生成（ゼロパディング）
     const code = String(Math.floor(Math.random() * 1000000)).padStart(6, "0");
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15分後
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
 
     await pool.query(
       "INSERT INTO reset_tokens (username, token, expires_at) VALUES ($1, $2, $3)",
       [username, code, expiresAt]
     );
 
-    await sendResetEmail(email, username, code);
+    await sendMail(
+      email,
+      "【Video Viewer】パスワードリセット確認コード",
+      `${username} さん\n\n以下の6桁コードを入力してパスワードをリセットしてください。\n\nコード: ${code}\n\n※このコードは15分間のみ有効です。\n※心当たりがない場合は無視してください。`
+    );
 
-    // メールアドレスをマスク表示（例: ab****@example.com）
-    const [localPart, domain] = email.split("@");
-    const masked = localPart.slice(0, 2) + "****@" + domain;
-
-    res.redirect("/reset-password/verify?" + new URLSearchParams({ user: username, hint: masked }).toString());
+    res.redirect("/reset-password/verify?" + new URLSearchParams({ user: username, hint: maskEmail(email) }).toString());
   } catch(e) {
     console.error("reset/send error:", e);
     redir("コードの送信に失敗しました。しばらく後にお試しください");
   }
 });
 
-// STEP 2: コード入力
 app.get("/reset-password/verify", (req, res) => {
   const { user, hint } = req.query;
   if (!user) return res.redirect("/reset-password");
   const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>コード入力</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>📧 確認コードを入力</h2>
   <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    <strong>${hint || "登録済みメールアドレス"}</strong> に送信した<br>6桁のコードを入力してください。<br>
+    <strong>${escHtml(hint || "登録済みメールアドレス")}</strong> に送信した<br>6桁のコードを入力してください。<br>
     <span style="color:#e74c3c;">※15分以内に入力してください</span>
   </p>
   ${msg}
   <form method="POST" action="/reset-password/verify">
-    <input type="hidden" name="user" value="${user}">
-    <input type="text" name="code" placeholder="6桁のコード" required maxlength="6"
-      style="width:100%;padding:14px;font-size:22px;letter-spacing:10px;text-align:center;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;"
-      autocomplete="one-time-code" inputmode="numeric">
-    <button class="btn btn-primary btn-full" type="submit"
-      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
-      ✅ コードを確認
-    </button>
+    <input type="hidden" name="user" value="${escHtml(user)}">
+    <input class="code-input" type="text" name="code" placeholder="000000"
+           required maxlength="6" autocomplete="one-time-code" inputmode="numeric">
+    <button class="btn btn-primary btn-full" type="submit">✅ コードを確認</button>
   </form>
   <div style="text-align:center;margin-top:12px;">
     <a href="/reset-password" style="font-size:13px;color:#888;">← コードを再送信する</a>
@@ -765,7 +1212,6 @@ app.get("/reset-password/verify", (req, res) => {
 app.post("/reset-password/verify", async (req, res) => {
   const { user, code } = req.body;
   const redir = (msg) => res.redirect("/reset-password/verify?" + new URLSearchParams({ user, msg }).toString());
-
   if (!user || !code) return res.redirect("/reset-password");
 
   try {
@@ -777,8 +1223,6 @@ app.post("/reset-password/verify", async (req, res) => {
     const row = result.rows[0];
     if (row.used) return redir("このコードは既に使用済みです");
     if (new Date() > new Date(row.expires_at)) return redir("コードの有効期限が切れています。再送信してください");
-
-    // 認証OK → 新パスワード入力画面へ（セッション代わりにトークンIDをクエリパラムで渡す）
     res.redirect("/reset-password/new?" + new URLSearchParams({ user, tid: row.id }).toString());
   } catch(e) {
     console.error("reset/verify error:", e);
@@ -786,27 +1230,21 @@ app.post("/reset-password/verify", async (req, res) => {
   }
 });
 
-// STEP 3: 新パスワード入力
 app.get("/reset-password/new", (req, res) => {
   const { user, tid } = req.query;
   if (!user || !tid) return res.redirect("/reset-password");
   const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${req.query.msg}</p>` : "";
+    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>新しいパスワード</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
   <h2>🔒 新しいパスワードを設定</h2>
   ${msg}
   <form method="POST" action="/reset-password/new">
-    <input type="hidden" name="user" value="${user}">
-    <input type="hidden" name="tid"  value="${tid}">
-    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required
-      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
-      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
-    <button class="btn btn-primary btn-full" type="submit"
-      style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#ff0000;color:white;">
-      🔑 パスワードをリセット
-    </button>
+    <input type="hidden" name="user" value="${escHtml(user)}">
+    <input type="hidden" name="tid"  value="${escHtml(tid)}">
+    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required>
+    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required>
+    <button class="btn btn-primary btn-full" type="submit">🔑 パスワードをリセット</button>
   </form>
 </div>
 </body></html>`);
@@ -815,13 +1253,11 @@ app.get("/reset-password/new", (req, res) => {
 app.post("/reset-password/new", async (req, res) => {
   const { user, tid, newpass, newpass2 } = req.body;
   const redir = (msg) => res.redirect("/reset-password/new?" + new URLSearchParams({ user, tid, msg }).toString());
-
   if (!user || !tid || !newpass || !newpass2) return redir("全ての項目を入力してください");
   if (newpass.length < 4) return redir("パスワードは4文字以上にしてください");
   if (newpass !== newpass2) return redir("パスワードが一致しません");
 
   try {
-    // トークン再検証（有効期限・使用済みチェック）
     const result = await pool.query(
       "SELECT expires_at, used FROM reset_tokens WHERE id=$1 AND username=$2",
       [tid, user]
@@ -831,10 +1267,8 @@ app.post("/reset-password/new", async (req, res) => {
     if (row.used) return res.redirect("/reset-password?msg=" + encodeURIComponent("このセッションは既に使用済みです"));
     if (new Date() > new Date(row.expires_at)) return res.redirect("/reset-password?msg=" + encodeURIComponent("セッションの有効期限が切れています。最初からやり直してください"));
 
-    // パスワード更新 & トークン無効化
     await pool.query("UPDATE users SET password=$1 WHERE username=$2", [newpass, user]);
     await pool.query("UPDATE reset_tokens SET used=TRUE WHERE id=$1", [tid]);
-
     res.redirect("/login?" + new URLSearchParams({ ok: "パスワードをリセットしました。新しいパスワードでログインしてください" }).toString());
   } catch(e) {
     console.error("reset/new error:", e);
@@ -1115,7 +1549,6 @@ async function handleEmbedWatch(res, id, mode, user) {
   res.send(page(title, "yt", body, "/", FAV_SCRIPT + CHANNEL_NAV_JS));
 }
 
-// edu / nocookie GET（直接アクセス用）
 app.get("/watch/edu/:id", async (req, res) => {
   const { id } = req.params;
   if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.send("動画IDが正しくありません");
@@ -1132,7 +1565,7 @@ app.get("/watch/nocookie/:id", async (req, res) => {
 });
 
 // ======================================
-// ■ YouTube 設定
+// ■ 設定
 // ======================================
 app.get("/settings", (req, res) => {
   const user = req.cookies.user;
@@ -1140,9 +1573,9 @@ app.get("/settings", (req, res) => {
   const platform = getPlatform(req);
   const currentMode = req.cookies.playbackMode || "normal";
   const pwMsg = req.query.pwmsg
-    ? `<p style="color:#e74c3c;font-size:13px;margin-top:8px;">${req.query.pwmsg}</p>`
+    ? `<p style="color:#e74c3c;font-size:13px;margin-top:8px;">${escHtml(req.query.pwmsg)}</p>`
     : req.query.pwok
-    ? `<p style="color:#27ae60;font-size:13px;margin-top:8px;">${req.query.pwok}</p>`
+    ? `<p style="color:#27ae60;font-size:13px;margin-top:8px;">${escHtml(req.query.pwok)}</p>`
     : "";
   const isAdmin = user === ADMIN_USER;
   const modes = [
@@ -1170,12 +1603,9 @@ app.get("/settings", (req, res) => {
 <div style="margin-top:28px;padding-top:24px;border-top:1px solid #eee;">
   <h3 style="font-size:16px;color:#2c3e50;margin-bottom:12px;">🔑 パスワード変更</h3>
   <form method="POST" action="/settings/change-password">
-    <input type="password" name="current" placeholder="現在のパスワード" required
-      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
-    <input type="password" name="newpass" placeholder="新しいパスワード（4文字以上）" required
-      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
-    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required
-      style="width:100%;padding:11px 13px;font-size:14px;border-radius:8px;border:1px solid #ccc;margin-bottom:10px;box-sizing:border-box;">
+    <input type="password" name="current"  placeholder="現在のパスワード" required>
+    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required>
+    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required>
     <button class="btn btn-primary" type="submit">🔒 パスワードを変更</button>
   </form>
   ${pwMsg}
@@ -1234,7 +1664,7 @@ app.post("/settings/change-password", async (req, res) => {
 });
 
 // ======================================
-// ■ チャンネル検索（YouTube専用）
+// ■ チャンネル検索
 // ======================================
 app.get("/channel-search", (req, res) => {
   const user = req.cookies.user;
@@ -1536,7 +1966,7 @@ app.post("/nico/favorite/add", async (req, res) => {
 });
 
 // ======================================
-// ■ お気に入り（プラットフォーム別表示）
+// ■ お気に入り
 // ======================================
 app.get("/favorites", async (req, res) => {
   const user=req.cookies.user; if(!user) return res.redirect("/login");
@@ -1594,7 +2024,7 @@ app.post("/favorite/add", async (req, res) => {
 });
 
 // ======================================
-// ■ 履歴（プラットフォーム別表示・削除）
+// ■ 履歴
 // ======================================
 app.get("/history", async (req, res) => {
   const user=req.cookies.user; if(!user) return res.redirect("/login");
@@ -1660,8 +2090,6 @@ app.post("/history/delete", async (req, res) => {
 // ======================================
 // ■ 管理者ページ
 // ======================================
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "changeme";
-
 app.get("/admin", (req, res) => {
   const user=req.cookies.user, pass=req.query.pass;
   if(!user) return res.redirect("/login");
@@ -1696,12 +2124,11 @@ app.post("/admin", async (req, res) => {
     byUser[row.user_id].push(row);
   }
 
-  // ユーザー一覧
   let usersHTML = "";
   const adminRegMsg = req.query.addmsg
-    ? `<p style="color:#e74c3c;font-size:13px;margin-top:6px;">${req.query.addmsg}</p>`
+    ? `<p style="color:#e74c3c;font-size:13px;margin-top:6px;">${escHtml(req.query.addmsg)}</p>`
     : req.query.addok
-    ? `<p style="color:#27ae60;font-size:13px;margin-top:6px;">${req.query.addok}</p>`
+    ? `<p style="color:#27ae60;font-size:13px;margin-top:6px;">${escHtml(req.query.addok)}</p>`
     : "";
   const adminRegForm = `
 <div style="background:#f8f9fa;border-radius:10px;padding:18px 20px;margin-bottom:24px;border:1px solid #e0e0e0;">
@@ -1728,7 +2155,7 @@ app.post("/admin", async (req, res) => {
   ${adminRegMsg}
 </div>`;
   try {
-    const usersResult = await pool.query("SELECT id, username, email, created_at FROM users ORDER BY created_at DESC");
+    const usersResult = await pool.query("SELECT id, username, email, oauth_provider, created_at FROM users ORDER BY created_at DESC");
     if (usersResult.rows.length === 0) {
       usersHTML = adminRegForm + `<p style="color:#999;text-align:center;padding:30px;">登録ユーザーはいません</p>`;
     } else {
@@ -1738,7 +2165,7 @@ app.post("/admin", async (req, res) => {
     <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
       <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
       <th style="text-align:left;padding:10px 12px;">登録日時</th>
-      <th style="text-align:left;padding:10px 12px;">メールアドレス</th>
+      <th style="text-align:left;padding:10px 12px;">メール / 認証</th>
       <th style="text-align:center;padding:10px 12px;">操作</th>
     </tr>
   </thead>
@@ -1749,11 +2176,15 @@ app.post("/admin", async (req, res) => {
       <td style="padding:10px 12px;color:#888;">—</td>
       <td style="padding:10px 12px;text-align:center;">—</td>
     </tr>
-    ${usersResult.rows.map(u => `
+    ${usersResult.rows.map(u => {
+      const authBadge = u.oauth_provider
+        ? `<span style="font-size:11px;background:#4285f4;color:white;padding:1px 7px;border-radius:10px;margin-left:4px;">${u.oauth_provider}</span>`
+        : "";
+      return `
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;">👤 ${u.username}</td>
       <td style="padding:10px 12px;color:#888;">${formatDateJP(u.created_at)}</td>
-      <td style="padding:10px 12px;color:#888;font-size:12px;">${u.email || "—"}</td>
+      <td style="padding:10px 12px;color:#888;font-size:12px;">${u.email || "—"}${authBadge}</td>
       <td style="padding:10px 12px;text-align:center;">
         <form method="POST" action="/admin/delete-account" style="display:inline;">
           <input type="hidden" name="pass" value="${ADMIN_PASSWORD}">
@@ -1764,7 +2195,8 @@ app.post("/admin", async (req, res) => {
           </button>
         </form>
       </td>
-    </tr>`).join("")}
+    </tr>`;
+    }).join("")}
   </tbody>
 </table>`;
     }
@@ -1854,6 +2286,25 @@ app.post("/admin/add-user", async (req, res) => {
     return redir("登録に失敗しました");
   }
 });
+
+// ======================================
+// ■ ユーティリティ
+// ======================================
+function escHtml(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function maskEmail(email) {
+  if (!email || !email.includes("@")) return "****";
+  const [local, domain] = email.split("@");
+  return local.slice(0, 2) + "****@" + domain;
+}
 
 // ======================================
 // ■ その他
