@@ -735,69 +735,49 @@ app.get("/auth/google/callback", async (req, res) => {
   }
 });
 
-// ======================================
-// ■ Microsoft OAuth
-// ======================================
-app.get("/auth/microsoft", (req, res) => {
-  if (!MICROSOFT_CLIENT_ID) return res.redirect("/login?msg=" + encodeURIComponent("Microsoft認証は設定されていません"));
+// GitHub OAuth
+app.get("/auth/github", (req, res) => {
   const mode = req.query.mode === "signup" ? "signup" : "login";
   const state = randomBytes(16).toString("hex");
   req.session.oauthState = state;
-  req.session.oauthMode  = mode;
+  req.session.oauthMode = mode;
 
   const params = new URLSearchParams({
-    client_id:     MICROSOFT_CLIENT_ID,
-    redirect_uri:  `${APP_BASE_URL}/auth/microsoft/callback`,
-    response_type: "code",
-    scope:         "openid email profile User.Read",
+    client_id: GITHUB_CLIENT_ID,
+    redirect_uri: `${APP_BASE_URL}/auth/github/callback`,
+    scope: "user:email",
     state,
-    response_mode: "query",
-    prompt:        "select_account"
+    allow_signup: mode === "signup"
   });
-  res.redirect("https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + params.toString());
+  res.redirect("https://github.com/login/oauth/authorize?" + params.toString());
 });
 
-app.get("/auth/microsoft/callback", async (req, res) => {
-  const { code, state, error } = req.query;
-  if (error) return res.redirect("/login?msg=" + encodeURIComponent("Microsoft認証がキャンセルされました"));
-  if (!code || state !== req.session.oauthState) {
-    return res.redirect("/login?msg=" + encodeURIComponent("認証エラーが発生しました。再度お試しください"));
+app.get("/auth/github/callback", async (req, res) => {
+  const { code, state } = req.query;
+  if (state !== req.session.oauthState) {
+    return res.redirect("/login?msg=認証エラー");
   }
 
-  const mode = req.session.oauthMode || "login";
-  req.session.oauthState = null;
-  req.session.oauthMode  = null;
-
   try {
-    // トークン取得
-    const tokenRes = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", {
+    const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
-      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      headers: { Accept: "application/json" },
       body: new URLSearchParams({
-        code,
-        client_id:     MICROSOFT_CLIENT_ID,
-        client_secret: MICROSOFT_CLIENT_SECRET,
-        redirect_uri:  `${APP_BASE_URL}/auth/microsoft/callback`,
-        grant_type:    "authorization_code"
-      }),
-      signal: AbortSignal.timeout(8000)
+        client_id: GITHUB_CLIENT_ID,
+        client_secret: GITHUB_CLIENT_SECRET,
+        code
+      })
     });
-    if (!tokenRes.ok) throw new Error("token exchange failed: " + tokenRes.status);
     const tokenData = await tokenRes.json();
 
-    // ユーザー情報取得
-    const userRes = await fetch("https://graph.microsoft.com/v1.0/me", {
-      headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      signal: AbortSignal.timeout(5000)
+    const userRes = await fetch("https://api.github.com/user", {
+      headers: { Authorization: `Bearer ${tokenData.access_token}` }
     });
-    if (!userRes.ok) throw new Error("graph fetch failed");
     const profile = await userRes.json();
 
-    const email = profile.mail || profile.userPrincipalName || null;
-    await handleOAuthLogin(req, res, "microsoft", profile.id, email, profile.displayName, mode);
+    await handleOAuthLogin(req, res, "github", profile.id.toString(), profile.email, profile.name, mode);
   } catch (e) {
-    console.error("Microsoft OAuth error:", e);
-    res.redirect("/login?msg=" + encodeURIComponent("Microsoftログインに失敗しました: " + e.message));
+    res.redirect("/login?msg=GitHub ログイン失敗");
   }
 });
 
