@@ -225,14 +225,14 @@ function buildCSS(platform = "yt") {
   }
   .btn-google:hover { background: #f8f8f8; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
 
-  .btn-microsoft {
-    display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
-    border-radius: 8px; border: none; background: #0078d4;
-    color: white; cursor: pointer; text-decoration: none;
-    transition: background 0.15s; margin-bottom: 10px;
-  }
-  .btn-microsoft:hover { background: #106ebe; }
+  .btn-github {
+  display: flex; align-items: center; justify-content: center; gap: 10px;
+  width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
+  border-radius: 8px; border: none; background: #24292e;
+  color: white; cursor: pointer; text-decoration: none;
+  transition: background 0.15s; margin-bottom: 10px;
+}
+.btn-github:hover { background: #0d1117; }
 
   .divider-text {
     display: flex; align-items: center; gap: 12px;
