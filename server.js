@@ -848,7 +848,13 @@ app.post("/login", async (req, res) => {
   const found = await findUser(user, pass);
   if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   setSessionUser(req, user);
-  res.redirect("/");
+  req.session.save((err) => {
+    if (err) {
+      console.error("session save error:", err);
+      return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました。再度お試しください"));
+    }
+    res.redirect("/");
+  });
 });
 
 app.get("/logout", (req, res) => {
@@ -1043,7 +1049,10 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
   if (existing.rows.length > 0) {
     const username = existing.rows[0].username;
     setSessionUser(req, username);
-    return res.redirect("/");
+    return req.session.save((err) => {
+      if (err) { console.error("session save error:", err); return res.redirect("/login"); }
+      res.redirect("/");
+    });
   }
 
   if (mode === "login") {
@@ -1059,7 +1068,10 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
         [provider, oauthId, username]
       );
       setSessionUser(req, username);
-      return res.redirect("/");
+      return req.session.save((err) => {
+        if (err) { console.error("session save error:", err); return res.redirect("/login"); }
+        res.redirect("/");
+      });
     }
   }
 
@@ -1129,7 +1141,10 @@ app.post("/auth/complete", async (req, res) => {
     );
     req.session.pendingOAuth = null;
     setSessionUser(req, username);
-    res.redirect("/");
+    req.session.save((err) => {
+      if (err) { console.error("session save error:", err); return res.redirect("/login"); }
+      res.redirect("/");
+    });
   } catch (e) {
     if (e.code === "23505") return redir("そのユーザー名は既に使用されています。別の名前をお試しください");
     console.error("auth/complete error:", e);
@@ -2407,7 +2422,10 @@ app.post("/admin/login", (req, res) => {
     return res.redirect("/admin/login?msg=" + encodeURIComponent("パスワードが違います"));
   }
   req.session.adminAuthed = true;
-  res.redirect("/admin");
+  req.session.save((err) => {
+    if (err) { console.error("session save error:", err); return res.redirect("/admin/login"); }
+    res.redirect("/admin");
+  });
 });
 
 app.get("/admin/logout", (req, res) => {
