@@ -83,32 +83,36 @@ function buildCSS(platform = "yt") {
     --accent-dark:  ${accentDark};
     --accent-light: ${accentLight};
     --bg:           ${bgColor};
+    --sidebar-w:    54px;
+    --sidebar-open: 230px;
+    --bottom-nav-h: 60px;
   }
 
-  * { box-sizing: border-box; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
   body {
-    font-family: "Segoe UI", sans-serif;
+    font-family: "Segoe UI", "Hiragino Sans", "Noto Sans JP", sans-serif;
     background: var(--bg);
     margin: 0; padding: 0; color: #333;
+    -webkit-text-size-adjust: 100%;
   }
 
   h2 { margin-bottom: 20px; color: #2c3e50; text-align: center; }
 
+  /* ============ デスクトップ：左サイドバー ============ */
   .sidebar {
     position: fixed;
     top: 0; left: 0;
-    width: 54px;
+    width: var(--sidebar-w);
     height: 100%;
     background: #1a1a2e;
-    padding-top: 0;
     transition: width 0.25s ease;
     overflow: hidden;
     z-index: 1000;
     display: flex;
     flex-direction: column;
   }
-  .sidebar.open { width: 230px; }
+  .sidebar.open { width: var(--sidebar-open); }
 
   .platform-switcher {
     padding: 8px 5px;
@@ -120,21 +124,14 @@ function buildCSS(platform = "yt") {
   }
 
   .platform-btn {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 9px 9px;
-    border-radius: 8px;
-    cursor: pointer;
-    border: none;
-    background: transparent;
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px; border-radius: 8px; cursor: pointer;
+    border: none; background: transparent;
     color: rgba(255,255,255,0.5);
-    font-size: 13px;
-    font-weight: bold;
-    white-space: nowrap;
-    width: 100%;
+    font-size: 13px; font-weight: bold;
+    white-space: nowrap; width: 100%;
     transition: background 0.18s, color 0.18s;
-    text-align: left;
+    text-align: left; min-height: 44px;
   }
   .platform-btn .p-icon { font-size: 20px; flex-shrink: 0; width: 28px; text-align: center; }
   .platform-btn .p-label { opacity: 0; transition: opacity 0.2s; }
@@ -148,16 +145,11 @@ function buildCSS(platform = "yt") {
   .sidebar-nav { flex: 1; overflow-y: auto; padding: 6px 5px; }
 
   .sidebar a {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-    padding: 10px 9px;
-    font-size: 14px;
-    color: rgba(255,255,255,0.7);
-    text-decoration: none;
-    white-space: nowrap;
-    border-radius: 8px;
-    margin-bottom: 2px;
+    display: flex; align-items: center; gap: 12px;
+    padding: 10px 9px; font-size: 14px;
+    color: rgba(255,255,255,0.7); text-decoration: none;
+    white-space: nowrap; border-radius: 8px;
+    margin-bottom: 2px; min-height: 44px;
     transition: background 0.18s, color 0.18s;
   }
   .sidebar a:hover       { background: rgba(255,255,255,0.1); color: white; }
@@ -168,30 +160,109 @@ function buildCSS(platform = "yt") {
   .sidebar.open .sidebar-text { opacity: 1; }
 
   .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 4px; }
-
   .sidebar-footer { padding: 6px 5px 10px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
 
+  /* デスクトップ：メインコンテンツ */
   .main-content {
-    margin-left: 74px;
+    margin-left: calc(var(--sidebar-w) + 20px);
     padding: 24px;
     transition: margin-left 0.25s ease;
     min-height: 100vh;
   }
-  .main-content.shift { margin-left: 250px; }
+  .main-content.shift { margin-left: calc(var(--sidebar-open) + 20px); }
 
+  /* ============ スマホ：下部ナビゲーション ============ */
+  .bottom-nav {
+    display: none;
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    height: var(--bottom-nav-h);
+    background: #1a1a2e;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    z-index: 1000;
+    align-items: stretch;
+  }
+  .bottom-nav-item {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 3px; padding: 6px 4px;
+    color: rgba(255,255,255,0.5); text-decoration: none;
+    font-size: 10px; font-weight: bold;
+    border: none; background: transparent; cursor: pointer;
+    transition: color 0.15s, background 0.15s;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .bottom-nav-item .bn-icon { font-size: 20px; line-height: 1; }
+  .bottom-nav-item.active   { color: white; background: rgba(255,255,255,0.08); }
+  .bottom-nav-item:active   { background: rgba(255,255,255,0.12); }
+
+  /* スマホ：プラットフォームモーダル */
+  .platform-modal-overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.5); z-index: 2000;
+    align-items: flex-end; justify-content: center;
+  }
+  .platform-modal-overlay.show { display: flex; }
+  .platform-modal {
+    background: #1a1a2e; border-radius: 16px 16px 0 0;
+    width: 100%; padding: 16px 16px 32px;
+  }
+  .platform-modal h3 {
+    color: rgba(255,255,255,0.7); font-size: 13px;
+    text-align: center; margin: 0 0 12px;
+  }
+  .platform-modal-btn {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; padding: 14px 16px; border-radius: 10px;
+    border: none; cursor: pointer; font-size: 15px;
+    font-weight: bold; margin-bottom: 8px;
+    color: white; background: rgba(255,255,255,0.08);
+    transition: background 0.15s;
+  }
+  .platform-modal-btn .pm-icon { font-size: 22px; }
+  .platform-modal-btn.yt-active   { background: #ff0000; }
+  .platform-modal-btn.nico-active { background: #e6242b; }
+  .platform-modal-cancel {
+    display: block; width: 100%; padding: 14px;
+    border-radius: 10px; border: none; background: rgba(255,255,255,0.05);
+    color: rgba(255,255,255,0.6); font-size: 14px; cursor: pointer; margin-top: 4px;
+  }
+
+  /* スマホ：メインコンテンツ（下ナビ分の余白） */
+  @media (max-width: 767px) {
+    .sidebar { display: none !important; }
+    .bottom-nav { display: flex !important; }
+    .main-content {
+      margin-left: 0 !important;
+      padding: 16px 12px;
+      padding-bottom: calc(var(--bottom-nav-h) + 16px);
+    }
+    .main-content.shift { margin-left: 0 !important; }
+  }
+
+  /* ============ カード・グリッド ============ */
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
     gap: 16px;
   }
-  .card {
-    background: white;
-    padding: 12px;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: transform 0.2s, box-shadow 0.2s;
+  @media (max-width: 767px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
   }
-  .card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
+  @media (max-width: 380px) {
+    .card-grid { grid-template-columns: 1fr; }
+  }
+
+  .card {
+    background: white; padding: 10px;
+    border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    transition: transform 0.2s, box-shadow 0.2s;
+    cursor: pointer;
+  }
+  @media (hover: hover) {
+    .card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
+  }
+  .card:active { transform: scale(0.97); }
   .card.nico-card { border-top: 3px solid #e6242b; }
   .card.yt-card   { border-top: 3px solid #ff0000; }
 
@@ -201,30 +272,41 @@ function buildCSS(platform = "yt") {
     background: #eee; display: block;
   }
 
+  /* ============ フォーム共通 ============ */
   .center-box {
-    max-width: 400px; margin: 60px auto;
-    background: white; padding: 30px;
+    max-width: 400px; margin: 40px auto;
+    background: white; padding: 28px 24px;
     border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+  @media (max-width: 767px) {
+    .center-box {
+      margin: 16px; max-width: none;
+      border-radius: 12px; padding: 20px 16px;
+    }
   }
 
   input[type=text], input[type=password], input[type=email], select.form-select {
-    width: 100%; padding: 12px 14px;
-    font-size: 15px; border-radius: 8px;
-    border: 1px solid #ccc; margin-bottom: 12px;
-    background: white; display: block;
+    width: 100%; padding: 14px 14px;
+    font-size: 16px; /* 16px以上でスマホのzoom防止 */
+    border-radius: 10px; border: 1px solid #ccc;
+    margin-bottom: 12px; background: white; display: block;
+    -webkit-appearance: none; appearance: none;
   }
   input[type=text]:focus, input[type=password]:focus,
   input[type=email]:focus, select.form-select:focus {
     outline: none; border-color: var(--accent);
+    box-shadow: 0 0 0 3px ${accentLight};
   }
 
   .btn {
     display: inline-flex; align-items: center; gap: 6px;
-    padding: 10px 16px; font-size: 13px; font-weight: bold;
-    border-radius: 8px; border: none; cursor: pointer;
-    text-decoration: none; transition: opacity 0.15s; margin-bottom: 8px;
+    padding: 12px 18px; font-size: 14px; font-weight: bold;
+    border-radius: 10px; border: none; cursor: pointer;
+    text-decoration: none; transition: opacity 0.15s, transform 0.1s;
+    margin-bottom: 8px; min-height: 44px;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn:hover { opacity: 0.85; }
+  .btn:active { transform: scale(0.96); }
   .btn-primary { background: var(--accent); color: white; }
   .btn-gray    { background: #95a5a6; color: white; }
   .btn-yellow  { background: #f1c40f; color: #333; }
@@ -235,21 +317,23 @@ function buildCSS(platform = "yt") {
   /* OAuthボタン */
   .btn-google {
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
-    border-radius: 8px; border: 1px solid #dadce0; background: white;
+    width: 100%; padding: 13px 16px; font-size: 15px; font-weight: 600;
+    border-radius: 10px; border: 1px solid #dadce0; background: white;
     color: #3c4043; cursor: pointer; text-decoration: none;
-    transition: background 0.15s, box-shadow 0.15s; margin-bottom: 10px;
+    transition: background 0.15s; margin-bottom: 10px; min-height: 48px;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-google:hover { background: #f8f8f8; box-shadow: 0 1px 4px rgba(0,0,0,0.15); }
+  .btn-google:active { background: #f0f0f0; }
 
   .btn-github {
     display: flex; align-items: center; justify-content: center; gap: 10px;
-    width: 100%; padding: 11px 16px; font-size: 14px; font-weight: 600;
-    border-radius: 8px; border: none; background: #24292e;
+    width: 100%; padding: 13px 16px; font-size: 15px; font-weight: 600;
+    border-radius: 10px; border: none; background: #24292e;
     color: white; cursor: pointer; text-decoration: none;
-    transition: background 0.15s; margin-bottom: 10px;
+    transition: background 0.15s; margin-bottom: 10px; min-height: 48px;
+    -webkit-tap-highlight-color: transparent;
   }
-  .btn-github:hover { background: #1a1e22; }
+  .btn-github:active { background: #1a1e22; }
 
   .divider-text {
     display: flex; align-items: center; gap: 12px;
@@ -259,16 +343,21 @@ function buildCSS(platform = "yt") {
     content: ""; flex: 1; border-top: 1px solid #e0e0e0;
   }
 
+  /* ============ 検索ボックス ============ */
   .search-wrap {
     max-width: 700px; margin: 0 auto 24px;
     background: white; border-radius: 14px;
-    padding: 24px 28px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+    padding: 20px 22px; box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  @media (max-width: 767px) {
+    .search-wrap { padding: 16px; border-radius: 12px; }
   }
 
   .page-header {
-    display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap;
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 20px; flex-wrap: wrap;
   }
-  .page-header h2 { margin: 0; text-align: left; font-size: 20px; }
+  .page-header h2 { margin: 0; text-align: left; font-size: 18px; }
 
   .platform-badge {
     display: inline-flex; align-items: center; gap: 4px;
@@ -278,8 +367,10 @@ function buildCSS(platform = "yt") {
   .platform-badge.yt   { background: #ff0000; }
   .platform-badge.nico { background: #e6242b; }
 
+  /* ============ 視聴ページ ============ */
   .watch-layout {
-    display: flex; gap: 24px; max-width: 1280px; margin: 0 auto; align-items: flex-start;
+    display: flex; gap: 20px; max-width: 1280px;
+    margin: 0 auto; align-items: flex-start;
   }
   .watch-player { flex: 1; min-width: 0; }
   .watch-player video { width:100%; aspect-ratio:16/9; border-radius:12px; background:#000; }
@@ -288,24 +379,37 @@ function buildCSS(platform = "yt") {
     position:absolute; top:0; left:0; width:100%; height:100%;
     border-radius:12px; border:none; background:#000;
   }
-  .watch-related { width:360px; flex-shrink:0; max-height:90vh; overflow-y:auto; }
+  .watch-related { width:340px; flex-shrink:0; max-height:90vh; overflow-y:auto; }
   .watch-related h3 { font-size:13px; margin-bottom:12px; color:#888; }
-  .action-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
-  .channel-info { font-size:14px; color:#555; margin:8px 0 12px; cursor:pointer; }
+  .action-bar { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
+  .channel-info { font-size:14px; color:#555; margin:6px 0 10px; cursor:pointer; }
   .channel-info:hover { color: var(--accent); }
-  @media (max-width:900px) { .watch-layout { flex-direction:column; } .watch-related { width:100%; } }
 
+  @media (max-width: 900px) {
+    .watch-layout { flex-direction:column; }
+    .watch-related { width:100%; max-height:none; }
+  }
+  @media (max-width: 767px) {
+    .watch-player h2 { font-size:15px !important; }
+    .action-bar .btn { font-size:12px; padding:9px 12px; }
+  }
+
+  /* ============ 設定ページ ============ */
   .settings-box {
     max-width:540px; margin:0 auto;
-    background:white; padding:32px;
+    background:white; padding:28px;
     border-radius:14px; box-shadow:0 4px 16px rgba(0,0,0,0.1);
   }
+  @media (max-width: 767px) {
+    .settings-box { padding: 18px 14px; }
+  }
+
   .mode-card {
     border:2px solid #ddd; border-radius:10px;
-    padding:14px 18px; margin-bottom:12px;
+    padding:14px 16px; margin-bottom:10px;
     cursor:pointer; transition:border-color 0.2s, background 0.2s;
   }
-  .mode-card:hover  { border-color:var(--accent); background:var(--accent-light); }
+  .mode-card:active { background: var(--accent-light); }
   .mode-card.selected { border-color:var(--accent); background:var(--accent-light); }
   .mode-card label { display:flex; align-items:flex-start; gap:10px; cursor:pointer; }
   .mode-card input[type=radio] { width:auto; margin:3px 0 0; flex-shrink:0; }
@@ -313,23 +417,34 @@ function buildCSS(platform = "yt") {
   .mode-card p { margin:0; font-size:13px; color:#666; line-height:1.5; }
   .current-badge {
     display:inline-block; background:var(--accent); color:white;
-    font-size:11px; padding:2px 8px; border-radius:20px; margin-left:8px; vertical-align:middle;
+    font-size:11px; padding:2px 8px; border-radius:20px;
+    margin-left:8px; vertical-align:middle;
   }
 
+  /* ============ 履歴カード ============ */
   .history-card {
-    background:white; border-radius:10px; padding:12px; margin-bottom:8px;
-    display:flex; gap:12px; align-items:center;
+    background:white; border-radius:10px; padding:10px 12px; margin-bottom:8px;
+    display:flex; gap:10px; align-items:center;
     box-shadow:0 1px 4px rgba(0,0,0,0.07);
+    cursor: pointer; transition: background 0.15s;
   }
+  .history-card:active { background: #f5f5f5; }
   .history-card img {
-    width:120px; height:68px; border-radius:8px;
+    width:100px; height:56px; border-radius:7px;
     object-fit:cover; flex-shrink:0; background:#eee;
   }
+  @media (max-width: 767px) {
+    .history-card img { width:88px; height:50px; }
+    .history-card { padding: 8px 10px; }
+  }
 
-  .tabs { display:flex; gap:8px; margin-bottom:20px; }
+  /* ============ タブ ============ */
+  .tabs { display:flex; gap:6px; margin-bottom:20px; flex-wrap: wrap; }
   .tab {
-    padding:10px 20px; border-radius:8px;
-    cursor:pointer; background:#eee; font-weight:bold; border:none; font-size:14px;
+    padding:10px 18px; border-radius:8px; min-height: 44px;
+    cursor:pointer; background:#eee; font-weight:bold;
+    border:none; font-size:14px;
+    -webkit-tap-highlight-color: transparent;
   }
   .tab.active { background:var(--accent); color:white; }
   .tab-content { display:none; }
@@ -341,18 +456,16 @@ function buildCSS(platform = "yt") {
   .rank-badge {
     position:absolute; top:8px; left:8px;
     background:var(--accent); color:white;
-    font-weight:bold; font-size:13px;
-    padding:2px 8px; border-radius:6px;
+    font-weight:bold; font-size:12px;
+    padding:2px 7px; border-radius:5px;
   }
 
-  /* コード入力 */
   .code-input {
     width: 100%; padding: 14px; font-size: 28px;
     letter-spacing: 14px; text-align: center;
     border-radius: 8px; border: 2px solid #ccc;
     margin-bottom: 16px; box-sizing: border-box;
     font-weight: bold; color: #2c3e50;
-    transition: border-color 0.2s;
   }
   .code-input:focus { outline: none; border-color: var(--accent); }
 </style>
@@ -360,11 +473,12 @@ function buildCSS(platform = "yt") {
 }
 
 // ======================================
-// ■ サイドバー HTML
+// ■ サイドバー HTML（デスクトップ）＋ 下部ナビ（スマホ）
 // ======================================
 function buildSidebar(platform, currentPath = "") {
   const isNico = platform === "nico";
   const al = (p) => currentPath === p ? ' class="active-link"' : '';
+  const abn = (p) => currentPath === p ? ' active' : '';
 
   const ytLinks = `
     <a href="/"${al("/")}><span class="sidebar-icon">🏠</span><span class="sidebar-text">ホーム</span></a>
@@ -387,7 +501,12 @@ function buildSidebar(platform, currentPath = "") {
     <a href="/admin"><span class="sidebar-icon">🛡️</span><span class="sidebar-text">管理者ページ</span></a>
   `;
 
+  // スマホ下部ナビ：プラットフォームによってホームURLを変える
+  const homeHref  = isNico ? "/nico" : "/";
+  const homeActive = (currentPath === "/" || currentPath === "/nico") ? " active" : "";
+
   return `
+<!-- デスクトップ：左サイドバー -->
 <div id="sidebar" class="sidebar">
   <div class="platform-switcher">
     <button class="platform-btn yt-btn${!isNico ? " active" : ""}" onclick="switchPlatform('yt')">
@@ -404,6 +523,40 @@ function buildSidebar(platform, currentPath = "") {
     <a href="/logout"><span class="sidebar-icon">🚪</span><span class="sidebar-text">ログアウト</span></a>
   </div>
 </div>
+
+<!-- スマホ：下部ナビゲーション -->
+<nav class="bottom-nav" id="bottom-nav">
+  <a href="${homeHref}" class="bottom-nav-item${homeActive}">
+    <span class="bn-icon">🏠</span><span>ホーム</span>
+  </a>
+  <a href="/favorites" class="bottom-nav-item${abn("/favorites")}">
+    <span class="bn-icon">⭐</span><span>お気に入り</span>
+  </a>
+  <a href="/history" class="bottom-nav-item${abn("/history")}">
+    <span class="bn-icon">🕘</span><span>履歴</span>
+  </a>
+  <button class="bottom-nav-item" onclick="openPlatformModal()" style="position:relative;">
+    <span class="bn-icon">${isNico ? "🎬" : "▶"}</span>
+    <span>${isNico ? "ニコニコ" : "YouTube"}</span>
+  </button>
+  <a href="/settings" class="bottom-nav-item${abn("/settings")}">
+    <span class="bn-icon">⚙️</span><span>設定</span>
+  </a>
+</nav>
+
+<!-- スマホ：プラットフォーム切替モーダル -->
+<div class="platform-modal-overlay" id="platform-modal" onclick="closePlatformModal(event)">
+  <div class="platform-modal">
+    <h3>プラットフォームを切替</h3>
+    <button class="platform-modal-btn${!isNico ? " yt-active" : ""}" onclick="switchPlatform('yt')">
+      <span class="pm-icon">▶</span> YouTube
+    </button>
+    <button class="platform-modal-btn${isNico ? " nico-active" : ""}" onclick="switchPlatform('nico')">
+      <span class="pm-icon">🎬</span> ニコニコ動画
+    </button>
+    <button class="platform-modal-cancel" onclick="closePlatformModal()">キャンセル</button>
+  </div>
+</div>
 `;
 }
 
@@ -412,13 +565,29 @@ function buildSidebar(platform, currentPath = "") {
 // ======================================
 const SIDEBAR_JS = `
 <script>
+// デスクトップ：ホバーでサイドバー展開
 const sidebar = document.getElementById("sidebar");
 const main    = document.getElementById("main-content");
-sidebar.addEventListener("mouseenter", () => { sidebar.classList.add("open"); if(main) main.classList.add("shift"); });
-sidebar.addEventListener("mouseleave", () => { sidebar.classList.remove("open"); if(main) main.classList.remove("shift"); });
+if (sidebar && window.innerWidth > 767) {
+  sidebar.addEventListener("mouseenter", () => { sidebar.classList.add("open"); if(main) main.classList.add("shift"); });
+  sidebar.addEventListener("mouseleave", () => { sidebar.classList.remove("open"); if(main) main.classList.remove("shift"); });
+}
+
 function switchPlatform(p) {
   document.cookie = "platform=" + p + "; path=/; max-age=31536000";
   location.href = (p === "nico") ? "/nico" : "/";
+}
+
+// スマホ：プラットフォームモーダル
+function openPlatformModal() {
+  const m = document.getElementById("platform-modal");
+  if (m) m.classList.add("show");
+}
+function closePlatformModal(e) {
+  if (!e || e.target === document.getElementById("platform-modal")) {
+    const m = document.getElementById("platform-modal");
+    if (m) m.classList.remove("show");
+  }
 }
 </script>
 `;
