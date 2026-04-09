@@ -2,6 +2,7 @@ import express from "express";
 import fetch from "node-fetch";
 import cookieParser from "cookie-parser";
 import session from "express-session";
+import connectPgSimple from "connect-pg-simple";
 import { randomBytes, createHash } from "crypto";
 import bcrypt from "bcrypt";
 
@@ -10,16 +11,6 @@ app.disable("x-powered-by");
 
 const PORT = process.env.PORT || 3000;
 
-app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
-app.use(express.json());
-app.use(session({
-  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
-  resave: false,
-  saveUninitialized: false,
-  cookie: { httpOnly: true, secure: process.env.NODE_ENV === "production", maxAge: 7 * 24 * 60 * 60 * 1000 } // 7日
-}));
-
 import pkg from "pg";
 const { Pool } = pkg;
 
@@ -27,6 +18,28 @@ const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
   ssl: { rejectUnauthorized: false }
 });
+
+const PgSession = connectPgSimple(session);
+
+app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
+app.use(express.json());
+app.use(session({
+  store: new PgSession({
+    pool,
+    tableName: "session",
+    createTableIfMissing: true
+  }),
+  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "lax",
+    maxAge: 7 * 24 * 60 * 60 * 1000
+  }
+}));
 
 // ======================================
 // ■ 環境変数
