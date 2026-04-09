@@ -861,11 +861,13 @@ app.post("/login", async (req, res) => {
   const found = await findUser(user, pass);
   if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   setSessionUser(req, user);
+  console.log("[LOGIN] sessionID:", req.sessionID, "user:", user, "session:", JSON.stringify(req.session));
   req.session.save((err) => {
     if (err) {
-      console.error("session save error:", err);
+      console.error("[LOGIN] session save error:", err);
       return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました。再度お試しください"));
     }
+    console.log("[LOGIN] save OK, redirecting to /");
     res.redirect("/");
   });
 });
@@ -1578,6 +1580,7 @@ app.post("/settings/secret-question", async (req, res) => {
 // ======================================
 app.get("/", (req, res) => {
   const user = getSessionUser(req);
+  console.log("[GET /] sessionID:", req.sessionID, "session:", JSON.stringify(req.session), "user:", user);
   if (!user) return res.redirect("/login");
 
   const body = `
