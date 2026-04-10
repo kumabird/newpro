@@ -34,7 +34,7 @@ app.use(session({
     createTableIfMissing: true,
   }),
   // ★ 修正2: SESSION_SECRETを固定（環境変数未設定でも再起動でセッションが消えない）
-  secret: process.env.SESSION_SECRET || "1JaGdYufr5t&\"mam157fogjagdyufr5t62",
+  secret: process.env.SESSION_SECRET,
   resave: false,
   saveUninitialized: false,
   rolling: true,
