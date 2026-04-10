@@ -1075,18 +1075,36 @@ app.post("/auth/complete", async (req, res) => {
 
   try {
     const emailVal = pending.email ? pending.email.toLowerCase().trim() : null;
+
     await pool.query(
       "INSERT INTO users (username, password, email, oauth_provider, oauth_id) VALUES ($1, NULL, $2, $3, $4)",
       [username, emailVal, pending.provider, pending.oauthId]
     );
+
     req.session.pendingOAuth = null;
-    setSessionUser(req, username);
-    req.session.save((err) => {
-      if (err) { console.error("session save error:", err); return res.redirect("/login"); }
-      res.redirect("/");
+
+    // === ここを修正：セッションを再生成してから確実に保存 ===
+    req.session.regenerate((regErr) => {
+      if (regErr) {
+        console.error("[AUTH COMPLETE] regenerate error:", regErr);
+        return res.redirect("/login?msg=" + encodeURIComponent("セッションエラーが発生しました"));
+      }
+
+      setSessionUser(req, username);
+
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("[AUTH COMPLETE] session save error:", saveErr);
+          return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました"));
+        }
+        res.redirect("/");
+      });
     });
+
   } catch (e) {
-    if (e.code === "23505") return redir("そのユーザー名は既に使用されています。別の名前をお試しください");
+    if (e.code === "23505") {
+      return redir("そのユーザー名は既に使用されています。別の名前をお試しください");
+    }
     console.error("auth/complete error:", e);
     redir("アカウント作成に失敗しました");
   }
