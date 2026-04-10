@@ -93,20 +93,29 @@ function getThumbUrl(videoId, size = "mq") {
 }
 
 // ======================================
-// ■ セッション認証ヘルパー
+// ■ セッション認証ヘルパー（修正版）
 // ======================================
 function getSessionUser(req) {
   return req.session?.user || null;
 }
 
 function setSessionUser(req, username) {
+  if (!req.session) req.session = {};
   req.session.user = username;
 }
 
 function destroySession(req, res) {
-  req.session.destroy(() => {});
+  if (!req.session) {
+    return res.redirect("/login");
+  }
+  req.session.destroy((err) => {
+    if (err) {
+      console.error("Session destroy error:", err);
+    }
+    res.clearCookie("sid");   // nameで指定したクッキー名に合わせる
+    res.redirect("/login");
+  });
 }
-
 // ======================================
 // ■ CSS
 // ======================================
