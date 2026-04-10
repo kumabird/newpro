@@ -28,11 +28,14 @@ app.use(session({
   store: new PgSession({
     pool,
     tableName: "session",
-    createTableIfMissing: true
+    createTableIfMissing: true,
+    // pruneSessionInterval: 60 * 60, // 1時間ごとに期限切れセッション削除（任意）
   }),
-  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
+  secret: process.env.SESSION_SECRET || "fallback-secret-change-me", // 本番では必ず強力な秘密鍵を設定！
   resave: false,
   saveUninitialized: false,
+  rolling: true,                    // ← 追加：アクティブな間は有効期限を延長
+  name: "sid",                      // ← 追加：デフォルトの connect.sid を隠す（セキュリティ向上）
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -40,7 +43,6 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
-
 // ======================================
 // ■ 環境変数
 // ======================================
