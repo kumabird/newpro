@@ -3,7 +3,7 @@ import fetch from "node-fetch";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { randomBytes, createHash } from "crypto";
+import { randomBytes } from "crypto";
 import bcrypt from "bcrypt";
 
 const app = express();
@@ -44,8 +44,8 @@ app.use(session({
 // ======================================
 // ■ 環境変数
 // ======================================
-const ADMIN_USER     = process.env.ADMIN_USER     || "hinata";
-const ADMIN_PASS     = process.env.ADMIN_PASS     || "changeme_admin";
+const ADMIN_USER = process.env.ADMIN_USER || "hinata";
+const ADMIN_PASS = process.env.ADMIN_PASS || "changeme_admin";
 
 const RECAPTCHA_SITE_KEY   = process.env.RECAPTCHA_SITE_KEY   || "";
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || "";
@@ -56,13 +56,39 @@ const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || "";
 const GITHUB_CLIENT_ID     = process.env.GITHUB_CLIENT_ID     || "";
 const GITHUB_CLIENT_SECRET = process.env.GITHUB_CLIENT_SECRET || "";
 
-// アプリのベースURL（コールバックURIに使用）
 const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 
-const RESEND_API_KEY = process.env.RESEND_API_KEY || "";
-const MAIL_FROM      = process.env.MAIL_FROM      || "noreply@example.com";
-
 const BCRYPT_ROUNDS = 10;
+
+// ======================================
+// ■ ユーティリティ（最初に定義）
+// ======================================
+function escHtml(str) {
+  if (typeof str !== "string") return "";
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function formatDateJP(date) {
+  const d = new Date(date);
+  const wk = ["日","月","火","水","木","金","土"];
+  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} `
+       + `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
+       + ` (${wk[d.getDay()]}曜)`;
+}
+
+function getThumbUrl(videoId, size = "mq") {
+  if (videoId.startsWith("nico:")) {
+    const numId = videoId.replace("nico:", "").replace(/^[a-zA-Z]+/, "");
+    return `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}`;
+  }
+  const map = { hq: "hqdefault", mq: "mqdefault", max: "maxresdefault" };
+  return `https://i.ytimg.com/vi/${videoId}/${map[size]||"mqdefault"}.jpg`;
+}
 
 // ======================================
 // ■ セッション認証ヘルパー
@@ -112,28 +138,19 @@ function buildCSS(platform = "yt") {
 
   h2 { margin-bottom: 20px; color: #2c3e50; text-align: center; }
 
-  /* ============ デスクトップ：左サイドバー ============ */
   .sidebar {
-    position: fixed;
-    top: 0; left: 0;
-    width: var(--sidebar-w);
-    height: 100%;
-    background: #1a1a2e;
-    transition: width 0.25s ease;
-    overflow: hidden;
-    z-index: 1000;
-    display: flex;
-    flex-direction: column;
+    position: fixed; top: 0; left: 0;
+    width: var(--sidebar-w); height: 100%;
+    background: #1a1a2e; transition: width 0.25s ease;
+    overflow: hidden; z-index: 1000;
+    display: flex; flex-direction: column;
   }
   .sidebar.open { width: var(--sidebar-open); }
 
   .platform-switcher {
     padding: 8px 5px;
     border-bottom: 1px solid rgba(255,255,255,0.1);
-    flex-shrink: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 3px;
+    flex-shrink: 0; display: flex; flex-direction: column; gap: 3px;
   }
 
   .platform-btn {
@@ -175,25 +192,18 @@ function buildCSS(platform = "yt") {
   .sidebar-divider { border: none; border-top: 1px solid rgba(255,255,255,0.1); margin: 5px 4px; }
   .sidebar-footer { padding: 6px 5px 10px; border-top: 1px solid rgba(255,255,255,0.1); flex-shrink: 0; }
 
-  /* デスクトップ：メインコンテンツ */
   .main-content {
     margin-left: calc(var(--sidebar-w) + 20px);
-    padding: 24px;
-    transition: margin-left 0.25s ease;
-    min-height: 100vh;
+    padding: 24px; transition: margin-left 0.25s ease; min-height: 100vh;
   }
   .main-content.shift { margin-left: calc(var(--sidebar-open) + 20px); }
 
-  /* ============ スマホ：下部ナビゲーション ============ */
   .bottom-nav {
-    display: none;
-    position: fixed;
+    display: none; position: fixed;
     bottom: 0; left: 0; right: 0;
-    height: var(--bottom-nav-h);
-    background: #1a1a2e;
+    height: var(--bottom-nav-h); background: #1a1a2e;
     border-top: 1px solid rgba(255,255,255,0.1);
-    z-index: 1000;
-    align-items: stretch;
+    z-index: 1000; align-items: stretch;
   }
   .bottom-nav-item {
     flex: 1; display: flex; flex-direction: column;
@@ -209,7 +219,6 @@ function buildCSS(platform = "yt") {
   .bottom-nav-item.active   { color: white; background: rgba(255,255,255,0.08); }
   .bottom-nav-item:active   { background: rgba(255,255,255,0.12); }
 
-  /* スマホ：プラットフォームモーダル */
   .platform-modal-overlay {
     display: none; position: fixed; inset: 0;
     background: rgba(0,0,0,0.5); z-index: 2000;
@@ -241,19 +250,16 @@ function buildCSS(platform = "yt") {
     color: rgba(255,255,255,0.6); font-size: 14px; cursor: pointer; margin-top: 4px;
   }
 
-  /* スマホ：メインコンテンツ（下ナビ分の余白） */
   @media (max-width: 767px) {
     .sidebar { display: none !important; }
     .bottom-nav { display: flex !important; }
     .main-content {
-      margin-left: 0 !important;
-      padding: 16px 12px;
+      margin-left: 0 !important; padding: 16px 12px;
       padding-bottom: calc(var(--bottom-nav-h) + 16px);
     }
     .main-content.shift { margin-left: 0 !important; }
   }
 
-  /* ============ カード・グリッド ============ */
   .card-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
@@ -269,8 +275,7 @@ function buildCSS(platform = "yt") {
   .card {
     background: white; padding: 10px;
     border-radius: 12px; box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-    transition: transform 0.2s, box-shadow 0.2s;
-    cursor: pointer;
+    transition: transform 0.2s, box-shadow 0.2s; cursor: pointer;
   }
   @media (hover: hover) {
     .card:hover { transform: translateY(-3px); box-shadow: 0 6px 18px rgba(0,0,0,0.13); }
@@ -285,22 +290,17 @@ function buildCSS(platform = "yt") {
     background: #eee; display: block;
   }
 
-  /* ============ フォーム共通 ============ */
   .center-box {
     max-width: 400px; margin: 40px auto;
     background: white; padding: 28px 24px;
     border-radius: 14px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
   }
   @media (max-width: 767px) {
-    .center-box {
-      margin: 16px; max-width: none;
-      border-radius: 12px; padding: 20px 16px;
-    }
+    .center-box { margin: 16px; max-width: none; border-radius: 12px; padding: 20px 16px; }
   }
 
   input[type=text], input[type=password], input[type=email], select.form-select {
-    width: 100%; padding: 14px 14px;
-    font-size: 16px; /* 16px以上でスマホのzoom防止 */
+    width: 100%; padding: 14px 14px; font-size: 16px;
     border-radius: 10px; border: 1px solid #ccc;
     margin-bottom: 12px; background: white; display: block;
     -webkit-appearance: none; appearance: none;
@@ -327,7 +327,6 @@ function buildCSS(platform = "yt") {
   .btn-green   { background: #27ae60; color: white; }
   .btn-full    { width: 100%; justify-content: center; }
 
-  /* OAuthボタン */
   .btn-google {
     display: flex; align-items: center; justify-content: center; gap: 10px;
     width: 100%; padding: 13px 16px; font-size: 15px; font-weight: 600;
@@ -356,7 +355,6 @@ function buildCSS(platform = "yt") {
     content: ""; flex: 1; border-top: 1px solid #e0e0e0;
   }
 
-  /* ============ 検索ボックス ============ */
   .search-wrap {
     max-width: 700px; margin: 0 auto 24px;
     background: white; border-radius: 14px;
@@ -380,7 +378,6 @@ function buildCSS(platform = "yt") {
   .platform-badge.yt   { background: #ff0000; }
   .platform-badge.nico { background: #e6242b; }
 
-  /* ============ 視聴ページ ============ */
   .watch-layout {
     display: flex; gap: 20px; max-width: 1280px;
     margin: 0 auto; align-items: flex-start;
@@ -407,15 +404,12 @@ function buildCSS(platform = "yt") {
     .action-bar .btn { font-size:12px; padding:9px 12px; }
   }
 
-  /* ============ 設定ページ ============ */
   .settings-box {
     max-width:540px; margin:0 auto;
     background:white; padding:28px;
     border-radius:14px; box-shadow:0 4px 16px rgba(0,0,0,0.1);
   }
-  @media (max-width: 767px) {
-    .settings-box { padding: 18px 14px; }
-  }
+  @media (max-width: 767px) { .settings-box { padding: 18px 14px; } }
 
   .mode-card {
     border:2px solid #ddd; border-radius:10px;
@@ -434,7 +428,6 @@ function buildCSS(platform = "yt") {
     margin-left:8px; vertical-align:middle;
   }
 
-  /* ============ 履歴カード ============ */
   .history-card {
     background:white; border-radius:10px; padding:10px 12px; margin-bottom:8px;
     display:flex; gap:10px; align-items:center;
@@ -451,7 +444,6 @@ function buildCSS(platform = "yt") {
     .history-card { padding: 8px 10px; }
   }
 
-  /* ============ タブ ============ */
   .tabs { display:flex; gap:6px; margin-bottom:20px; flex-wrap: wrap; }
   .tab {
     padding:10px 18px; border-radius:8px; min-height: 44px;
@@ -472,21 +464,12 @@ function buildCSS(platform = "yt") {
     font-weight:bold; font-size:12px;
     padding:2px 7px; border-radius:5px;
   }
-
-  .code-input {
-    width: 100%; padding: 14px; font-size: 28px;
-    letter-spacing: 14px; text-align: center;
-    border-radius: 8px; border: 2px solid #ccc;
-    margin-bottom: 16px; box-sizing: border-box;
-    font-weight: bold; color: #2c3e50;
-  }
-  .code-input:focus { outline: none; border-color: var(--accent); }
 </style>
 `;
 }
 
 // ======================================
-// ■ サイドバー HTML（デスクトップ）＋ 下部ナビ（スマホ）
+// ■ サイドバー HTML
 // ======================================
 function buildSidebar(platform, currentPath = "") {
   const isNico = platform === "nico";
@@ -514,12 +497,10 @@ function buildSidebar(platform, currentPath = "") {
     <a href="/admin"><span class="sidebar-icon">🛡️</span><span class="sidebar-text">管理者ページ</span></a>
   `;
 
-  // スマホ下部ナビ：プラットフォームによってホームURLを変える
   const homeHref  = isNico ? "/nico" : "/";
   const homeActive = (currentPath === "/" || currentPath === "/nico") ? " active" : "";
 
   return `
-<!-- デスクトップ：左サイドバー -->
 <div id="sidebar" class="sidebar">
   <div class="platform-switcher">
     <button class="platform-btn yt-btn${!isNico ? " active" : ""}" onclick="switchPlatform('yt')">
@@ -537,7 +518,6 @@ function buildSidebar(platform, currentPath = "") {
   </div>
 </div>
 
-<!-- スマホ：下部ナビゲーション -->
 <nav class="bottom-nav" id="bottom-nav">
   <a href="${homeHref}" class="bottom-nav-item${homeActive}">
     <span class="bn-icon">🏠</span><span>ホーム</span>
@@ -557,7 +537,6 @@ function buildSidebar(platform, currentPath = "") {
   </a>
 </nav>
 
-<!-- スマホ：プラットフォーム切替モーダル -->
 <div class="platform-modal-overlay" id="platform-modal" onclick="closePlatformModal(event)">
   <div class="platform-modal">
     <h3>プラットフォームを切替</h3>
@@ -578,20 +557,16 @@ function buildSidebar(platform, currentPath = "") {
 // ======================================
 const SIDEBAR_JS = `
 <script>
-// デスクトップ：ホバーでサイドバー展開
 const sidebar = document.getElementById("sidebar");
 const main    = document.getElementById("main-content");
 if (sidebar && window.innerWidth > 767) {
   sidebar.addEventListener("mouseenter", () => { sidebar.classList.add("open"); if(main) main.classList.add("shift"); });
   sidebar.addEventListener("mouseleave", () => { sidebar.classList.remove("open"); if(main) main.classList.remove("shift"); });
 }
-
 function switchPlatform(p) {
   document.cookie = "platform=" + p + "; path=/; max-age=31536000";
   location.href = (p === "nico") ? "/nico" : "/";
 }
-
-// スマホ：プラットフォームモーダル
 function openPlatformModal() {
   const m = document.getElementById("platform-modal");
   if (m) m.classList.add("show");
@@ -624,7 +599,7 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
 
 function page(title, platform, body, currentPath = "", extraJS = "") {
   let fixedTitle = "Video Viewer";
-  if (platform === "yt") fixedTitle = "YouTube Viewer";
+  if (platform === "yt")   fixedTitle = "YouTube Viewer";
   if (platform === "nico") fixedTitle = "Niconico Viewer";
 
   return `<!DOCTYPE html>
@@ -670,7 +645,7 @@ async function verifyRecaptcha(token) {
 function recaptchaWidget() {
   if (!RECAPTCHA_SITE_KEY) return "";
   return `
-<script src="https://www.google.com/recaptcha/api.js" async defer></script>
+<script src="https://www.google.com/recaptcha/api.js" async defer><\/script>
 <div class="g-recaptcha" data-sitekey="${RECAPTCHA_SITE_KEY}" style="margin-bottom:12px;transform:scale(0.95);transform-origin:0 0;"></div>
 `;
 }
@@ -683,11 +658,9 @@ async function hashPassword(plain) {
 }
 
 async function verifyPassword(plain, hash) {
-  // ハッシュ化前の平文パスワードが残っている場合も照合できるよう対応（移行期間）
   if (hash && hash.startsWith("$2b$")) {
     return bcrypt.compare(plain, hash);
   }
-  // 平文パスワードのレガシー照合（移行後は削除可）
   return plain === hash;
 }
 
@@ -711,27 +684,16 @@ async function ensureUsersTable() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
   await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
 
+  // パスワードリセットリクエストテーブル（管理者承認方式）
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS reset_tokens (
+    CREATE TABLE IF NOT EXISTS password_reset_requests (
       id SERIAL PRIMARY KEY,
       username TEXT NOT NULL,
-      token TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      used BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
-    )
-  `);
-
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS email_verify_codes (
-      id SERIAL PRIMARY KEY,
-      email TEXT NOT NULL,
-      code TEXT NOT NULL,
-      username TEXT NOT NULL,
-      password TEXT NOT NULL,
-      expires_at TIMESTAMPTZ NOT NULL,
-      used BOOLEAN DEFAULT FALSE,
-      created_at TIMESTAMPTZ DEFAULT NOW()
+      message TEXT,
+      status TEXT NOT NULL DEFAULT 'pending',
+      new_password TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      updated_at TIMESTAMPTZ DEFAULT NOW()
     )
   `);
 }
@@ -753,7 +715,6 @@ async function findUser(user, pass) {
     const row = result.rows[0];
     const ok = await verifyPassword(pass, row.password);
     if (!ok) return null;
-    // レガシー平文パスワードを自動的にハッシュ化して移行
     if (row.password && !row.password.startsWith("$2b$")) {
       const hashed = await hashPassword(pass);
       await pool.query("UPDATE users SET password=$1 WHERE username=$2", [hashed, user]);
@@ -762,25 +723,6 @@ async function findUser(user, pass) {
   } catch (e) {
     console.error("DB findUser error:", e);
     return null;
-  }
-}
-
-async function sendMail(to, subject, text) {
-  if (!RESEND_API_KEY) {
-    console.warn("[mail] RESEND_API_KEY 未設定、スキップ:", subject);
-    return;
-  }
-  const res = await fetch("https://api.resend.com/emails", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${RESEND_API_KEY}`
-    },
-    body: JSON.stringify({ from: MAIL_FROM, to: [to], subject, text })
-  });
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(`Resend API error: ${res.status} ${err}`);
   }
 }
 
@@ -795,23 +737,6 @@ async function saveHistory(user, keyword, videoId, title, source = "yt") {
     pool.query("INSERT INTO history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params),
     pool.query("INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params)
   ]);
-}
-
-function formatDateJP(date) {
-  const d = new Date(date);
-  const wk = ["日","月","火","水","木","金","土"];
-  return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} `
-       + `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`
-       + ` (${wk[d.getDay()]}曜)`;
-}
-
-function getThumbUrl(videoId, size = "mq") {
-  if (videoId.startsWith("nico:")) {
-    const numId = videoId.replace("nico:", "").replace(/^[a-zA-Z]+/, "");
-    return `https://nicovideo.cdn.nimg.jp/thumbnails/${numId}/${numId}`;
-  }
-  const map = { hq: "hqdefault", mq: "mqdefault", max: "maxresdefault" };
-  return `https://i.ytimg.com/vi/${videoId}/${map[size]||"mqdefault"}.jpg`;
 }
 
 // ======================================
@@ -843,7 +768,7 @@ app.get("/login", (req, res) => {
     <button class="btn btn-primary btn-full" type="submit">ログイン</button>
   </form>
   <div style="text-align:center;margin-top:10px;">
-    <a href="/reset-password" style="font-size:13px;color:#888;text-decoration:underline;">パスワードを忘れましたか？</a>
+    <a href="/reset-password/request" style="font-size:13px;color:#888;text-decoration:underline;">パスワードを忘れましたか？</a>
   </div>
   <div style="text-align:center;margin-top:18px;padding-top:16px;border-top:1px solid #eee;">
     <p style="font-size:13px;color:#888;margin-bottom:10px;">アカウントをまだお持ちでないですか？</p>
@@ -861,13 +786,11 @@ app.post("/login", async (req, res) => {
   const found = await findUser(user, pass);
   if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   setSessionUser(req, user);
-  console.log("[LOGIN] sessionID:", req.sessionID, "user:", user, "session:", JSON.stringify(req.session));
   req.session.save((err) => {
     if (err) {
       console.error("[LOGIN] session save error:", err);
       return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました。再度お試しください"));
     }
-    console.log("[LOGIN] save OK, redirecting to /");
     res.redirect("/");
   });
 });
@@ -937,11 +860,8 @@ app.get("/auth/google/callback", async (req, res) => {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: new URLSearchParams({
-        code,
-        client_id:     GOOGLE_CLIENT_ID,
-        client_secret: GOOGLE_CLIENT_SECRET,
-        redirect_uri:  `${APP_BASE_URL}/auth/google/callback`,
-        grant_type:    "authorization_code"
+        code, client_id: GOOGLE_CLIENT_ID, client_secret: GOOGLE_CLIENT_SECRET,
+        redirect_uri: `${APP_BASE_URL}/auth/google/callback`, grant_type: "authorization_code"
       }),
       signal: AbortSignal.timeout(8000)
     });
@@ -993,18 +913,12 @@ app.get("/auth/github/callback", async (req, res) => {
   req.session.oauthMode  = null;
 
   try {
-    // トークン取得
     const tokenRes = await fetch("https://github.com/login/oauth/access_token", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Accept": "application/json"
-      },
+      headers: { "Content-Type": "application/json", "Accept": "application/json" },
       body: JSON.stringify({
-        client_id:     GITHUB_CLIENT_ID,
-        client_secret: GITHUB_CLIENT_SECRET,
-        code,
-        redirect_uri:  `${APP_BASE_URL}/auth/github/callback`
+        client_id: GITHUB_CLIENT_ID, client_secret: GITHUB_CLIENT_SECRET,
+        code, redirect_uri: `${APP_BASE_URL}/auth/github/callback`
       }),
       signal: AbortSignal.timeout(8000)
     });
@@ -1013,27 +927,18 @@ app.get("/auth/github/callback", async (req, res) => {
     if (tokenData.error) throw new Error(tokenData.error_description || tokenData.error);
 
     const accessToken = tokenData.access_token;
-
-    // ユーザー情報取得
     const userRes = await fetch("https://api.github.com/user", {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        "User-Agent": "VideoViewer/1.0"
-      },
+      headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": "VideoViewer/1.0" },
       signal: AbortSignal.timeout(5000)
     });
     if (!userRes.ok) throw new Error("user fetch failed");
     const profile = await userRes.json();
 
-    // メールアドレス取得（プロフィールに含まれない場合はAPIで取得）
     let email = profile.email || null;
     if (!email) {
       try {
         const emailRes = await fetch("https://api.github.com/user/emails", {
-          headers: {
-            Authorization: `Bearer ${accessToken}`,
-            "User-Agent": "VideoViewer/1.0"
-          },
+          headers: { Authorization: `Bearer ${accessToken}`, "User-Agent": "VideoViewer/1.0" },
           signal: AbortSignal.timeout(5000)
         });
         if (emailRes.ok) {
@@ -1041,7 +946,7 @@ app.get("/auth/github/callback", async (req, res) => {
           const primary = emails.find(e => e.primary && e.verified);
           email = primary ? primary.email : (emails[0]?.email || null);
         }
-      } catch { /* メール取得失敗は無視 */ }
+      } catch { /* ignore */ }
     }
 
     const displayName = profile.name || profile.login || "user";
@@ -1078,10 +983,7 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
     const emailCheck = await pool.query("SELECT username FROM users WHERE email=$1", [email.toLowerCase().trim()]);
     if (emailCheck.rows.length > 0) {
       const username = emailCheck.rows[0].username;
-      await pool.query(
-        "UPDATE users SET oauth_provider=$1, oauth_id=$2 WHERE username=$3",
-        [provider, oauthId, username]
-      );
+      await pool.query("UPDATE users SET oauth_provider=$1, oauth_id=$2 WHERE username=$3", [provider, oauthId, username]);
       setSessionUser(req, username);
       return req.session.save((err) => {
         if (err) { console.error("session save error:", err); return res.redirect("/login"); }
@@ -1096,8 +998,7 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
   while (true) {
     const dup = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
     if (dup.rows.length === 0) break;
-    username = baseUsername + suffix;
-    suffix++;
+    username = baseUsername + suffix++;
   }
 
   req.session.pendingOAuth = { provider, oauthId, email, suggestedUsername: username };
@@ -1174,39 +1075,22 @@ app.get("/signup", (req, res) => {
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
     : "";
-
   const oauthButtons = buildOAuthButtons("signup");
 
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>アカウント登録</title>${buildCSS("yt")}</head><body>
 <div style="max-width:480px;margin:40px auto;background:white;padding:30px;border-radius:14px;box-shadow:0 4px 16px rgba(0,0,0,0.12);">
   <h2 style="text-align:center;color:#2c3e50;">📝 アカウント登録</h2>
   ${msg}
-
-  ${oauthButtons ? `
-  <div style="margin-bottom:20px;">
-    ${oauthButtons}
-  </div>
-  <div class="divider-text">またはメールアドレスで登録</div>
-  ` : ""}
+  ${oauthButtons ? `<div style="margin-bottom:20px;">${oauthButtons}</div><div class="divider-text">またはユーザー名で登録</div>` : ""}
 
   <div style="border:1px solid #ddd;border-radius:10px;padding:16px;margin-bottom:20px;background:#fafafa;">
     <h3 style="font-size:15px;margin-top:0;color:#2c3e50;">📋 利用規約</h3>
     <div style="height:220px;overflow-y:auto;font-size:13px;line-height:1.8;color:#555;padding-right:6px;">
-      <p><strong>第1条（本サービスについて）</strong><br>
-      本サービスは、YouTube・ニコニコ動画の動画を閲覧するためのプライベートビューアです。管理者の承認のもと、招待されたユーザーのみが利用できます。</p>
-      <p><strong>第2条（履歴の記録・監視）</strong><br>
-      本サービスでは、ユーザーの視聴履歴（閲覧した動画のタイトル・動画ID・検索キーワード・日時）を自動的に記録します。記録された履歴は管理者が閲覧・管理できます。ユーザー自身が履歴を削除した後も、管理者用の記録は保持されます。</p>
-      <p><strong>第3条（禁止事項）</strong><br>
-      以下の行為を禁止します。<br>
-      ・アカウント情報の第三者への共有・譲渡<br>
-      ・本サービスへの不正アクセスや改ざん<br>
-      ・サービスの安定運用を妨げる行為</p>
-      <p><strong>第4条（アカウントの停止）</strong><br>
-      管理者は、利用規約に違反したと判断した場合、予告なくアカウントを停止することができます。</p>
-      <p><strong>第5条（免責事項）</strong><br>
-      本サービスの利用によって生じた損害について、運営者は一切の責任を負いません。</p>
-      <p><strong>第6条（規約の変更）</strong><br>
-      本規約はサービスの運営上必要に応じて変更されることがあります。</p>
+      <p><strong>第1条（本サービスについて）</strong><br>本サービスは、YouTube・ニコニコ動画の動画を閲覧するためのプライベートビューアです。管理者の承認のもと、招待されたユーザーのみが利用できます。</p>
+      <p><strong>第2条（履歴の記録・監視）</strong><br>本サービスでは、ユーザーの視聴履歴を自動的に記録します。記録された履歴は管理者が閲覧・管理できます。ユーザー自身が履歴を削除した後も、管理者用の記録は保持されます。</p>
+      <p><strong>第3条（禁止事項）</strong><br>アカウント情報の第三者への共有・譲渡、不正アクセスや改ざん、サービスの安定運用を妨げる行為を禁止します。</p>
+      <p><strong>第4条（アカウントの停止）</strong><br>管理者は、利用規約に違反したと判断した場合、予告なくアカウントを停止することができます。</p>
+      <p><strong>第5条（免責事項）</strong><br>本サービスの利用によって生じた損害について、運営者は一切の責任を負いません。</p>
     </div>
   </div>
 
@@ -1217,14 +1101,9 @@ app.get("/signup", (req, res) => {
   </label>
 
   <form method="POST" action="/signup">
-    <input type="text"     name="user"  placeholder="ユーザー名（半角英数字）" required
-           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="email"    name="email" placeholder="メールアドレス（パスワードリセット用・任意）"
-           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="pass"  placeholder="パスワード（4文字以上）" required
-           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
-    <input type="password" name="pass2" placeholder="パスワード（確認）" required
-           style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
+    <input type="text"     name="user"  placeholder="ユーザー名（半角英数字）" required style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="pass"  placeholder="パスワード（4文字以上）" required style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:12px;box-sizing:border-box;">
+    <input type="password" name="pass2" placeholder="パスワード（確認）" required style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;margin-bottom:16px;box-sizing:border-box;">
     ${recaptchaWidget()}
     <button id="signup-btn" class="btn btn-green btn-full" type="submit" disabled
             style="display:flex;align-items:center;justify-content:center;gap:6px;width:100%;padding:12px;font-size:15px;font-weight:bold;border-radius:8px;border:none;cursor:pointer;background:#27ae60;color:white;opacity:0.5;transition:opacity 0.2s;">
@@ -1240,7 +1119,7 @@ app.get("/signup", (req, res) => {
 });
 
 app.post("/signup", async (req, res) => {
-  const { user, email, pass, pass2 } = req.body;
+  const { user, pass, pass2 } = req.body;
   const redirect = (msg) => res.redirect("/signup?msg=" + encodeURIComponent(msg));
 
   const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
@@ -1252,25 +1131,12 @@ app.post("/signup", async (req, res) => {
   if (pass.length < 4) return redirect("パスワードは4文字以上にしてください");
   if (pass !== pass2) return redirect("パスワードが一致しません");
 
-  const normalizedEmail = (email && email.trim()) ? email.trim().toLowerCase() : null;
-  if (normalizedEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
-    return redirect("有効なメールアドレスを入力してください");
-  }
-
   try {
     const dupUser = await pool.query("SELECT 1 FROM users WHERE username=$1", [user]);
     if (dupUser.rows.length > 0) return redirect("そのユーザー名は既に使用されています");
 
-    if (normalizedEmail) {
-      const dupEmail = await pool.query("SELECT 1 FROM users WHERE email=$1", [normalizedEmail]);
-      if (dupEmail.rows.length > 0) return redirect("そのメールアドレスは既に使用されています");
-    }
-
     const hashedPass = await hashPassword(pass);
-    await pool.query(
-      "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
-      [user, hashedPass, normalizedEmail]
-    );
+    await pool.query("INSERT INTO users (username, password) VALUES ($1, $2)", [user, hashedPass]);
     res.redirect("/login?" + new URLSearchParams({ ok: "アカウントを作成しました。ログインしてください" }).toString());
   } catch (e) {
     if (e.code === "23505") return redirect("そのユーザー名は既に使用されています");
@@ -1280,36 +1146,29 @@ app.post("/signup", async (req, res) => {
 });
 
 // ======================================
-// ■ パスワードリセット（秘密の質問方式）
+// ■ パスワードリセット（管理者承認方式）
 // ======================================
 
-// 秘密の質問一覧
-const SECRET_QUESTIONS = [
-  "子供の頃に飼っていたペットの名前は？",
-  "幼少期に住んでいた街の名前は？",
-  "初めて通った学校の名前は？",
-  "母親の旧姓は？",
-  "一番好きな食べ物は？",
-  "初めて買ったゲームのタイトルは？",
-  "お気に入りの映画のタイトルは？",
-  "尊敬する人物の名前は？",
-];
-
-app.get("/reset-password", (req, res) => {
+// ユーザー：リセット申請ページ
+app.get("/reset-password/request", (req, res) => {
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
   const ok = req.query.ok
     ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${escHtml(req.query.ok)}</p>` : "";
-  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>パスワードリセット</title>${buildCSS("yt")}</head><body>
+
+  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>パスワードリセット申請</title>${buildCSS("yt")}</head><body>
 <div class="center-box">
-  <h2>🔑 パスワードリセット</h2>
+  <h2>🔑 パスワードリセット申請</h2>
   <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    登録済みのユーザー名を入力してください。
+    管理者にパスワードリセットを申請します。<br>承認後、新しいパスワードでログインできるようになります。
   </p>
   ${msg}${ok}
-  <form method="POST" action="/reset-password/question">
-    <input type="text" name="user" placeholder="ユーザー名" required>
-    <button class="btn btn-primary btn-full" type="submit">次へ →</button>
+  <form method="POST" action="/reset-password/request">
+    <input type="text" name="username" placeholder="ユーザー名" required>
+    <textarea name="message" placeholder="申請メッセージ（任意）本人確認のためのメモなど"
+      style="width:100%;padding:12px 14px;font-size:15px;border-radius:8px;border:1px solid #ccc;
+             margin-bottom:12px;box-sizing:border-box;resize:vertical;min-height:80px;font-family:inherit;"></textarea>
+    <button class="btn btn-primary btn-full" type="submit">📨 申請する</button>
   </form>
   <div style="text-align:center;margin-top:16px;">
     <a href="/login" style="font-size:13px;color:#888;">← ログインに戻る</a>
@@ -1318,260 +1177,34 @@ app.get("/reset-password", (req, res) => {
 </body></html>`);
 });
 
-app.post("/reset-password/question", async (req, res) => {
-  const { user } = req.body;
-  const redir = (msg) => res.redirect("/reset-password?" + new URLSearchParams({ msg }).toString());
-  if (!user) return redir("ユーザー名を入力してください");
+app.post("/reset-password/request", async (req, res) => {
+  const { username, message } = req.body;
+  const redir = (msg) => res.redirect("/reset-password/request?" + new URLSearchParams({ msg }).toString());
+  const ok    = (msg) => res.redirect("/reset-password/request?" + new URLSearchParams({ ok: msg }).toString());
+
+  if (!username) return redir("ユーザー名を入力してください");
 
   try {
-    const result = await pool.query(
-      "SELECT username, secret_question, secret_answer FROM users WHERE username=$1",
-      [user]
-    );
+    const result = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
     if (result.rows.length === 0) return redir("ユーザーが見つかりません");
-    const row = result.rows[0];
 
-    // 秘密の質問が未設定の場合
-    if (!row.secret_question || !row.secret_answer) {
-      return redir("このアカウントには秘密の質問が設定されていません。管理者にお問い合わせください");
-    }
-
-    const msg = req.query.msg
-      ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
-
-    res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>秘密の質問</title>${buildCSS("yt")}</head><body>
-<div class="center-box">
-  <h2>🔐 秘密の質問</h2>
-  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    登録時に設定した秘密の質問に答えてください。
-  </p>
-  ${msg}
-  <div style="background:#f8f9fa;border-radius:8px;padding:14px;margin-bottom:16px;font-size:14px;color:#2c3e50;font-weight:bold;">
-    ❓ ${escHtml(row.secret_question)}
-  </div>
-  <form method="POST" action="/reset-password/answer">
-    <input type="hidden" name="user" value="${escHtml(user)}">
-    <input type="text" name="answer" placeholder="答えを入力" required autocomplete="off">
-    <button class="btn btn-primary btn-full" type="submit">✅ 確認</button>
-  </form>
-  <div style="text-align:center;margin-top:12px;">
-    <a href="/reset-password" style="font-size:13px;color:#888;">← 戻る</a>
-  </div>
-</div>
-</body></html>`);
-  } catch(e) {
-    console.error("reset/question error:", e);
-    redir("エラーが発生しました");
-  }
-});
-
-app.post("/reset-password/answer", async (req, res) => {
-  const { user, answer } = req.body;
-  const redir = (msg) => res.redirect(
-    "/reset-password/question?" + new URLSearchParams({ msg }).toString(),
-    // 質問ページへ戻すにはPOSTが必要なのでセッションを使う
-  );
-
-  if (!user || !answer) return res.redirect("/reset-password");
-
-  try {
-    const result = await pool.query(
-      "SELECT secret_answer FROM users WHERE username=$1",
-      [user]
+    // 既に pending の申請があるか確認
+    const existing = await pool.query(
+      "SELECT 1 FROM password_reset_requests WHERE username=$1 AND status='pending'",
+      [username]
     );
-    if (result.rows.length === 0) return res.redirect("/reset-password");
-
-    const storedAnswer = result.rows[0].secret_answer || "";
-    // 答えは小文字・前後空白除去で比較（大文字小文字を無視）
-    const inputAnswer = answer.trim().toLowerCase();
-    const correctAnswer = storedAnswer.trim().toLowerCase();
-
-    if (inputAnswer !== correctAnswer) {
-      // セッションにユーザー名を保存して質問ページへリダイレクト
-      req.session.resetUser = user;
-      req.session.resetWrongAnswer = true;
-      return res.redirect("/reset-password/question-retry");
+    if (existing.rows.length > 0) {
+      return ok("既に申請済みです。管理者の承認をお待ちください。");
     }
-
-    // 正解 → パスワード変更ページへ（セッションにトークンを保存）
-    const token = randomBytes(32).toString("hex");
-    req.session.resetToken = { user, token, expires: Date.now() + 15 * 60 * 1000 };
-    res.redirect("/reset-password/new");
-  } catch(e) {
-    console.error("reset/answer error:", e);
-    res.redirect("/reset-password?msg=" + encodeURIComponent("エラーが発生しました"));
-  }
-});
-
-// 答えが間違いの場合のリダイレクト（GETで質問ページを再表示）
-app.get("/reset-password/question-retry", (req, res) => {
-  const user = req.session.resetUser;
-  if (!user) return res.redirect("/reset-password");
-  req.session.resetUser = null;
-  req.session.resetWrongAnswer = null;
-  res.redirect("/reset-password/question?" + new URLSearchParams({
-    user,
-    msg: "答えが正しくありません"
-  }).toString());
-});
-
-// 質問ページのGETアクセス（user クエリパラメータからも受け付ける）
-app.get("/reset-password/question", async (req, res) => {
-  const user = req.query.user;
-  const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
-  if (!user) return res.redirect("/reset-password");
-
-  try {
-    const result = await pool.query(
-      "SELECT secret_question FROM users WHERE username=$1",
-      [user]
-    );
-    if (result.rows.length === 0 || !result.rows[0].secret_question) {
-      return res.redirect("/reset-password?msg=" + encodeURIComponent("秘密の質問が設定されていません"));
-    }
-
-    res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>秘密の質問</title>${buildCSS("yt")}</head><body>
-<div class="center-box">
-  <h2>🔐 秘密の質問</h2>
-  <p style="font-size:13px;color:#888;text-align:center;margin-bottom:20px;">
-    登録時に設定した秘密の質問に答えてください。
-  </p>
-  ${msg}
-  <div style="background:#f8f9fa;border-radius:8px;padding:14px;margin-bottom:16px;font-size:14px;color:#2c3e50;font-weight:bold;">
-    ❓ ${escHtml(result.rows[0].secret_question)}
-  </div>
-  <form method="POST" action="/reset-password/answer">
-    <input type="hidden" name="user" value="${escHtml(user)}">
-    <input type="text" name="answer" placeholder="答えを入力" required autocomplete="off">
-    <button class="btn btn-primary btn-full" type="submit">✅ 確認</button>
-  </form>
-  <div style="text-align:center;margin-top:12px;">
-    <a href="/reset-password" style="font-size:13px;color:#888;">← 戻る</a>
-  </div>
-</div>
-</body></html>`);
-  } catch(e) {
-    res.redirect("/reset-password?msg=" + encodeURIComponent("エラーが発生しました"));
-  }
-});
-
-app.get("/reset-password/new", (req, res) => {
-  const resetInfo = req.session.resetToken;
-  if (!resetInfo || Date.now() > resetInfo.expires) {
-    return res.redirect("/reset-password?msg=" + encodeURIComponent("セッションが切れました。最初からやり直してください"));
-  }
-  const msg = req.query.msg
-    ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
-  res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>新しいパスワード</title>${buildCSS("yt")}</head><body>
-<div class="center-box">
-  <h2>🔒 新しいパスワードを設定</h2>
-  ${msg}
-  <form method="POST" action="/reset-password/new">
-    <input type="password" name="newpass"  placeholder="新しいパスワード（4文字以上）" required>
-    <input type="password" name="newpass2" placeholder="新しいパスワード（確認）" required>
-    <button class="btn btn-primary btn-full" type="submit">🔑 パスワードをリセット</button>
-  </form>
-</div>
-</body></html>`);
-});
-
-app.post("/reset-password/new", async (req, res) => {
-  const resetInfo = req.session.resetToken;
-  if (!resetInfo || Date.now() > resetInfo.expires) {
-    return res.redirect("/reset-password?msg=" + encodeURIComponent("セッションが切れました。最初からやり直してください"));
-  }
-
-  const { newpass, newpass2 } = req.body;
-  const redir = (msg) => res.redirect("/reset-password/new?" + new URLSearchParams({ msg }).toString());
-
-  if (!newpass || !newpass2) return redir("全ての項目を入力してください");
-  if (newpass.length < 4) return redir("パスワードは4文字以上にしてください");
-  if (newpass !== newpass2) return redir("パスワードが一致しません");
-
-  try {
-    const hashed = await hashPassword(newpass);
-    await pool.query("UPDATE users SET password=$1 WHERE username=$2", [hashed, resetInfo.user]);
-    req.session.resetToken = null;
-    res.redirect("/login?" + new URLSearchParams({ ok: "パスワードをリセットしました。新しいパスワードでログインしてください" }).toString());
-  } catch(e) {
-    console.error("reset/new error:", e);
-    redir("リセットに失敗しました");
-  }
-});
-
-// ======================================
-// ■ 秘密の質問設定（設定ページから）
-// ======================================
-app.get("/settings/secret-question", (req, res) => {
-  const user = getSessionUser(req);
-  if (!user) return res.redirect("/login");
-  if (user === ADMIN_USER) return res.redirect("/settings");
-
-  const platform = getPlatform(req);
-  const msg = req.query.msg
-    ? `<p style="color:#e74c3c;font-size:13px;margin-top:8px;">${escHtml(req.query.msg)}</p>` : "";
-  const ok = req.query.ok
-    ? `<p style="color:#27ae60;font-size:13px;margin-top:8px;">${escHtml(req.query.ok)}</p>` : "";
-
-  const questionOptions = SECRET_QUESTIONS.map(q =>
-    `<option value="${escHtml(q)}">${escHtml(q)}</option>`
-  ).join("");
-
-  const body = `
-<div class="settings-box">
-  <h2>🔐 秘密の質問設定</h2>
-  <p style="font-size:14px;color:#666;margin-bottom:20px;">
-    パスワードを忘れた場合に使用する秘密の質問を設定してください。
-  </p>
-  <form method="POST" action="/settings/secret-question">
-    <label style="font-size:13px;color:#888;display:block;margin-bottom:4px;">秘密の質問</label>
-    <select name="question" class="form-select" required style="margin-bottom:12px;">
-      <option value="">-- 質問を選択 --</option>
-      ${questionOptions}
-    </select>
-    <label style="font-size:13px;color:#888;display:block;margin-bottom:4px;">答え</label>
-    <input type="text" name="answer" placeholder="答えを入力（大文字小文字は区別しません）" required>
-    <label style="font-size:13px;color:#888;display:block;margin-bottom:4px;">現在のパスワード（確認）</label>
-    <input type="password" name="current" placeholder="現在のパスワード" required>
-    <button class="btn btn-primary" type="submit" style="margin-top:4px;">💾 保存</button>
-  </form>
-  ${msg}${ok}
-  <div style="margin-top:16px;">
-    <a href="/settings" style="font-size:13px;color:#888;">← 設定に戻る</a>
-  </div>
-</div>
-`;
-  res.send(page("秘密の質問設定", platform, body, "/settings"));
-});
-
-app.post("/settings/secret-question", async (req, res) => {
-  const user = getSessionUser(req);
-  if (!user) return res.redirect("/login");
-  if (user === ADMIN_USER) return res.redirect("/settings");
-
-  const { question, answer, current } = req.body;
-  const redir = (msg) => res.redirect("/settings/secret-question?" + new URLSearchParams({ msg }).toString());
-  const ok    = (msg) => res.redirect("/settings/secret-question?" + new URLSearchParams({ ok: msg }).toString());
-
-  if (!question || !answer || !current) return redir("全ての項目を入力してください");
-  if (!SECRET_QUESTIONS.includes(question)) return redir("無効な質問です");
-  if (answer.trim().length < 2) return redir("答えは2文字以上にしてください");
-
-  try {
-    const result = await pool.query("SELECT password FROM users WHERE username=$1", [user]);
-    if (result.rows.length === 0) return redir("ユーザーが見つかりません");
-    const passOk = await verifyPassword(current, result.rows[0].password);
-    if (!passOk) return redir("現在のパスワードが違います");
 
     await pool.query(
-      "UPDATE users SET secret_question=$1, secret_answer=$2 WHERE username=$3",
-      [question, answer.trim().toLowerCase(), user]
+      "INSERT INTO password_reset_requests (username, message, status) VALUES ($1, $2, 'pending')",
+      [username, message || null]
     );
-    return ok("✅ 秘密の質問を設定しました");
-  } catch(e) {
-    console.error("secret-question save error:", e);
-    redir("保存に失敗しました");
+    return ok("✅ 申請を受け付けました。管理者が承認すると新しいパスワードでログインできます。");
+  } catch (e) {
+    console.error("reset request error:", e);
+    redir("申請に失敗しました。しばらく後にお試しください");
   }
 });
 
@@ -1580,7 +1213,6 @@ app.post("/settings/secret-question", async (req, res) => {
 // ======================================
 app.get("/", (req, res) => {
   const user = getSessionUser(req);
-  console.log("[GET /] sessionID:", req.sessionID, "session:", JSON.stringify(req.session), "user:", user);
   if (!user) return res.redirect("/login");
 
   const body = `
@@ -1673,11 +1305,9 @@ async function getYouTube(videoId) {
   return {
     streamUrl:   [...fmt].reverse().map(s=>s.url)[0],
     audioUrl:    adp.filter(s=>s.container==="m4a"&&s.audioQuality==="AUDIO_QUALITY_MEDIUM").map(s=>s.url)[0]||null,
-    videoId,
-    channelId:   info.authorId||"",
-    channelName: info.author||"",
-    title:       info.title||"タイトル不明",
-    related:     (info.recommendedVideos||[]).slice(0,20).map(v=>({id:v.videoId,title:v.title}))
+    videoId, channelId: info.authorId||"", channelName: info.author||"",
+    title: info.title||"タイトル不明",
+    related: (info.recommendedVideos||[]).slice(0,20).map(v=>({id:v.videoId,title:v.title}))
   };
 }
 
@@ -1691,7 +1321,7 @@ async function getEduParams() {
     try {
       const res = await fetch(url, { signal: AbortSignal.timeout(5000) });
       if (res.ok) { cachedEduParams = await res.text(); setTimeout(()=>{cachedEduParams=null;},5*60*1000); return cachedEduParams; }
-    } catch (e) { /* 続行 */ }
+    } catch (e) { /* continue */ }
   }
   return "";
 }
@@ -1909,11 +1539,6 @@ app.get("/settings", (req, res) => {
     <button class="btn btn-primary" type="submit">🔒 パスワードを変更</button>
   </form>
   ${pwMsg}
-</div>
-<div style="margin-top:20px;padding-top:20px;border-top:1px solid #eee;">
-  <h3 style="font-size:16px;color:#2c3e50;margin-bottom:8px;">🔐 秘密の質問</h3>
-  <p style="font-size:13px;color:#888;margin-bottom:12px;">パスワードを忘れた際に本人確認に使用します。</p>
-  <a href="/settings/secret-question" class="btn btn-gray">🔐 秘密の質問を設定する</a>
 </div>`;
 
   const body = `
@@ -2396,10 +2021,8 @@ app.post("/history/delete", async (req, res) => {
 });
 
 // ======================================
-// ■ 管理者ページ（POST認証、?passなし）
+// ■ 管理者ページ
 // ======================================
-
-// 管理者セッション確認ミドルウェア
 function requireAdmin(req, res, next) {
   const user = getSessionUser(req);
   if (!user) return res.redirect("/login");
@@ -2449,7 +2072,6 @@ app.get("/admin/logout", (req, res) => {
   res.redirect("/");
 });
 
-// 管理者ページ本体
 app.get("/admin", requireAdmin, async (req, res) => {
   const addmsg = req.query.addmsg || "";
   const addok  = req.query.addok  || "";
@@ -2459,6 +2081,71 @@ app.get("/admin", requireAdmin, async (req, res) => {
   for (const row of result.rows) {
     if (!byUser[row.user_id]) byUser[row.user_id] = [];
     byUser[row.user_id].push(row);
+  }
+
+  // パスワードリセット申請一覧
+  let resetRequestsHTML = "";
+  try {
+    const reqs = await pool.query(
+      "SELECT id, username, message, status, new_password, created_at FROM password_reset_requests ORDER BY created_at DESC"
+    );
+    const pending = reqs.rows.filter(r => r.status === "pending");
+    const done    = reqs.rows.filter(r => r.status !== "pending");
+
+    if (reqs.rows.length === 0) {
+      resetRequestsHTML = `<p style="color:#999;text-align:center;padding:20px;">申請はありません</p>`;
+    } else {
+      const renderRow = (r) => {
+        const statusBadge = r.status === "pending"
+          ? `<span style="background:#f39c12;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">承認待ち</span>`
+          : r.status === "approved"
+          ? `<span style="background:#27ae60;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">承認済</span>`
+          : `<span style="background:#95a5a6;color:white;padding:2px 8px;border-radius:10px;font-size:11px;">拒否</span>`;
+
+        const actions = r.status === "pending" ? `
+          <form method="POST" action="/admin/reset-request/approve" style="display:inline;">
+            <input type="hidden" name="id" value="${r.id}">
+            <input type="text" name="new_password" placeholder="新パスワード" required
+              style="padding:6px 10px;font-size:13px;border-radius:6px;border:1px solid #ccc;width:130px;margin-right:4px;">
+            <button class="btn btn-green" style="font-size:12px;padding:6px 12px;margin:0;">✅ 承認</button>
+          </form>
+          <form method="POST" action="/admin/reset-request/reject" style="display:inline;margin-left:6px;">
+            <input type="hidden" name="id" value="${r.id}">
+            <button class="btn btn-danger" style="font-size:12px;padding:6px 12px;margin:0;"
+              onclick="return confirm('拒否しますか？')">✕ 拒否</button>
+          </form>
+        ` : r.status === "approved" ? `
+          <span style="font-size:12px;color:#27ae60;">新PW: <code>${escHtml(r.new_password||"")}</code></span>
+        ` : `<span style="font-size:12px;color:#999;">拒否済み</span>`;
+
+        return `
+<tr style="border-bottom:1px solid #eee;">
+  <td style="padding:10px 12px;">${escHtml(r.username)}</td>
+  <td style="padding:10px 12px;font-size:12px;color:#666;max-width:200px;word-break:break-all;">${escHtml(r.message||"—")}</td>
+  <td style="padding:10px 12px;">${statusBadge}</td>
+  <td style="padding:10px 12px;font-size:12px;color:#999;">${formatDateJP(r.created_at)}</td>
+  <td style="padding:10px 12px;">${actions}</td>
+</tr>`;
+      };
+
+      resetRequestsHTML = `
+<table style="width:100%;border-collapse:collapse;font-size:14px;">
+  <thead>
+    <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
+      <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
+      <th style="text-align:left;padding:10px 12px;">メッセージ</th>
+      <th style="text-align:left;padding:10px 12px;">状態</th>
+      <th style="text-align:left;padding:10px 12px;">申請日時</th>
+      <th style="text-align:left;padding:10px 12px;">操作</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${[...pending, ...done].map(renderRow).join("")}
+  </tbody>
+</table>`;
+    }
+  } catch(e) {
+    resetRequestsHTML = `<p style="color:#e74c3c;">リセット申請の取得に失敗: ${escHtml(e.message)}</p>`;
   }
 
   let usersHTML = "";
@@ -2482,11 +2169,6 @@ app.get("/admin", requireAdmin, async (req, res) => {
       <input type="text" name="password" placeholder="4文字以上" required
         style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
     </div>
-    <div style="flex:1;min-width:140px;">
-      <label style="font-size:12px;color:#888;display:block;margin-bottom:4px;">メールアドレス（任意）</label>
-      <input type="email" name="email" placeholder="空白でも登録可"
-        style="width:100%;padding:9px 11px;font-size:14px;border-radius:7px;border:1px solid #ccc;box-sizing:border-box;">
-    </div>
     <button class="btn btn-green" type="submit" style="white-space:nowrap;margin-bottom:0;">✅ 登録</button>
   </form>
   ${adminRegMsg}
@@ -2503,7 +2185,7 @@ app.get("/admin", requireAdmin, async (req, res) => {
     <tr style="background:#f5f5f5;border-bottom:2px solid #ddd;">
       <th style="text-align:left;padding:10px 12px;">ユーザー名</th>
       <th style="text-align:left;padding:10px 12px;">登録日時</th>
-      <th style="text-align:left;padding:10px 12px;">メール / 認証</th>
+      <th style="text-align:left;padding:10px 12px;">認証</th>
       <th style="text-align:center;padding:10px 12px;">操作</th>
     </tr>
   </thead>
@@ -2516,20 +2198,18 @@ app.get("/admin", requireAdmin, async (req, res) => {
     </tr>
     ${usersResult.rows.map(u => {
       const authBadge = u.oauth_provider
-        ? `<span style="font-size:11px;background:#4285f4;color:white;padding:1px 7px;border-radius:10px;margin-left:4px;">${u.oauth_provider}</span>`
+        ? `<span style="font-size:11px;background:#4285f4;color:white;padding:1px 7px;border-radius:10px;">${u.oauth_provider}</span>`
         : "";
       return `
     <tr style="border-bottom:1px solid #eee;">
       <td style="padding:10px 12px;">👤 ${escHtml(u.username)}</td>
       <td style="padding:10px 12px;color:#888;">${formatDateJP(u.created_at)}</td>
-      <td style="padding:10px 12px;color:#888;font-size:12px;">${escHtml(u.email || "—")}${authBadge}</td>
+      <td style="padding:10px 12px;">${authBadge}</td>
       <td style="padding:10px 12px;text-align:center;">
         <form method="POST" action="/admin/delete-account" style="display:inline;">
           <input type="hidden" name="username" value="${escHtml(u.username)}">
           <button class="btn btn-danger" style="font-size:12px;padding:5px 12px;margin:0;"
-            onclick="return confirm('${escHtml(u.username)} のアカウントを削除しますか？')">
-            🗑 削除
-          </button>
+            onclick="return confirm('${escHtml(u.username)} のアカウントを削除しますか？')">🗑 削除</button>
         </form>
       </td>
     </tr>`;
@@ -2538,7 +2218,7 @@ app.get("/admin", requireAdmin, async (req, res) => {
 </table>`;
     }
   } catch(e) {
-    usersHTML = `<p style="color:#e74c3c;">ユーザー一覧の取得に失敗しました: ${escHtml(e.message)}</p>`;
+    usersHTML = `<p style="color:#e74c3c;">ユーザー一覧の取得に失敗: ${escHtml(e.message)}</p>`;
   }
 
   let allHTML = "", delHTML = "";
@@ -2571,13 +2251,14 @@ app.get("/admin", requireAdmin, async (req, res) => {
   <h2 style="margin:0;">🛡️ 管理者ページ</h2>
   <a href="/admin/logout" class="btn btn-gray" style="font-size:12px;">管理者ログアウト</a>
 </div>
-<p style="text-align:center;color:#e74c3c;font-size:13px;">※ユーザーが削除してもこの記録は残ります</p>
 <div class="tabs">
   <button class="tab active" id="tab-all" onclick="openTab('all')">全履歴</button>
+  <button class="tab" id="tab-reset" onclick="openTab('reset')">🔑 PW リセット申請</button>
   <button class="tab" id="tab-del" onclick="openTab('del')">記録削除</button>
   <button class="tab" id="tab-users" onclick="openTab('users')">👥 ユーザー一覧</button>
 </div>
-<div class="tab-content active" id="content-all">${allHTML}</div>
+<div class="tab-content active" id="content-all">${allHTML||'<p style="color:#999;text-align:center;padding:30px;">履歴はありません</p>'}</div>
+<div class="tab-content" id="content-reset">${resetRequestsHTML}</div>
 <div class="tab-content" id="content-del">${delHTML}</div>
 <div class="tab-content" id="content-users">${usersHTML}</div>
 <script>
@@ -2587,6 +2268,44 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
 </script>
 `;
   res.send(page("管理者ページ", getPlatform(req), body));
+});
+
+// パスワードリセット申請：承認
+app.post("/admin/reset-request/approve", requireAdmin, async (req, res) => {
+  const { id, new_password } = req.body;
+  if (!id || !new_password) return res.redirect("/admin");
+  if (new_password.length < 4) return res.redirect("/admin?addmsg=" + encodeURIComponent("パスワードは4文字以上にしてください") + "#tab-reset");
+
+  try {
+    const reqRow = await pool.query("SELECT username FROM password_reset_requests WHERE id=$1 AND status='pending'", [id]);
+    if (reqRow.rows.length === 0) return res.redirect("/admin");
+
+    const username = reqRow.rows[0].username;
+    const hashed = await hashPassword(new_password);
+
+    await pool.query("UPDATE users SET password=$1 WHERE username=$2", [hashed, username]);
+    await pool.query(
+      "UPDATE password_reset_requests SET status='approved', new_password=$1, updated_at=NOW() WHERE id=$2",
+      [new_password, id]  // 平文を記録（管理者が確認できるように）
+    );
+    res.redirect("/admin?addok=" + encodeURIComponent(`✅ ${username} のパスワードをリセットしました`) + "#tab-reset");
+  } catch(e) {
+    console.error("reset approve error:", e);
+    res.redirect("/admin?addmsg=" + encodeURIComponent("処理に失敗しました") + "#tab-reset");
+  }
+});
+
+// パスワードリセット申請：拒否
+app.post("/admin/reset-request/reject", requireAdmin, async (req, res) => {
+  const { id } = req.body;
+  if (!id) return res.redirect("/admin");
+  try {
+    await pool.query("UPDATE password_reset_requests SET status='rejected', updated_at=NOW() WHERE id=$1", [id]);
+    res.redirect("/admin#tab-reset");
+  } catch(e) {
+    console.error("reset reject error:", e);
+    res.redirect("/admin");
+  }
 });
 
 app.post("/admin/delete-user", requireAdmin, async (req, res) => {
@@ -2603,7 +2322,7 @@ app.post("/admin/delete-account", requireAdmin, async (req, res) => {
 });
 
 app.post("/admin/add-user", requireAdmin, async (req, res) => {
-  const { username, password, email } = req.body;
+  const { username, password } = req.body;
   const redir = (addmsg) => res.redirect("/admin?" + new URLSearchParams({ addmsg }).toString() + "#tab-users");
   const ok    = (addok)  => res.redirect("/admin?" + new URLSearchParams({ addok  }).toString() + "#tab-users");
 
@@ -2613,12 +2332,8 @@ app.post("/admin/add-user", requireAdmin, async (req, res) => {
   if (password.length < 4) return redir("パスワードは4文字以上にしてください");
 
   try {
-    const emailVal = email && email.trim() ? email.trim().toLowerCase() : null;
     const hashedPass = await hashPassword(password);
-    await pool.query(
-      "INSERT INTO users (username, password, email) VALUES ($1, $2, $3)",
-      [username, hashedPass, emailVal]
-    );
+    await pool.query("INSERT INTO users (username, password) VALUES ($1, $2)", [username, hashedPass]);
     return ok(`✅ ${username} を登録しました`);
   } catch(e) {
     if (e.code === "23505") return redir("そのユーザー名は既に使用されています");
@@ -2626,34 +2341,6 @@ app.post("/admin/add-user", requireAdmin, async (req, res) => {
     return redir("登録に失敗しました");
   }
 });
-
-// ======================================
-// ■ DBマイグレーション：秘密の質問カラム追加
-// ======================================
-async function ensureSecretQuestionColumns() {
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS secret_question TEXT`);
-  await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS secret_answer TEXT`);
-}
-ensureSecretQuestionColumns().catch(console.error);
-
-// ======================================
-// ■ ユーティリティ
-// ======================================
-function escHtml(str) {
-  if (typeof str !== "string") return "";
-  return str
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function maskEmail(email) {
-  if (!email || !email.includes("@")) return "****";
-  const [local, domain] = email.split("@");
-  return local.slice(0, 2) + "****@" + domain;
-}
 
 // ======================================
 // ■ その他
