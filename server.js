@@ -29,13 +29,12 @@ app.use(session({
     pool,
     tableName: "session",
     createTableIfMissing: true,
-    // pruneSessionInterval: 60 * 60, // 1時間ごとに期限切れセッション削除（任意）
   }),
-  secret: process.env.SESSION_SECRET || "fallback-secret-change-me", // 本番では必ず強力な秘密鍵を設定！
+  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
   resave: false,
   saveUninitialized: false,
-  rolling: true,                    // ← 追加：アクティブな間は有効期限を延長
-  name: "sid",                      // ← 追加：デフォルトの connect.sid を隠す（セキュリティ向上）
+  rolling: true,
+  name: "sid",
   cookie: {
     httpOnly: true,
     secure: process.env.NODE_ENV === "production",
@@ -43,6 +42,7 @@ app.use(session({
     maxAge: 7 * 24 * 60 * 60 * 1000
   }
 }));
+
 // ======================================
 // ■ 環境変数
 // ======================================
@@ -63,7 +63,7 @@ const APP_BASE_URL = process.env.APP_BASE_URL || "http://localhost:3000";
 const BCRYPT_ROUNDS = 10;
 
 // ======================================
-// ■ ユーティリティ（最初に定義）
+// ■ ユーティリティ
 // ======================================
 function escHtml(str) {
   if (typeof str !== "string") return "";
@@ -93,7 +93,7 @@ function getThumbUrl(videoId, size = "mq") {
 }
 
 // ======================================
-// ■ セッション認証ヘルパー（修正版）
+// ■ セッション認証ヘルパー
 // ======================================
 function getSessionUser(req) {
   return req.session?.user || null;
@@ -112,10 +112,11 @@ function destroySession(req, res) {
     if (err) {
       console.error("Session destroy error:", err);
     }
-    res.clearCookie("sid");   // nameで指定したクッキー名に合わせる
+    res.clearCookie("sid");
     res.redirect("/login");
   });
 }
+
 // ======================================
 // ■ CSS
 // ======================================
@@ -676,7 +677,7 @@ async function verifyPassword(plain, hash) {
 }
 
 // ======================================
-// ■ DBセットアップ
+// ■ DBセットアップ（修正1: 全テーブルをここで作成）
 // ======================================
 async function ensureUsersTable() {
   await pool.query(`
@@ -695,7 +696,43 @@ async function ensureUsersTable() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
   await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
 
-  // パスワードリセットリクエストテーブル（管理者承認方式）
+  // ★ 修正1: history テーブル
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS history (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      query TEXT,
+      video_id TEXT,
+      title TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ★ 修正1: admin_history テーブル
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS admin_history (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      query TEXT,
+      video_id TEXT,
+      title TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `);
+
+  // ★ 修正1: favorites テーブル
+  await pool.query(`
+    CREATE TABLE IF NOT EXISTS favorites (
+      id SERIAL PRIMARY KEY,
+      user_id TEXT NOT NULL,
+      video_id TEXT NOT NULL,
+      title TEXT,
+      created_at TIMESTAMPTZ DEFAULT NOW(),
+      UNIQUE(user_id, video_id)
+    )
+  `);
+
+  // パスワードリセットリクエストテーブル
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_reset_requests (
       id SERIAL PRIMARY KEY,
@@ -741,13 +778,19 @@ function getPlatform(req) {
   return req.cookies.platform === "nico" ? "nico" : "yt";
 }
 
+// ★ 修正3: エラーを握りつぶさずログに出す
 async function saveHistory(user, keyword, videoId, title, source = "yt") {
   const storedId = source === "nico" ? `nico:${videoId}` : videoId;
   const params = [user, keyword, storedId, title];
-  await Promise.allSettled([
+  const results = await Promise.allSettled([
     pool.query("INSERT INTO history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params),
     pool.query("INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params)
   ]);
+  results.forEach((r, i) => {
+    if (r.status === "rejected") {
+      console.error(`saveHistory[${i}] failed:`, r.reason?.message || r.reason);
+    }
+  });
 }
 
 // ======================================
@@ -756,7 +799,7 @@ async function saveHistory(user, keyword, videoId, title, source = "yt") {
 app.get("/login", (req, res) => {
   const user = getSessionUser(req);
   if (user) return res.redirect("/");
-  
+
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
     : "";
@@ -801,7 +844,6 @@ app.post("/login", async (req, res) => {
     return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
   }
 
-  // === ここを修正（セッション固定化対策 + 確実な保存）===
   req.session.regenerate((regErr) => {
     if (regErr) {
       console.error("[LOGIN] regenerate error:", regErr);
@@ -982,7 +1024,7 @@ app.get("/auth/github/callback", async (req, res) => {
 });
 
 // ======================================
-// ■ OAuth共通ログイン処理
+// ■ OAuth共通ログイン処理（修正2: regenerate追加）
 // ======================================
 async function handleOAuthLogin(req, res, provider, oauthId, email, displayName, mode) {
   const existing = await pool.query(
@@ -990,12 +1032,22 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
     [provider, oauthId]
   );
 
+  // ★ 修正2: 既存ユーザーログイン時も regenerate を実施
   if (existing.rows.length > 0) {
     const username = existing.rows[0].username;
-    setSessionUser(req, username);
-    return req.session.save((err) => {
-      if (err) { console.error("session save error:", err); return res.redirect("/login"); }
-      res.redirect("/");
+    return req.session.regenerate((regErr) => {
+      if (regErr) {
+        console.error("[OAUTH] regenerate error:", regErr);
+        return res.redirect("/login?msg=" + encodeURIComponent("セッションエラーが発生しました"));
+      }
+      setSessionUser(req, username);
+      req.session.save((saveErr) => {
+        if (saveErr) {
+          console.error("[OAUTH] session save error:", saveErr);
+          return res.redirect("/login");
+        }
+        res.redirect("/");
+      });
     });
   }
 
@@ -1008,10 +1060,20 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
     if (emailCheck.rows.length > 0) {
       const username = emailCheck.rows[0].username;
       await pool.query("UPDATE users SET oauth_provider=$1, oauth_id=$2 WHERE username=$3", [provider, oauthId, username]);
-      setSessionUser(req, username);
-      return req.session.save((err) => {
-        if (err) { console.error("session save error:", err); return res.redirect("/login"); }
-        res.redirect("/");
+      // ★ 修正2: メール紐付け時も regenerate を実施
+      return req.session.regenerate((regErr) => {
+        if (regErr) {
+          console.error("[OAUTH email] regenerate error:", regErr);
+          return res.redirect("/login?msg=" + encodeURIComponent("セッションエラーが発生しました"));
+        }
+        setSessionUser(req, username);
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[OAUTH email] session save error:", saveErr);
+            return res.redirect("/login");
+          }
+          res.redirect("/");
+        });
       });
     }
   }
@@ -1083,7 +1145,6 @@ app.post("/auth/complete", async (req, res) => {
 
     req.session.pendingOAuth = null;
 
-    // === ここを修正：セッションを再生成してから確実に保存 ===
     req.session.regenerate((regErr) => {
       if (regErr) {
         console.error("[AUTH COMPLETE] regenerate error:", regErr);
@@ -1190,8 +1251,6 @@ app.post("/signup", async (req, res) => {
 // ======================================
 // ■ パスワードリセット（管理者承認方式）
 // ======================================
-
-// ユーザー：リセット申請ページ
 app.get("/reset-password/request", (req, res) => {
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>` : "";
@@ -1230,7 +1289,6 @@ app.post("/reset-password/request", async (req, res) => {
     const result = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
     if (result.rows.length === 0) return redir("ユーザーが見つかりません");
 
-    // 既に pending の申請があるか確認
     const existing = await pool.query(
       "SELECT 1 FROM password_reset_requests WHERE username=$1 AND status='pending'",
       [username]
@@ -2125,7 +2183,6 @@ app.get("/admin", requireAdmin, async (req, res) => {
     byUser[row.user_id].push(row);
   }
 
-  // パスワードリセット申請一覧
   let resetRequestsHTML = "";
   try {
     const reqs = await pool.query(
@@ -2312,7 +2369,6 @@ function postNicoWatch(id){const f=document.createElement("form");f.method="POST
   res.send(page("管理者ページ", getPlatform(req), body));
 });
 
-// パスワードリセット申請：承認
 app.post("/admin/reset-request/approve", requireAdmin, async (req, res) => {
   const { id, new_password } = req.body;
   if (!id || !new_password) return res.redirect("/admin");
@@ -2328,7 +2384,7 @@ app.post("/admin/reset-request/approve", requireAdmin, async (req, res) => {
     await pool.query("UPDATE users SET password=$1 WHERE username=$2", [hashed, username]);
     await pool.query(
       "UPDATE password_reset_requests SET status='approved', new_password=$1, updated_at=NOW() WHERE id=$2",
-      [new_password, id]  // 平文を記録（管理者が確認できるように）
+      [new_password, id]
     );
     res.redirect("/admin?addok=" + encodeURIComponent(`✅ ${username} のパスワードをリセットしました`) + "#tab-reset");
   } catch(e) {
@@ -2337,7 +2393,6 @@ app.post("/admin/reset-request/approve", requireAdmin, async (req, res) => {
   }
 });
 
-// パスワードリセット申請：拒否
 app.post("/admin/reset-request/reject", requireAdmin, async (req, res) => {
   const { id } = req.body;
   if (!id) return res.redirect("/admin");
