@@ -756,14 +756,13 @@ async function saveHistory(user, keyword, videoId, title, source = "yt") {
 app.get("/login", (req, res) => {
   const user = getSessionUser(req);
   if (user) return res.redirect("/");
-
+  
   const msg = req.query.msg
     ? `<p style="color:#e74c3c;text-align:center;font-size:14px;">${escHtml(req.query.msg)}</p>`
     : "";
   const ok = req.query.ok
     ? `<p style="color:#27ae60;text-align:center;font-size:14px;">${escHtml(req.query.ok)}</p>`
     : "";
-
   const oauthButtons = buildOAuthButtons("login");
 
   res.send(`<!DOCTYPE html><html lang="ja"><head><meta charset="utf-8"><title>ログイン</title>${buildCSS("yt")}</head><body>
@@ -773,7 +772,7 @@ app.get("/login", (req, res) => {
   ${oauthButtons}
   ${oauthButtons ? '<div class="divider-text">または</div>' : ""}
   <form method="POST" action="/login">
-    <input type="text"     name="user" placeholder="ユーザー名" required>
+    <input type="text" name="user" placeholder="ユーザー名" required>
     <input type="password" name="pass" placeholder="パスワード" required>
     ${recaptchaWidget()}
     <button class="btn btn-primary btn-full" type="submit">ログイン</button>
@@ -792,23 +791,37 @@ app.get("/login", (req, res) => {
 app.post("/login", async (req, res) => {
   const { user, pass } = req.body;
   const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
-  if (!captchaOk) return res.redirect("/login?msg=" + encodeURIComponent("reCAPTCHAの確認に失敗しました。もう一度お試しください"));
+
+  if (!captchaOk) {
+    return res.redirect("/login?msg=" + encodeURIComponent("reCAPTCHAの確認に失敗しました。もう一度お試しください"));
+  }
 
   const found = await findUser(user, pass);
-  if (!found) return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
-  setSessionUser(req, user);
-  req.session.save((err) => {
-    if (err) {
-      console.error("[LOGIN] session save error:", err);
-      return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました。再度お試しください"));
+  if (!found) {
+    return res.redirect("/login?msg=" + encodeURIComponent("ユーザー名またはパスワードが違います"));
+  }
+
+  // === ここを修正（セッション固定化対策 + 確実な保存）===
+  req.session.regenerate((regErr) => {
+    if (regErr) {
+      console.error("[LOGIN] regenerate error:", regErr);
+      return res.redirect("/login?msg=" + encodeURIComponent("セッションエラーが発生しました"));
     }
-    res.redirect("/");
+
+    setSessionUser(req, user);
+
+    req.session.save((saveErr) => {
+      if (saveErr) {
+        console.error("[LOGIN] session save error:", saveErr);
+        return res.redirect("/login?msg=" + encodeURIComponent("ログインに失敗しました。再度お試しください"));
+      }
+      res.redirect("/");
+    });
   });
 });
 
 app.get("/logout", (req, res) => {
   destroySession(req, res);
-  res.redirect("/login");
 });
 
 // ======================================
