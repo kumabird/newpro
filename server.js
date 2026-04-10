@@ -9,6 +9,9 @@ import bcrypt from "bcrypt";
 const app = express();
 app.disable("x-powered-by");
 
+// ★ 修正1: Renderのリバースプロキシを信頼する（これがないとsecure cookieが送信されない）
+app.set("trust proxy", 1);
+
 const PORT = process.env.PORT || 3000;
 
 import pkg from "pg";
@@ -30,13 +33,15 @@ app.use(session({
     tableName: "session",
     createTableIfMissing: true,
   }),
-  secret: process.env.SESSION_SECRET || "fallback-secret-change-me",
+  // ★ 修正2: SESSION_SECRETを固定（環境変数未設定でも再起動でセッションが消えない）
+  secret: process.env.SESSION_SECRET || "1JaGdYufr5t&\"mam157fogjagdyufr5t62",
   resave: false,
   saveUninitialized: false,
   rolling: true,
   name: "sid",
   cookie: {
     httpOnly: true,
+    // ★ 修正3: trust proxy=1があるのでsecure:trueがRenderで正しく動作する
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     maxAge: 7 * 24 * 60 * 60 * 1000
@@ -677,7 +682,7 @@ async function verifyPassword(plain, hash) {
 }
 
 // ======================================
-// ■ DBセットアップ（修正1: 全テーブルをここで作成）
+// ■ DBセットアップ
 // ======================================
 async function ensureUsersTable() {
   await pool.query(`
@@ -696,7 +701,6 @@ async function ensureUsersTable() {
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
   await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
 
-  // ★ 修正1: history テーブル
   await pool.query(`
     CREATE TABLE IF NOT EXISTS history (
       id SERIAL PRIMARY KEY,
@@ -708,7 +712,6 @@ async function ensureUsersTable() {
     )
   `);
 
-  // ★ 修正1: admin_history テーブル
   await pool.query(`
     CREATE TABLE IF NOT EXISTS admin_history (
       id SERIAL PRIMARY KEY,
@@ -720,7 +723,6 @@ async function ensureUsersTable() {
     )
   `);
 
-  // ★ 修正1: favorites テーブル
   await pool.query(`
     CREATE TABLE IF NOT EXISTS favorites (
       id SERIAL PRIMARY KEY,
@@ -732,7 +734,6 @@ async function ensureUsersTable() {
     )
   `);
 
-  // パスワードリセットリクエストテーブル
   await pool.query(`
     CREATE TABLE IF NOT EXISTS password_reset_requests (
       id SERIAL PRIMARY KEY,
@@ -778,7 +779,6 @@ function getPlatform(req) {
   return req.cookies.platform === "nico" ? "nico" : "yt";
 }
 
-// ★ 修正3: エラーを握りつぶさずログに出す
 async function saveHistory(user, keyword, videoId, title, source = "yt") {
   const storedId = source === "nico" ? `nico:${videoId}` : videoId;
   const params = [user, keyword, storedId, title];
@@ -1024,7 +1024,7 @@ app.get("/auth/github/callback", async (req, res) => {
 });
 
 // ======================================
-// ■ OAuth共通ログイン処理（修正2: regenerate追加）
+// ■ OAuth共通ログイン処理
 // ======================================
 async function handleOAuthLogin(req, res, provider, oauthId, email, displayName, mode) {
   const existing = await pool.query(
@@ -1032,7 +1032,6 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
     [provider, oauthId]
   );
 
-  // ★ 修正2: 既存ユーザーログイン時も regenerate を実施
   if (existing.rows.length > 0) {
     const username = existing.rows[0].username;
     return req.session.regenerate((regErr) => {
@@ -1060,7 +1059,6 @@ async function handleOAuthLogin(req, res, provider, oauthId, email, displayName,
     if (emailCheck.rows.length > 0) {
       const username = emailCheck.rows[0].username;
       await pool.query("UPDATE users SET oauth_provider=$1, oauth_id=$2 WHERE username=$3", [provider, oauthId, username]);
-      // ★ 修正2: メール紐付け時も regenerate を実施
       return req.session.regenerate((regErr) => {
         if (regErr) {
           console.error("[OAUTH email] regenerate error:", regErr);
