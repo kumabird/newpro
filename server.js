@@ -1535,68 +1535,57 @@ app.post("/search", async (req, res) => {
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
   const videos = matches.slice(0,60).map(m=>({id:m[1],title:m[2]}));
 
-  // 最初の50件だけ表示、残りはJS側で保持してスクロール時に追加
-  const INITIAL = 50;
+  // 最初の20件をSSR、残りはIntersectionObserverで追加
+  const INITIAL = 20;
   const initialVideos = videos.slice(0, INITIAL);
   const remainVideos  = videos.slice(INITIAL);
 
-  function videoCardHTML(v) {
-    return `<form action="/watch" method="post">
-      <input type="hidden" name="id" value="${escHtml(v.id)}">
-      <button style="all:unset;cursor:pointer;width:100%;">
-        <div class="card yt-card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
-          <div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">${escHtml(v.title)}</div>
-        </div>
-      </button>
-    </form>`;
-  }
+  const cards = initialVideos.map(v=>`<form action="/watch" method="post">
+    <input type="hidden" name="id" value="${escHtml(v.id)}">
+    <button style="all:unset;cursor:pointer;width:100%;">
+      <div class="card yt-card">
+        <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
+        <div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">${escHtml(v.title)}</div>
+      </div>
+    </button>
+  </form>`).join("");
 
-  const cards = initialVideos.map(videoCardHTML).join("");
   const remainJSON = JSON.stringify(remainVideos.map(v=>({id:v.id,title:v.title})));
 
   const body = `
 <div class="page-header" style="margin-bottom:18px;">
   <h2 style="font-size:18px;">「${escHtml(q)}」の検索結果</h2>
   <span class="platform-badge yt">▶ YouTube</span>
-  <span style="font-size:13px;color:#999;margin-left:auto;">${region==="jp"?"🇯🇵 日本":"🌏 全世界"} / <span id="result-count">${initialVideos.length}</span>件表示</span>
+  <span style="font-size:13px;color:#999;margin-left:auto;">${region==="jp"?"🇯🇵 日本":"🌏 全世界"} / 全${videos.length}件</span>
 </div>
 <div class="card-grid" id="search-grid">${cards}</div>
-<div id="load-sentinel" style="height:60px;display:flex;align-items:center;justify-content:center;">
-  <span id="load-more-msg" style="color:#aaa;font-size:13px;display:none;">⏳ 読み込み中...</span>
-</div>
+<div id="load-sentinel" style="height:1px;margin-top:40px;"></div>
 <script>
 (function(){
-  const remaining = ${remainJSON};
+  const all = ${remainJSON};
   let idx = 0;
-  const CHUNK = 50;
+  const CHUNK = 20;
   const grid = document.getElementById("search-grid");
   const sentinel = document.getElementById("load-sentinel");
-  const msg = document.getElementById("load-more-msg");
-  const counter = document.getElementById("result-count");
-  let loading = false;
 
   function addCards() {
-    if (loading || idx >= remaining.length) return;
-    loading = true;
-    msg.style.display = "flex";
-    const chunk = remaining.slice(idx, idx + CHUNK);
+    if (idx >= all.length) { observer.disconnect(); return; }
+    const chunk = all.slice(idx, idx + CHUNK);
     idx += CHUNK;
     const frag = document.createDocumentFragment();
     chunk.forEach(v => {
-      const div = document.createElement("div");
-      div.innerHTML = '<form action="/watch" method="post"><input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">'+v.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div></div></button></form>';
-      frag.appendChild(div.firstChild);
+      const wrap = document.createElement("form");
+      wrap.action = "/watch"; wrap.method = "post";
+      const t = v.title.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      wrap.innerHTML = '<input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">'+t+'</div></div></button>';
+      frag.appendChild(wrap);
     });
     grid.appendChild(frag);
-    counter.textContent = (parseInt(counter.textContent)||0) + chunk.length;
-    loading = false;
-    if (idx >= remaining.length) msg.style.display = "none";
   }
 
   const observer = new IntersectionObserver(entries => {
     if (entries[0].isIntersecting) addCards();
-  }, { rootMargin: "200px" });
+  }, { rootMargin: "400px" });
   observer.observe(sentinel);
 })();
 </script>
@@ -1928,21 +1917,19 @@ async function handleChannelVideos(req, res) {
 
   const chTitle=data.metadata?.channelMetadataRenderer?.title||"チャンネル";
 
-  const CH_INITIAL = 50;
+  const CH_INITIAL = 20;
   const chInitial  = videos.slice(0, CH_INITIAL);
   const chRemain   = videos.slice(CH_INITIAL);
 
-  const cards=chInitial.map(v=>`
-    <form action="/watch" method="post">
-      <input type="hidden" name="id" value="${escHtml(v.id)}">
-      <button style="all:unset;cursor:pointer;width:100%;">
-        <div class="card yt-card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
-          <div style="margin-top:8px;font-size:13px;font-weight:bold;">${escHtml(v.title)}</div>
-        </div>
-      </button>
-    </form>
-  `).join("");
+  const cards=chInitial.map(v=>`<form action="/watch" method="post">
+    <input type="hidden" name="id" value="${escHtml(v.id)}">
+    <button style="all:unset;cursor:pointer;width:100%;">
+      <div class="card yt-card">
+        <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
+        <div style="margin-top:8px;font-size:13px;font-weight:bold;">${escHtml(v.title)}</div>
+      </div>
+    </button>
+  </form>`).join("");
 
   const chRemainJSON = JSON.stringify(chRemain.map(v=>({id:v.id,title:v.title})));
 
@@ -1950,44 +1937,36 @@ async function handleChannelVideos(req, res) {
 <div class="page-header" style="margin-bottom:18px;">
   <h2 style="font-size:18px;">📺 ${escHtml(chTitle)}</h2>
   <span class="platform-badge yt">▶ YouTube</span>
-  <span style="font-size:13px;color:#999;margin-left:auto;"><span id="ch-count">${chInitial.length}</span>件表示</span>
+  <span style="font-size:13px;color:#999;margin-left:auto;">全${videos.length}件</span>
 </div>
 <div class="card-grid" id="ch-grid">${cards}</div>
-<div id="ch-sentinel" style="height:60px;display:flex;align-items:center;justify-content:center;">
-  <span id="ch-load-msg" style="color:#aaa;font-size:13px;display:none;">⏳ 読み込み中...</span>
-</div>
+<div id="ch-sentinel" style="height:1px;margin-top:40px;"></div>
 <script>
 (function(){
-  const remaining = ${chRemainJSON};
+  const all = ${chRemainJSON};
   let idx = 0;
-  const CHUNK = 50;
+  const CHUNK = 20;
   const grid = document.getElementById("ch-grid");
   const sentinel = document.getElementById("ch-sentinel");
-  const msg = document.getElementById("ch-load-msg");
-  const counter = document.getElementById("ch-count");
-  let loading = false;
 
   function addCards() {
-    if (loading || idx >= remaining.length) return;
-    loading = true;
-    msg.style.display = "flex";
-    const chunk = remaining.slice(idx, idx + CHUNK);
+    if (idx >= all.length) { observer.disconnect(); return; }
+    const chunk = all.slice(idx, idx + CHUNK);
     idx += CHUNK;
     const frag = document.createDocumentFragment();
     chunk.forEach(v => {
-      const div = document.createElement("div");
-      div.innerHTML = '<form action="/watch" method="post"><input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;">'+v.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div></div></button></form>';
-      frag.appendChild(div.firstChild);
+      const wrap = document.createElement("form");
+      wrap.action = "/watch"; wrap.method = "post";
+      const t = v.title.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;");
+      wrap.innerHTML = '<input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;">'+t+'</div></div></button>';
+      frag.appendChild(wrap);
     });
     grid.appendChild(frag);
-    counter.textContent = (parseInt(counter.textContent)||0) + chunk.length;
-    loading = false;
-    if (idx >= remaining.length) msg.style.display = "none";
   }
 
   const observer = new IntersectionObserver(entries => {
     if (entries[0].isIntersecting) addCards();
-  }, { rootMargin: "200px" });
+  }, { rootMargin: "400px" });
   observer.observe(sentinel);
 })();
 </script>
@@ -2627,62 +2606,82 @@ app.post("/admin/add-user", requireAdmin, async (req, res) => {
 // ■ Shorts
 // ======================================
 
-// Shortsのビデオリストをサーバー側で取得するAPIエンドポイント
+// ── ヘルパー: YouTubeのwatch pageから直接streamingDataを抽出 (Invidious不要・高速)
+async function getYTStreamDirect(videoId) {
+  const url = `https://www.youtube.com/watch?v=${videoId}&hl=ja`;
+  const html = await fetch(url, {
+    headers: {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+      "Accept-Language": "ja,en;q=0.9",
+    },
+    signal: AbortSignal.timeout(5000),
+  }).then(r => r.text());
+
+  // ytInitialPlayerResponse を抽出
+  const m = html.match(/ytInitialPlayerResponse\s*=\s*(\{.+?\});\s*(?:var |<\/script>)/s);
+  if (!m) throw new Error("ytInitialPlayerResponse not found");
+  const data = JSON.parse(m[1]);
+
+  const title = data.videoDetails?.title || "";
+  const fmt = data.streamingData?.formats || [];
+  const adp = data.streamingData?.adaptiveFormats || [];
+
+  // 360p → 480p → 最低画質 の順で選択（速度優先）
+  const stream =
+    fmt.find(s => s.qualityLabel === "360p") ||
+    fmt.find(s => s.qualityLabel === "480p") ||
+    fmt.find(s => s.qualityLabel === "240p") ||
+    fmt[0];
+
+  if (!stream?.url) throw new Error("no stream url");
+  return { streamUrl: stream.url, title };
+}
+
+// Shorts動画リスト取得API
 app.get("/api/shorts", async (req, res) => {
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ error: "unauthorized" });
 
-  // YouTubeのShortsフィードを複数の検索クエリからランダムに取得（高速化）
-  const queries = [
+  const urls = [
     "https://www.youtube.com/shorts",
     "https://www.youtube.com/results?search_query=%23shorts&sp=EgQQARgB",
-    "https://www.youtube.com/results?search_query=shorts+viral&sp=EgQQARgB",
+    "https://www.youtube.com/results?search_query=shorts+trending+japan&sp=EgQQARgB",
   ];
-  const url = queries[Math.floor(Math.random() * queries.length)];
+  const url = urls[Math.floor(Math.random() * urls.length)];
 
   try {
     const html = await fetch(url, {
-      headers: { "Accept-Language": "ja,en;q=0.9", "User-Agent": "Mozilla/5.0" },
-      signal: AbortSignal.timeout(6000)
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+        "Accept-Language": "ja,en;q=0.9",
+      },
+      signal: AbortSignal.timeout(6000),
     }).then(r => r.text());
 
-    // ytInitialData からビデオIDを抽出
-    const jM = html.match(/var ytInitialData\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
-    let ids = [];
+    // reelItemRenderer (Shorts専用) を優先
+    let ids = [...new Set([...html.matchAll(/"reelItemRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]))];
 
-    if (jM) {
-      // reelItemRenderer (Shorts専用レンダラー) を探す
-      const reelMatches = [...html.matchAll(/"reelItemRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/g)];
-      ids = [...new Set(reelMatches.map(m => m[1]))];
-    }
-
-    // フォールバック: 通常の動画IDからショートっぽいものを収集
+    // フォールバック: 通常のvideoIdを使う
     if (ids.length < 5) {
-      const fallbackMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
-      const fallback = [...new Set(fallbackMatches.map(m => m[1]))].slice(0, 30);
-      ids = [...new Set([...ids, ...fallback])];
+      const all = [...new Set([...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)].map(m => m[1]))];
+      ids = [...new Set([...ids, ...all])];
+    }
+    ids = ids.slice(0, 40);
+
+    // タイトル抽出（あれば）
+    const titleMap = {};
+    for (const m of html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]{0,200}"text":"([^"]{1,120})"/gs)) {
+      if (!titleMap[m[1]]) titleMap[m[1]] = m[2];
     }
 
-    ids = ids.slice(0, 30);
-
-    // タイトルも抽出（簡易）
-    const titleMap = {};
-    const titleMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]*?"text":"([^"]{1,120})"/g)];
-    titleMatches.forEach(m => { if (!titleMap[m[1]]) titleMap[m[1]] = m[2]; });
-
-    const videos = ids.map(id => ({
-      id,
-      title: titleMap[id] || "",
-    }));
-
-    res.json({ videos });
+    res.json({ videos: ids.map(id => ({ id, title: titleMap[id] || "" })) });
   } catch (e) {
-    console.error("shorts fetch error:", e);
+    console.error("shorts list error:", e.message);
     res.status(500).json({ error: e.message });
   }
 });
 
-// Shorts ストリームURL取得 (高速: Invidiousを使う)
+// Shorts ストリームURL取得API（高速版: YouTube直接）
 app.get("/api/shorts/stream/:id", async (req, res) => {
   const user = getSessionUser(req);
   if (!user) return res.status(401).json({ error: "unauthorized" });
@@ -2690,24 +2689,20 @@ app.get("/api/shorts/stream/:id", async (req, res) => {
   if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.status(400).json({ error: "invalid id" });
 
   try {
-    const data = await ggvideo(id);
-    // Shortsは縦型動画なのでadaptiveFormats優先
-    const adp = data.adaptiveFormats || [];
-    const fmt = data.formatStreams || [];
-    // 360p or 480p を優先（速度重視）
-    const stream =
-      fmt.find(s => s.qualityLabel === "360p") ||
-      fmt.find(s => s.qualityLabel === "480p") ||
-      [...fmt].reverse()[0];
-
-    if (user) saveHistory(user, "shorts", id, data.title || id, "yt").catch(console.error);
-
-    res.json({
-      streamUrl: stream?.url || null,
-      title: data.title || "",
-    });
+    const { streamUrl, title } = await getYTStreamDirect(id);
+    saveHistory(user, "shorts", id, title || id, "yt").catch(console.error);
+    res.json({ streamUrl, title });
   } catch (e) {
-    res.status(500).json({ error: e.message });
+    // フォールバック: Invidious
+    try {
+      const data = await ggvideo(id);
+      const fmt = data.formatStreams || [];
+      const stream = fmt.find(s => s.qualityLabel === "360p") || fmt[0];
+      saveHistory(user, "shorts", id, data.title || id, "yt").catch(console.error);
+      res.json({ streamUrl: stream?.url || null, title: data.title || "" });
+    } catch (e2) {
+      res.status(500).json({ error: e2.message });
+    }
   }
 });
 
@@ -2725,10 +2720,9 @@ app.get("/shorts", (req, res) => {
 
   <div class="shorts-video-wrap" id="shorts-wrap">
     <video id="shorts-video" playsinline autoplay muted
-           style="width:100%;height:100%;object-fit:contain;background:#000;">
-    </video>
+           style="width:100%;height:100%;object-fit:contain;background:#000;"></video>
     <div class="shorts-overlay">
-      <div class="shorts-title" id="shorts-title">読み込み中...</div>
+      <div class="shorts-title" id="shorts-title"></div>
     </div>
     <div class="shorts-actions">
       <button class="shorts-btn" onclick="toggleMute()" id="mute-btn">
@@ -2745,10 +2739,9 @@ app.get("/shorts", (req, res) => {
       </button>
     </div>
     <div class="shorts-nav-btns">
-      <button class="shorts-nav-btn" onclick="prevShort()" title="前へ">▲</button>
-      <button class="shorts-nav-btn" onclick="nextShort()" title="次へ">▼</button>
+      <button class="shorts-nav-btn" onclick="prevShort()">▲</button>
+      <button class="shorts-nav-btn" onclick="nextShort()">▼</button>
     </div>
-    <div class="shorts-loading" id="shorts-loading" style="display:none;">⏳</div>
     <div class="shorts-progress">
       <div class="shorts-progress-bar" id="progress-bar"></div>
     </div>
@@ -2759,176 +2752,145 @@ app.get("/shorts", (req, res) => {
 (function(){
   const video    = document.getElementById("shorts-video");
   const titleEl  = document.getElementById("shorts-title");
-  const loadingEl= document.getElementById("shorts-loading");
   const progress = document.getElementById("progress-bar");
   const muteIcon = document.getElementById("mute-icon");
+  const muteBtn  = document.getElementById("mute-btn");
 
   let playlist = [];
   let idx = 0;
-  let muted = true;          // 最初はミュート（自動再生のため）
-  let streamCache = {};      // id -> { streamUrl, title }
-  let prefetchQueue = [];
-  let prefetchRunning = false;
+  let muted = true;
+  let cache = {};      // id -> { streamUrl, title } | null
+  let fetching = new Set();
   let currentId = null;
+  let skipping = false;
 
-  // プリフェッチ: 次2件のストリームURLを先読み
-  async function prefetch(ids) {
-    for (const id of ids) {
-      if (streamCache[id] || prefetchQueue.includes(id)) continue;
-      prefetchQueue.push(id);
+  // ストリームURLを取得してキャッシュ
+  async function fetchStream(id) {
+    if (cache[id] !== undefined || fetching.has(id)) return;
+    fetching.add(id);
+    try {
+      const r = await fetch("/api/shorts/stream/" + id, { signal: AbortSignal.timeout(5000) });
+      const d = await r.json();
+      cache[id] = d.streamUrl ? d : null;
+    } catch { cache[id] = null; }
+    fetching.delete(id);
+  }
+
+  // 次N件を並列プリフェッチ
+  function prefetchAhead(from, count = 3) {
+    for (let k = 1; k <= count; k++) {
+      const ni = (from + k) % playlist.length;
+      fetchStream(playlist[ni].id);
     }
-    if (prefetchRunning) return;
-    prefetchRunning = true;
-    while (prefetchQueue.length > 0) {
-      const id = prefetchQueue.shift();
-      if (streamCache[id]) continue;
-      try {
-        const r = await fetch("/api/shorts/stream/" + id);
-        const d = await r.json();
-        if (d.streamUrl) streamCache[id] = d;
-      } catch(e) { streamCache[id] = null; }
-    }
-    prefetchRunning = false;
   }
 
   async function loadPlaylist() {
     try {
-      const r = await fetch("/api/shorts");
+      const r = await fetch("/api/shorts", { signal: AbortSignal.timeout(7000) });
       const d = await r.json();
-      if (d.videos && d.videos.length > 0) {
-        playlist = d.videos;
-        // シャッフル
-        for (let i = playlist.length-1; i > 0; i--) {
-          const j = Math.floor(Math.random()*(i+1));
-          [playlist[i],playlist[j]] = [playlist[j],playlist[i]];
-        }
-        playAt(0);
+      if (!d.videos?.length) { titleEl.textContent = "動画が見つかりません"; return; }
+      // シャッフル
+      const arr = d.videos;
+      for (let i = arr.length-1; i > 0; i--) {
+        const j = Math.floor(Math.random()*(i+1));
+        [arr[i],arr[j]]=[arr[j],arr[i]];
       }
+      playlist = arr;
+      playAt(0);
     } catch(e) { titleEl.textContent = "読み込みエラー"; }
   }
 
   async function playAt(i) {
-    if (playlist.length === 0) return;
+    if (!playlist.length || skipping) return;
+    skipping = true;
     idx = ((i % playlist.length) + playlist.length) % playlist.length;
     const item = playlist[idx];
     currentId = item.id;
-    titleEl.textContent = item.title || "読み込み中...";
-    loadingEl.style.display = "flex";
+    titleEl.textContent = item.title || "";
     progress.style.width = "0%";
 
-    // キャッシュ確認
-    if (!streamCache[item.id]) {
-      await prefetch([item.id]);
-      // キャッシュが埋まるまで待つ（最大5秒）
-      let waited = 0;
-      while (!streamCache[item.id] && waited < 50) {
-        await new Promise(r=>setTimeout(r,100));
-        waited++;
+    // キャッシュになければ取得（最大4秒待つ）
+    if (cache[item.id] === undefined) {
+      fetchStream(item.id);
+      const deadline = Date.now() + 4000;
+      while (cache[item.id] === undefined && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 80));
       }
     }
 
-    const cached = streamCache[item.id];
-    if (!cached || !cached.streamUrl) {
-      // ストリームURLが取れなければ skip
-      loadingEl.style.display = "none";
+    const hit = cache[item.id];
+    if (!hit) {
+      // 取れなければ即スキップ
+      skipping = false;
       playAt(idx + 1);
       return;
     }
 
-    titleEl.textContent = cached.title || item.title || "";
-    video.src = cached.streamUrl;
+    titleEl.textContent = hit.title || item.title || "";
     video.muted = muted;
-    video.load();
+    video.src = hit.streamUrl;
 
-    try {
-      await video.play();
-    } catch(e) {
-      // autoplay blocked: ミュートで再試行
-      video.muted = true;
-      muted = true;
+    try { await video.play(); }
+    catch {
+      video.muted = true; muted = true;
       muteIcon.textContent = "🔇";
+      muteBtn.querySelector("span").textContent = "ミュート";
       try { await video.play(); } catch {}
     }
 
-    loadingEl.style.display = "none";
+    skipping = false;
 
-    // 次の2件をプリフェッチ
-    const nextIds = [];
-    for (let k = 1; k <= 2; k++) {
-      const ni = (idx + k) % playlist.length;
-      nextIds.push(playlist[ni].id);
-    }
-    prefetch(nextIds);
+    // 次3件を並列プリフェッチ
+    prefetchAhead(idx, 3);
 
-    // プレイリストの終わり付近でリロード
-    if (idx >= playlist.length - 5) {
-      loadPlaylist();
-    }
+    // プレイリスト末尾付近で再取得
+    if (idx >= playlist.length - 6) loadPlaylist();
   }
 
-  // 進捗バー
   video.addEventListener("timeupdate", () => {
-    if (video.duration > 0) {
-      progress.style.width = (video.currentTime / video.duration * 100) + "%";
-    }
+    if (video.duration > 0) progress.style.width = (video.currentTime / video.duration * 100) + "%";
   });
+  video.addEventListener("ended", () => { if (!skipping) playAt(idx + 1); });
 
-  // 再生終了で次へ
-  video.addEventListener("ended", () => nextShort());
-
-  // スワイプジェスチャー
-  let touchStartY = 0;
+  // スワイプ
+  let ty = 0;
   const wrap = document.getElementById("shorts-wrap");
-  wrap.addEventListener("touchstart", e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  wrap.addEventListener("touchstart", e => { ty = e.touches[0].clientY; }, { passive: true });
   wrap.addEventListener("touchend", e => {
-    const dy = touchStartY - e.changedTouches[0].clientY;
-    if (Math.abs(dy) > 60) {
-      if (dy > 0) nextShort(); else prevShort();
-    }
+    const dy = ty - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 50) { if (dy > 0) nextShort(); else prevShort(); }
   }, { passive: true });
 
-  // キーボード操作
+  // キーボード
   document.addEventListener("keydown", e => {
-    if (e.key === "ArrowDown" || e.key === "ArrowRight") nextShort();
-    if (e.key === "ArrowUp"   || e.key === "ArrowLeft")  prevShort();
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") { e.preventDefault(); nextShort(); }
+    if (e.key === "ArrowUp"   || e.key === "ArrowLeft")  { e.preventDefault(); prevShort(); }
     if (e.key === " ") { e.preventDefault(); toggleMute(); }
   });
 
-  // グローバル関数
-  window.nextShort = () => playAt(idx + 1);
-  window.prevShort = () => playAt(idx - 1);
-
+  window.nextShort  = () => playAt(idx + 1);
+  window.prevShort  = () => playAt(idx - 1);
   window.toggleMute = () => {
     muted = !muted;
     video.muted = muted;
     muteIcon.textContent = muted ? "🔇" : "🔊";
-    document.getElementById("mute-btn").querySelector("span").textContent = muted ? "ミュート" : "音あり";
+    muteBtn.querySelector("span").textContent = muted ? "ミュート" : "音あり";
   };
-
-  window.openYT = () => {
-    if (currentId) window.open("https://www.youtube.com/shorts/" + currentId, "_blank");
-  };
-
+  window.openYT = () => { if (currentId) window.open("https://www.youtube.com/shorts/" + currentId, "_blank"); };
   window.favCurrent = () => {
     if (!currentId) return;
-    const t = titleEl.textContent;
-    fetch("/favorite/add",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({videoId:currentId,title:t})
-    }).then(r=>r.json()).then(d=>{
-      if(d.ok) alert("お気に入りに追加しました");
-      else if(d.duplicate) alert("すでに登録済みです");
-    }).catch(()=>alert("エラーが発生しました"));
+    fetch("/favorite/add", { method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({ videoId: currentId, title: titleEl.textContent }) })
+    .then(r=>r.json()).then(d=>{
+      alert(d.ok ? "お気に入りに追加しました" : d.duplicate ? "すでに登録済みです" : "エラー");
+    }).catch(()=>alert("通信エラー"));
   };
 
-  // 初期化
   loadPlaylist();
 })();
 </script>
 `;
 
-  // Shortsページはメインレイアウトを使わず独自ページ
   res.send(`<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -2936,10 +2898,7 @@ app.get("/shorts", (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Shorts - YouTube Viewer</title>
 ${buildCSS("yt")}
-<style>
-  body { background: #000; overflow: hidden; }
-  .main-content { margin: 0; padding: 0; }
-</style>
+<style>body{background:#000;overflow:hidden;}</style>
 </head>
 <body>
 ${body}
