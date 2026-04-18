@@ -575,6 +575,7 @@ function buildCSS(platform = "yt") {
     .shorts-video-wrap { max-width: 390px; height: 90vh; }
   }
 </style>
+`;
 }
 
 // ======================================
