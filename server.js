@@ -481,8 +481,100 @@ function buildCSS(platform = "yt") {
     font-weight:bold; font-size:12px;
     padding:2px 7px; border-radius:5px;
   }
+
+  /* ===== Shorts ===== */
+  .shorts-container {
+    position: fixed; inset: 0;
+    background: #000;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    overflow: hidden; z-index: 500;
+  }
+  .shorts-video-wrap {
+    position: relative;
+    width: 100%; max-width: 420px;
+    height: 100vh; max-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .shorts-video-wrap video {
+    width: 100%; height: 100%;
+    object-fit: contain; background: #000;
+    display: block;
+  }
+  .shorts-overlay {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    padding: 16px 14px 24px;
+    background: linear-gradient(transparent, rgba(0,0,0,0.75));
+    color: white; pointer-events: none;
+  }
+  .shorts-title {
+    font-size: 14px; font-weight: bold;
+    line-height: 1.4; margin-bottom: 6px;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.6);
+  }
+  .shorts-actions {
+    position: absolute; right: 10px; bottom: 80px;
+    display: flex; flex-direction: column; gap: 18px;
+    align-items: center;
+  }
+  .shorts-btn {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 4px; color: white; border: none; background: transparent;
+    cursor: pointer; font-size: 11px; font-weight: bold;
+    -webkit-tap-highlight-color: transparent;
+    pointer-events: all;
+  }
+  .shorts-btn .sb-icon {
+    width: 44px; height: 44px; border-radius: 50%;
+    background: rgba(255,255,255,0.2);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px; backdrop-filter: blur(4px);
+  }
+  .shorts-nav-btns {
+    position: absolute; top: 50%; right: 8px;
+    transform: translateY(-50%);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .shorts-nav-btn {
+    width: 40px; height: 40px; border-radius: 50%;
+    background: rgba(255,255,255,0.15); border: none;
+    color: white; font-size: 18px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    backdrop-filter: blur(4px);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .shorts-top-bar {
+    position: fixed; top: 0; left: 0; right: 0;
+    padding: 10px 14px; z-index: 600;
+    display: flex; align-items: center; gap: 10px;
+    background: linear-gradient(rgba(0,0,0,0.5), transparent);
+  }
+  .shorts-top-bar a {
+    color: white; text-decoration: none; font-size: 22px;
+    line-height: 1;
+  }
+  .shorts-top-bar h2 {
+    color: white; font-size: 16px; margin: 0;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  .shorts-progress {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 3px; background: rgba(255,255,255,0.3);
+  }
+  .shorts-progress-bar {
+    height: 100%; background: var(--accent);
+    width: 0%; transition: width 0.25s linear;
+  }
+  .shorts-loading {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.6);
+    color: white; font-size: 14px;
+  }
+  @media (min-width: 768px) {
+    .shorts-video-wrap { max-width: 390px; height: 90vh; }
+  }
 </style>
-`;
 }
 
 // ======================================
@@ -495,6 +587,7 @@ function buildSidebar(platform, currentPath = "") {
 
   const ytLinks = `
     <a href="/"${al("/")}><span class="sidebar-icon">🏠</span><span class="sidebar-text">ホーム</span></a>
+    <a href="/shorts"${al("/shorts")}><span class="sidebar-icon">📱</span><span class="sidebar-text">Shorts</span></a>
     <a href="/channel-search"${al("/channel-search")}><span class="sidebar-icon">📺</span><span class="sidebar-text">チャンネル検索</span></a>
     <a href="/music"><span class="sidebar-icon">♫</span><span class="sidebar-text">Music</span></a>
     <hr class="sidebar-divider">
@@ -539,6 +632,9 @@ function buildSidebar(platform, currentPath = "") {
   <a href="${homeHref}" class="bottom-nav-item${homeActive}">
     <span class="bn-icon">🏠</span><span>ホーム</span>
   </a>
+  <a href="/shorts" class="bottom-nav-item${abn("/shorts")}">
+    <span class="bn-icon">📱</span><span>Shorts</span>
+  </a>
   <a href="/favorites" class="bottom-nav-item${abn("/favorites")}">
     <span class="bn-icon">⭐</span><span>お気に入り</span>
   </a>
@@ -549,9 +645,6 @@ function buildSidebar(platform, currentPath = "") {
     <span class="bn-icon">${isNico ? "🎬" : "▶"}</span>
     <span>${isNico ? "ニコニコ" : "YouTube"}</span>
   </button>
-  <a href="/settings" class="bottom-nav-item${abn("/settings")}">
-    <span class="bn-icon">⚙️</span><span>設定</span>
-  </a>
 </nav>
 
 <div class="platform-modal-overlay" id="platform-modal" onclick="closePlatformModal(event)">
@@ -1441,25 +1534,71 @@ app.post("/search", async (req, res) => {
   const matches = [...html.matchAll(/"videoId":"(.*?)".*?"title":\{"runs":\[\{"text":"(.*?)"\}\]/gs)];
   const videos = matches.slice(0,60).map(m=>({id:m[1],title:m[2]}));
 
-  const cards = videos.map(v=>`
-    <form action="/watch" method="post">
-      <input type="hidden" name="id" value="${v.id}">
+  // 最初の50件だけ表示、残りはJS側で保持してスクロール時に追加
+  const INITIAL = 50;
+  const initialVideos = videos.slice(0, INITIAL);
+  const remainVideos  = videos.slice(INITIAL);
+
+  function videoCardHTML(v) {
+    return `<form action="/watch" method="post">
+      <input type="hidden" name="id" value="${escHtml(v.id)}">
       <button style="all:unset;cursor:pointer;width:100%;">
         <div class="card yt-card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-          <div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">${v.title}</div>
+          <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
+          <div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">${escHtml(v.title)}</div>
         </div>
       </button>
-    </form>
-  `).join("");
+    </form>`;
+  }
+
+  const cards = initialVideos.map(videoCardHTML).join("");
+  const remainJSON = JSON.stringify(remainVideos.map(v=>({id:v.id,title:v.title})));
 
   const body = `
 <div class="page-header" style="margin-bottom:18px;">
-  <h2 style="font-size:18px;">「${q}」の検索結果</h2>
+  <h2 style="font-size:18px;">「${escHtml(q)}」の検索結果</h2>
   <span class="platform-badge yt">▶ YouTube</span>
-  <span style="font-size:13px;color:#999;margin-left:auto;">${region==="jp"?"🇯🇵 日本":"🌏 全世界"} / ${videos.length}件</span>
+  <span style="font-size:13px;color:#999;margin-left:auto;">${region==="jp"?"🇯🇵 日本":"🌏 全世界"} / <span id="result-count">${initialVideos.length}</span>件表示</span>
 </div>
-<div class="card-grid">${cards}</div>
+<div class="card-grid" id="search-grid">${cards}</div>
+<div id="load-sentinel" style="height:60px;display:flex;align-items:center;justify-content:center;">
+  <span id="load-more-msg" style="color:#aaa;font-size:13px;display:none;">⏳ 読み込み中...</span>
+</div>
+<script>
+(function(){
+  const remaining = ${remainJSON};
+  let idx = 0;
+  const CHUNK = 50;
+  const grid = document.getElementById("search-grid");
+  const sentinel = document.getElementById("load-sentinel");
+  const msg = document.getElementById("load-more-msg");
+  const counter = document.getElementById("result-count");
+  let loading = false;
+
+  function addCards() {
+    if (loading || idx >= remaining.length) return;
+    loading = true;
+    msg.style.display = "flex";
+    const chunk = remaining.slice(idx, idx + CHUNK);
+    idx += CHUNK;
+    const frag = document.createDocumentFragment();
+    chunk.forEach(v => {
+      const div = document.createElement("div");
+      div.innerHTML = '<form action="/watch" method="post"><input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;line-height:1.4;">'+v.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div></div></button></form>';
+      frag.appendChild(div.firstChild);
+    });
+    grid.appendChild(frag);
+    counter.textContent = (parseInt(counter.textContent)||0) + chunk.length;
+    loading = false;
+    if (idx >= remaining.length) msg.style.display = "none";
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting) addCards();
+  }, { rootMargin: "200px" });
+  observer.observe(sentinel);
+})();
+</script>
 `;
   res.send(page(`${q} - YouTube検索`, "yt", body, "/"));
 });
@@ -1787,24 +1926,70 @@ async function handleChannelVideos(req, res) {
     .slice(0,60);
 
   const chTitle=data.metadata?.channelMetadataRenderer?.title||"チャンネル";
-  const cards=videos.map(v=>`
+
+  const CH_INITIAL = 50;
+  const chInitial  = videos.slice(0, CH_INITIAL);
+  const chRemain   = videos.slice(CH_INITIAL);
+
+  const cards=chInitial.map(v=>`
     <form action="/watch" method="post">
-      <input type="hidden" name="id" value="${v.id}">
+      <input type="hidden" name="id" value="${escHtml(v.id)}">
       <button style="all:unset;cursor:pointer;width:100%;">
         <div class="card yt-card">
-          <img class="thumb" src="https://i.ytimg.com/vi/${v.id}/hqdefault.jpg">
-          <div style="margin-top:8px;font-size:13px;font-weight:bold;">${v.title}</div>
+          <img class="thumb" src="https://i.ytimg.com/vi/${escHtml(v.id)}/hqdefault.jpg" loading="lazy">
+          <div style="margin-top:8px;font-size:13px;font-weight:bold;">${escHtml(v.title)}</div>
         </div>
       </button>
     </form>
   `).join("");
 
+  const chRemainJSON = JSON.stringify(chRemain.map(v=>({id:v.id,title:v.title})));
+
   const body=`
 <div class="page-header" style="margin-bottom:18px;">
-  <h2 style="font-size:18px;">📺 ${chTitle}</h2>
+  <h2 style="font-size:18px;">📺 ${escHtml(chTitle)}</h2>
   <span class="platform-badge yt">▶ YouTube</span>
+  <span style="font-size:13px;color:#999;margin-left:auto;"><span id="ch-count">${chInitial.length}</span>件表示</span>
 </div>
-<div class="card-grid">${cards}</div>
+<div class="card-grid" id="ch-grid">${cards}</div>
+<div id="ch-sentinel" style="height:60px;display:flex;align-items:center;justify-content:center;">
+  <span id="ch-load-msg" style="color:#aaa;font-size:13px;display:none;">⏳ 読み込み中...</span>
+</div>
+<script>
+(function(){
+  const remaining = ${chRemainJSON};
+  let idx = 0;
+  const CHUNK = 50;
+  const grid = document.getElementById("ch-grid");
+  const sentinel = document.getElementById("ch-sentinel");
+  const msg = document.getElementById("ch-load-msg");
+  const counter = document.getElementById("ch-count");
+  let loading = false;
+
+  function addCards() {
+    if (loading || idx >= remaining.length) return;
+    loading = true;
+    msg.style.display = "flex";
+    const chunk = remaining.slice(idx, idx + CHUNK);
+    idx += CHUNK;
+    const frag = document.createDocumentFragment();
+    chunk.forEach(v => {
+      const div = document.createElement("div");
+      div.innerHTML = '<form action="/watch" method="post"><input type="hidden" name="id" value="'+v.id+'"><button style="all:unset;cursor:pointer;width:100%;"><div class="card yt-card"><img class="thumb" src="https://i.ytimg.com/vi/'+v.id+'/hqdefault.jpg" loading="lazy"><div style="margin-top:8px;font-size:13px;font-weight:bold;">'+v.title.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div></div></button></form>';
+      frag.appendChild(div.firstChild);
+    });
+    grid.appendChild(frag);
+    counter.textContent = (parseInt(counter.textContent)||0) + chunk.length;
+    loading = false;
+    if (idx >= remaining.length) msg.style.display = "none";
+  }
+
+  const observer = new IntersectionObserver(entries => {
+    if (entries[0].isIntersecting) addCards();
+  }, { rootMargin: "200px" });
+  observer.observe(sentinel);
+})();
+</script>
 `;
   res.send(page(chTitle, "yt", body, "/channel-search"));
 }
@@ -2435,6 +2620,330 @@ app.post("/admin/add-user", requireAdmin, async (req, res) => {
     console.error("admin/add-user error:", e);
     return redir("登録に失敗しました");
   }
+});
+
+// ======================================
+// ■ Shorts
+// ======================================
+
+// Shortsのビデオリストをサーバー側で取得するAPIエンドポイント
+app.get("/api/shorts", async (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ error: "unauthorized" });
+
+  // YouTubeのShortsフィードを複数の検索クエリからランダムに取得（高速化）
+  const queries = [
+    "https://www.youtube.com/shorts",
+    "https://www.youtube.com/results?search_query=%23shorts&sp=EgQQARgB",
+    "https://www.youtube.com/results?search_query=shorts+viral&sp=EgQQARgB",
+  ];
+  const url = queries[Math.floor(Math.random() * queries.length)];
+
+  try {
+    const html = await fetch(url, {
+      headers: { "Accept-Language": "ja,en;q=0.9", "User-Agent": "Mozilla/5.0" },
+      signal: AbortSignal.timeout(6000)
+    }).then(r => r.text());
+
+    // ytInitialData からビデオIDを抽出
+    const jM = html.match(/var ytInitialData\s*=\s*(\{[\s\S]*?\});\s*<\/script>/);
+    let ids = [];
+
+    if (jM) {
+      // reelItemRenderer (Shorts専用レンダラー) を探す
+      const reelMatches = [...html.matchAll(/"reelItemRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+      ids = [...new Set(reelMatches.map(m => m[1]))];
+    }
+
+    // フォールバック: 通常の動画IDからショートっぽいものを収集
+    if (ids.length < 5) {
+      const fallbackMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g)];
+      const fallback = [...new Set(fallbackMatches.map(m => m[1]))].slice(0, 30);
+      ids = [...new Set([...ids, ...fallback])];
+    }
+
+    ids = ids.slice(0, 30);
+
+    // タイトルも抽出（簡易）
+    const titleMap = {};
+    const titleMatches = [...html.matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"[^}]*?"text":"([^"]{1,120})"/g)];
+    titleMatches.forEach(m => { if (!titleMap[m[1]]) titleMap[m[1]] = m[2]; });
+
+    const videos = ids.map(id => ({
+      id,
+      title: titleMap[id] || "",
+    }));
+
+    res.json({ videos });
+  } catch (e) {
+    console.error("shorts fetch error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Shorts ストリームURL取得 (高速: Invidiousを使う)
+app.get("/api/shorts/stream/:id", async (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) return res.status(401).json({ error: "unauthorized" });
+  const { id } = req.params;
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(id)) return res.status(400).json({ error: "invalid id" });
+
+  try {
+    const data = await ggvideo(id);
+    // Shortsは縦型動画なのでadaptiveFormats優先
+    const adp = data.adaptiveFormats || [];
+    const fmt = data.formatStreams || [];
+    // 360p or 480p を優先（速度重視）
+    const stream =
+      fmt.find(s => s.qualityLabel === "360p") ||
+      fmt.find(s => s.qualityLabel === "480p") ||
+      [...fmt].reverse()[0];
+
+    if (user) saveHistory(user, "shorts", id, data.title || id, "yt").catch(console.error);
+
+    res.json({
+      streamUrl: stream?.url || null,
+      title: data.title || "",
+    });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// Shorts ページ
+app.get("/shorts", (req, res) => {
+  const user = getSessionUser(req);
+  if (!user) return res.redirect("/login");
+
+  const body = `
+<div class="shorts-container" id="shorts-container">
+  <div class="shorts-top-bar">
+    <a href="/">←</a>
+    <h2>📱 Shorts</h2>
+  </div>
+
+  <div class="shorts-video-wrap" id="shorts-wrap">
+    <video id="shorts-video" playsinline autoplay muted
+           style="width:100%;height:100%;object-fit:contain;background:#000;">
+    </video>
+    <div class="shorts-overlay">
+      <div class="shorts-title" id="shorts-title">読み込み中...</div>
+    </div>
+    <div class="shorts-actions">
+      <button class="shorts-btn" onclick="toggleMute()" id="mute-btn">
+        <div class="sb-icon" id="mute-icon">🔇</div>
+        <span>ミュート</span>
+      </button>
+      <button class="shorts-btn" onclick="favCurrent()">
+        <div class="sb-icon">⭐</div>
+        <span>お気に入り</span>
+      </button>
+      <button class="shorts-btn" onclick="openYT()">
+        <div class="sb-icon">▶</div>
+        <span>YouTube</span>
+      </button>
+    </div>
+    <div class="shorts-nav-btns">
+      <button class="shorts-nav-btn" onclick="prevShort()" title="前へ">▲</button>
+      <button class="shorts-nav-btn" onclick="nextShort()" title="次へ">▼</button>
+    </div>
+    <div class="shorts-loading" id="shorts-loading" style="display:none;">⏳</div>
+    <div class="shorts-progress">
+      <div class="shorts-progress-bar" id="progress-bar"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const video    = document.getElementById("shorts-video");
+  const titleEl  = document.getElementById("shorts-title");
+  const loadingEl= document.getElementById("shorts-loading");
+  const progress = document.getElementById("progress-bar");
+  const muteIcon = document.getElementById("mute-icon");
+
+  let playlist = [];
+  let idx = 0;
+  let muted = true;          // 最初はミュート（自動再生のため）
+  let streamCache = {};      // id -> { streamUrl, title }
+  let prefetchQueue = [];
+  let prefetchRunning = false;
+  let currentId = null;
+
+  // プリフェッチ: 次2件のストリームURLを先読み
+  async function prefetch(ids) {
+    for (const id of ids) {
+      if (streamCache[id] || prefetchQueue.includes(id)) continue;
+      prefetchQueue.push(id);
+    }
+    if (prefetchRunning) return;
+    prefetchRunning = true;
+    while (prefetchQueue.length > 0) {
+      const id = prefetchQueue.shift();
+      if (streamCache[id]) continue;
+      try {
+        const r = await fetch("/api/shorts/stream/" + id);
+        const d = await r.json();
+        if (d.streamUrl) streamCache[id] = d;
+      } catch(e) { streamCache[id] = null; }
+    }
+    prefetchRunning = false;
+  }
+
+  async function loadPlaylist() {
+    try {
+      const r = await fetch("/api/shorts");
+      const d = await r.json();
+      if (d.videos && d.videos.length > 0) {
+        playlist = d.videos;
+        // シャッフル
+        for (let i = playlist.length-1; i > 0; i--) {
+          const j = Math.floor(Math.random()*(i+1));
+          [playlist[i],playlist[j]] = [playlist[j],playlist[i]];
+        }
+        playAt(0);
+      }
+    } catch(e) { titleEl.textContent = "読み込みエラー"; }
+  }
+
+  async function playAt(i) {
+    if (playlist.length === 0) return;
+    idx = ((i % playlist.length) + playlist.length) % playlist.length;
+    const item = playlist[idx];
+    currentId = item.id;
+    titleEl.textContent = item.title || "読み込み中...";
+    loadingEl.style.display = "flex";
+    progress.style.width = "0%";
+
+    // キャッシュ確認
+    if (!streamCache[item.id]) {
+      await prefetch([item.id]);
+      // キャッシュが埋まるまで待つ（最大5秒）
+      let waited = 0;
+      while (!streamCache[item.id] && waited < 50) {
+        await new Promise(r=>setTimeout(r,100));
+        waited++;
+      }
+    }
+
+    const cached = streamCache[item.id];
+    if (!cached || !cached.streamUrl) {
+      // ストリームURLが取れなければ skip
+      loadingEl.style.display = "none";
+      playAt(idx + 1);
+      return;
+    }
+
+    titleEl.textContent = cached.title || item.title || "";
+    video.src = cached.streamUrl;
+    video.muted = muted;
+    video.load();
+
+    try {
+      await video.play();
+    } catch(e) {
+      // autoplay blocked: ミュートで再試行
+      video.muted = true;
+      muted = true;
+      muteIcon.textContent = "🔇";
+      try { await video.play(); } catch {}
+    }
+
+    loadingEl.style.display = "none";
+
+    // 次の2件をプリフェッチ
+    const nextIds = [];
+    for (let k = 1; k <= 2; k++) {
+      const ni = (idx + k) % playlist.length;
+      nextIds.push(playlist[ni].id);
+    }
+    prefetch(nextIds);
+
+    // プレイリストの終わり付近でリロード
+    if (idx >= playlist.length - 5) {
+      loadPlaylist();
+    }
+  }
+
+  // 進捗バー
+  video.addEventListener("timeupdate", () => {
+    if (video.duration > 0) {
+      progress.style.width = (video.currentTime / video.duration * 100) + "%";
+    }
+  });
+
+  // 再生終了で次へ
+  video.addEventListener("ended", () => nextShort());
+
+  // スワイプジェスチャー
+  let touchStartY = 0;
+  const wrap = document.getElementById("shorts-wrap");
+  wrap.addEventListener("touchstart", e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+  wrap.addEventListener("touchend", e => {
+    const dy = touchStartY - e.changedTouches[0].clientY;
+    if (Math.abs(dy) > 60) {
+      if (dy > 0) nextShort(); else prevShort();
+    }
+  }, { passive: true });
+
+  // キーボード操作
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowDown" || e.key === "ArrowRight") nextShort();
+    if (e.key === "ArrowUp"   || e.key === "ArrowLeft")  prevShort();
+    if (e.key === " ") { e.preventDefault(); toggleMute(); }
+  });
+
+  // グローバル関数
+  window.nextShort = () => playAt(idx + 1);
+  window.prevShort = () => playAt(idx - 1);
+
+  window.toggleMute = () => {
+    muted = !muted;
+    video.muted = muted;
+    muteIcon.textContent = muted ? "🔇" : "🔊";
+    document.getElementById("mute-btn").querySelector("span").textContent = muted ? "ミュート" : "音あり";
+  };
+
+  window.openYT = () => {
+    if (currentId) window.open("https://www.youtube.com/shorts/" + currentId, "_blank");
+  };
+
+  window.favCurrent = () => {
+    if (!currentId) return;
+    const t = titleEl.textContent;
+    fetch("/favorite/add",{
+      method:"POST",
+      headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({videoId:currentId,title:t})
+    }).then(r=>r.json()).then(d=>{
+      if(d.ok) alert("お気に入りに追加しました");
+      else if(d.duplicate) alert("すでに登録済みです");
+    }).catch(()=>alert("エラーが発生しました"));
+  };
+
+  // 初期化
+  loadPlaylist();
+})();
+</script>
+`;
+
+  // Shortsページはメインレイアウトを使わず独自ページ
+  res.send(`<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Shorts - YouTube Viewer</title>
+${buildCSS("yt")}
+<style>
+  body { background: #000; overflow: hidden; }
+  .main-content { margin: 0; padding: 0; }
+</style>
+</head>
+<body>
+${body}
+</body>
+</html>`);
 });
 
 // ======================================
