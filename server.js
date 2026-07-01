@@ -400,17 +400,34 @@ async function verifyPassword(plain, hash) {
 // ■ DBセットアップ
 // ======================================
 async function ensureUsersTable() {
+  // DB接続確認
+  try {
+    await pool.query("SELECT 1");
+    console.log("[DB] connection OK");
+  } catch(e) {
+    console.error("[DB] connection FAILED:", e.message);
+    throw e;
+  }
+
   await pool.query(`CREATE TABLE IF NOT EXISTS users (id SERIAL PRIMARY KEY, username TEXT UNIQUE NOT NULL, password TEXT, email TEXT, oauth_provider TEXT, oauth_id TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS email TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_provider TEXT`);
   await pool.query(`ALTER TABLE users ADD COLUMN IF NOT EXISTS oauth_id TEXT`);
   await pool.query(`ALTER TABLE users ALTER COLUMN password DROP NOT NULL`).catch(() => {});
+
   await pool.query(`CREATE TABLE IF NOT EXISTS history (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, query TEXT, video_id TEXT, title TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  // 既存テーブルにtitleカラムがない場合に備えて追加
+  await pool.query(`ALTER TABLE history ADD COLUMN IF NOT EXISTS title TEXT`).catch(() => {});
+
   await pool.query(`CREATE TABLE IF NOT EXISTS admin_history (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, query TEXT, video_id TEXT, title TEXT, created_at TIMESTAMPTZ DEFAULT NOW())`);
+  await pool.query(`ALTER TABLE admin_history ADD COLUMN IF NOT EXISTS title TEXT`).catch(() => {});
+
   await pool.query(`CREATE TABLE IF NOT EXISTS favorites (id SERIAL PRIMARY KEY, user_id TEXT NOT NULL, video_id TEXT NOT NULL, title TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), UNIQUE(user_id, video_id))`);
   await pool.query(`CREATE TABLE IF NOT EXISTS password_reset_requests (id SERIAL PRIMARY KEY, username TEXT NOT NULL, message TEXT, status TEXT NOT NULL DEFAULT 'pending', new_password TEXT, created_at TIMESTAMPTZ DEFAULT NOW(), updated_at TIMESTAMPTZ DEFAULT NOW())`);
+
+  console.log("[DB] all tables ensured");
 }
-ensureUsersTable().catch(console.error);
+ensureUsersTable().catch(e => console.error("[DB] ensureUsersTable failed:", e.message));
 
 // ======================================
 // ■ ユーティリティ
@@ -433,24 +450,46 @@ async function findUser(user, pass) {
 function getPlatform(req) { return req.cookies.platform === "nico" ? "nico" : "yt"; }
 
 // ======================================
-// ■ [FIX] 履歴保存 - nico:プレフィックスの二重付与を防止
+// ■ [FIX] 履歴保存
 // ======================================
 async function saveHistory(user, keyword, videoId, title, source = "yt") {
+  if (!user || !videoId) {
+    console.error("[saveHistory] missing required params:", { user, videoId });
+    return;
+  }
+
   let storedId;
   if (source === "nico") {
-    // すでにnico:プレフィックスがついていれば付け直さない
     storedId = videoId.startsWith("nico:") ? videoId : `nico:${videoId}`;
   } else {
-    storedId = videoId;
+    // YT側はnico:が入り込まないよう念のため除去
+    storedId = videoId.replace(/^nico:/, "");
   }
-  const params = [user, keyword, storedId, title];
-  const results = await Promise.allSettled([
-    pool.query("INSERT INTO history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params),
-    pool.query("INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)", params)
-  ]);
-  results.forEach((r, i) => {
-    if (r.status === "rejected") console.error(`saveHistory[${i}] failed:`, r.reason?.message || r.reason);
-  });
+
+  const safeTitle = (title || "").trim() || storedId;
+  const safeKeyword = keyword || "watch";
+
+  console.log(`[saveHistory] user=${user} source=${source} storedId=${storedId}`);
+
+  const params = [user, safeKeyword, storedId, safeTitle];
+
+  try {
+    await pool.query(
+      "INSERT INTO history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)",
+      params
+    );
+  } catch (e) {
+    console.error("[saveHistory] history INSERT failed:", e.message, "params:", params);
+  }
+
+  try {
+    await pool.query(
+      "INSERT INTO admin_history (user_id, query, video_id, title) VALUES ($1,$2,$3,$4)",
+      params
+    );
+  } catch (e) {
+    console.error("[saveHistory] admin_history INSERT failed:", e.message, "params:", params);
+  }
 }
 
 // ======================================
@@ -972,9 +1011,14 @@ function addFav(id, title) {
 async function handleNormalWatch(req, res, id) {
   const user = getSessionUser(req);
   let data;
-  try { data = await getYouTube(id); } catch (e) { return res.redirect(`https://www.youtube.com/watch?v=${id}`); }
+  try { data = await getYouTube(id); } catch (e) {
+    // Invidious失敗時もタイトル不明で履歴保存を試みる
+    if (user) saveHistory(user, "watch", id, id, "yt").catch(console.error);
+    return res.redirect(`https://www.youtube.com/watch?v=${id}`);
+  }
   const { streamUrl, title, channelName, channelId, related } = data;
-  if (user) saveHistory(user, "watch", id, title, "yt").catch(console.error);
+  // awaitで確実に保存（エラーはsaveHistory内でログ出力）
+  if (user) await saveHistory(user, "watch", id, title, "yt");
   const body = `
 <div class="watch-layout">
   <div class="watch-player">
@@ -1002,8 +1046,8 @@ async function handleEmbedWatch(res, id, mode, user) {
   try {
     const d = await getYouTube(id);
     title=d.title; channelName=d.channelName; channelId=d.channelId; related=d.related;
-    if(user) saveHistory(user,"watch",id,title,"yt").catch(console.error);
-  } catch(e) { /* 埋め込みは継続 */ }
+    if(user) await saveHistory(user,"watch",id,title,"yt");
+  } catch(e) { console.error("[handleEmbedWatch] getYouTube failed:", e.message); /* 埋め込みは継続 */ }
   const modeLabel = mode==="edu" ? "edu (YouTube Education)" : "nocookie (NoCookie)";
   const body = `
 <div class="watch-layout">
