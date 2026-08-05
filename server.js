@@ -870,6 +870,38 @@ async function getYouTube(videoId) {
   };
 }
 
+// Invidiousが全滅している時のタイトル取得用フォールバック
+// YOUTUBE_API_KEYがあれば公式YouTube Data API v3を優先使用（スクレイピング系より確実にブロックされにくい）
+// なければ最後の手段としてoEmbedを試す
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY || "";
+
+async function getYouTubeTitleFallback(videoId) {
+  if (YOUTUBE_API_KEY) {
+    try {
+      const res = await fetch(
+        `https://www.googleapis.com/youtube/v3/videos?part=snippet&id=${videoId}&key=${YOUTUBE_API_KEY}`,
+        { signal: AbortSignal.timeout(4000) }
+      );
+      if (!res.ok) throw new Error(`YouTube Data API bad status: ${res.status}`);
+      const data = await res.json();
+      const title = data.items?.[0]?.snippet?.title;
+      if (title) return title;
+      console.error("[YouTube Data API] video not found or no snippet:", videoId);
+    } catch (e) {
+      console.error("[YouTube Data API] title fetch failed:", e.message);
+    }
+  }
+  try {
+    const res = await fetch(`https://www.youtube.com/oembed?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)}&format=json`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) throw new Error("oembed bad status");
+    const data = await res.json();
+    return data.title || null;
+  } catch (e) {
+    console.error("[oembed] title fetch failed:", e.message);
+    return null;
+  }
+}
+
 let cachedEduParams = null;
 async function getEduParams() {
   if (cachedEduParams) return cachedEduParams;
@@ -1012,8 +1044,11 @@ async function handleNormalWatch(req, res, id) {
   const user = getSessionUser(req);
   let data;
   try { data = await getYouTube(id); } catch (e) {
-    // Invidious失敗時もタイトル不明で履歴保存を試みる
-    if (user) saveHistory(user, "watch", id, id, "yt").catch(console.error);
+    // Invidious失敗時はoEmbedでタイトルだけ取得して履歴保存を試みる
+    if (user) {
+      const fallbackTitle = await getYouTubeTitleFallback(id);
+      saveHistory(user, "watch", id, fallbackTitle || id, "yt").catch(console.error);
+    }
     return res.redirect(`https://www.youtube.com/watch?v=${id}`);
   }
   const { streamUrl, title, channelName, channelId, related } = data;
@@ -1049,8 +1084,10 @@ async function handleEmbedWatch(res, id, mode, user) {
     if(user) await saveHistory(user,"watch",id,title,"yt");
   } catch(e) {
     console.error("[handleEmbedWatch] getYouTube failed:", e.message);
-    // Invidiousが全滅していても埋め込み再生は継続するため、タイトル不明のまま履歴だけは保存する
-    if(user) saveHistory(user,"watch",id,id,"yt").catch(console.error);
+    // Invidiousが全滅していても埋め込み再生は継続するため、oEmbedでタイトルだけ別途取得して履歴保存する
+    const fallbackTitle = await getYouTubeTitleFallback(id);
+    if (fallbackTitle) title = fallbackTitle;
+    if(user) saveHistory(user,"watch",id,fallbackTitle || id,"yt").catch(console.error);
   }
   const modeLabel = mode==="edu" ? "edu (YouTube Education)" : "nocookie (NoCookie)";
   const body = `
