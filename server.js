@@ -1047,7 +1047,11 @@ async function handleEmbedWatch(res, id, mode, user) {
     const d = await getYouTube(id);
     title=d.title; channelName=d.channelName; channelId=d.channelId; related=d.related;
     if(user) await saveHistory(user,"watch",id,title,"yt");
-  } catch(e) { console.error("[handleEmbedWatch] getYouTube failed:", e.message); /* 埋め込みは継続 */ }
+  } catch(e) {
+    console.error("[handleEmbedWatch] getYouTube failed:", e.message);
+    // Invidiousが全滅していても埋め込み再生は継続するため、タイトル不明のまま履歴だけは保存する
+    if(user) saveHistory(user,"watch",id,id,"yt").catch(console.error);
+  }
   const modeLabel = mode==="edu" ? "edu (YouTube Education)" : "nocookie (NoCookie)";
   const body = `
 <div class="watch-layout">
