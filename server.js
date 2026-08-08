@@ -24,7 +24,9 @@ const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
 app.use(helmet({
-  contentSecurityPolicy: false, // インラインscript/styleを多用しているため個別に見直すまで無効化
+  contentSecurityPolicy: false,   // インラインscript/styleを多用しているため個別に見直すまで無効化
+  crossOriginEmbedderPolicy: false, // 有効だとYouTube/ニコニコの埋め込みiframeがブロックされ「エラー153」等の原因になるため無効化
+  crossOriginResourcePolicy: false, // 同上。外部埋め込み・画像読み込みを妨げないようにする
 }));
 
 const PORT = process.env.PORT || 3000;
