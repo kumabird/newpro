@@ -3,21 +3,43 @@ import fetch from "node-fetch";
 import cookieParser from "cookie-parser";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
-import { randomBytes } from "crypto";
+import { randomBytes, timingSafeEqual } from "crypto";
 import bcrypt from "bcrypt";
+import helmet from "helmet";
+import rateLimit from "express-rate-limit";
+
+// ======================================
+// ■ 必須シークレットの検証（起動時チェック）
+// ======================================
+// SESSION_SECRETとADMIN_PASSが未設定のまま本番稼働することを防ぐ。
+// デフォルト値へのフォールバックは推測可能な弱いシークレットに繋がるため廃止。
+for (const key of ["SESSION_SECRET", "ADMIN_PASS"]) {
+  if (!process.env[key]) {
+    console.error(`[FATAL] 環境変数 ${key} が設定されていません。安全なランダム値を設定してください。`);
+    process.exit(1);
+  }
+}
 
 const app = express();
 app.disable("x-powered-by");
 app.set("trust proxy", 1);
+app.use(helmet({
+  contentSecurityPolicy: false, // インラインscript/styleを多用しているため個別に見直すまで無効化
+}));
 
 const PORT = process.env.PORT || 3000;
+
+if (!process.env.RECAPTCHA_SECRET_KEY) {
+  console.warn("[WARN] RECAPTCHA_SECRET_KEY 未設定のため reCAPTCHA 検証はスキップされます。IPレート制限のみでブルートフォースを防いでいます。");
+}
 
 import pkg from "pg";
 const { Pool } = pkg;
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
+  // 自己署名証明書を使うホスティング環境向けに環境変数で切り替え可能にしつつ、デフォルトは検証を有効化
+  ssl: { rejectUnauthorized: process.env.DB_SSL_REJECT_UNAUTHORIZED !== "false" }
 });
 
 const PgSession = connectPgSimple(session);
@@ -44,8 +66,32 @@ app.use(session({
   }
 }));
 
+// ======================================
+// ■ ブルートフォース対策（レート制限）
+// ======================================
+// reCAPTCHAは環境変数未設定時に自動でスキップされる仕様のため、
+// それに依存せず常に効くIPベースのレート制限を認証系エンドポイントに適用する。
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: "試行回数が多すぎます。しばらくしてから再度お試しください" },
+});
+
+function timingSafeStrEqual(a, b) {
+  const bufA = Buffer.from(String(a ?? ""));
+  const bufB = Buffer.from(String(b ?? ""));
+  if (bufA.length !== bufB.length) {
+    // 長さが違う場合でも比較コストを揃えるため、ダミー比較を行ってから false を返す
+    timingSafeEqual(bufA, bufA);
+    return false;
+  }
+  return timingSafeEqual(bufA, bufB);
+}
+
 const ADMIN_USER = process.env.ADMIN_USER || "hinata";
-const ADMIN_PASS = process.env.ADMIN_PASS || "changeme_admin";
+const ADMIN_PASS = process.env.ADMIN_PASS; // 起動時チェック済みなので必ず設定されている
 const RECAPTCHA_SITE_KEY   = process.env.RECAPTCHA_SITE_KEY   || "";
 const RECAPTCHA_SECRET_KEY = process.env.RECAPTCHA_SECRET_KEY || "";
 const GOOGLE_CLIENT_ID     = process.env.GOOGLE_CLIENT_ID     || "";
@@ -393,7 +439,12 @@ function recaptchaWidget() {
 async function hashPassword(plain) { return bcrypt.hash(plain, BCRYPT_ROUNDS); }
 async function verifyPassword(plain, hash) {
   if (hash && hash.startsWith("$2b$")) return bcrypt.compare(plain, hash);
-  return plain === hash;
+  // 旧データ移行用の互換パス：bcryptハッシュでない（平文保存）レコードのみ対象。
+  // "===" はタイミング攻撃で文字を1文字ずつ推測されうるため、定数時間比較に変更。
+  // 一致した場合は findUser 側で即bcryptに置き換えるため、この経路は自然に淘汰される。
+  if (!hash) return false;
+  console.warn("[verifyPassword] 平文パスワードとの比較を実行しました。該当ユーザーは次回ログイン時にbcryptへ移行されます。");
+  return timingSafeStrEqual(plain, hash);
 }
 
 // ======================================
@@ -433,7 +484,7 @@ ensureUsersTable().catch(e => console.error("[DB] ensureUsersTable failed:", e.m
 // ■ ユーティリティ
 // ======================================
 async function findUser(user, pass) {
-  if (user === ADMIN_USER) return pass === ADMIN_PASS ? { user, isAdmin: true } : null;
+  if (user === ADMIN_USER) return timingSafeStrEqual(pass, ADMIN_PASS) ? { user, isAdmin: true } : null;
   try {
     const result = await pool.query("SELECT username, password FROM users WHERE username=$1", [user]);
     if (result.rows.length === 0) return null;
@@ -535,7 +586,7 @@ app.get("/login", (req, res) => {
 </div></body></html>`);
 });
 
-app.post("/login", async (req, res) => {
+app.post("/login", authLimiter, async (req, res) => {
   const { user, pass } = req.body;
   const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
   if (!captchaOk) return res.redirect("/login?msg=" + encodeURIComponent("reCAPTCHAの確認に失敗しました。もう一度お試しください"));
@@ -729,7 +780,7 @@ app.get("/signup", (req, res) => {
 </body></html>`);
 });
 
-app.post("/signup", async (req, res) => {
+app.post("/signup", authLimiter, async (req, res) => {
   const { user, pass, pass2 } = req.body;
   const redirect = (msg) => res.redirect("/signup?msg=" + encodeURIComponent(msg));
   const captchaOk = await verifyRecaptcha(req.body["g-recaptcha-response"]);
@@ -771,18 +822,20 @@ app.get("/reset-password/request", (req, res) => {
 </div></body></html>`);
 });
 
-app.post("/reset-password/request", async (req, res) => {
+app.post("/reset-password/request", authLimiter, async (req, res) => {
   const { username, message } = req.body;
   const redir = (msg) => res.redirect("/reset-password/request?" + new URLSearchParams({ msg }).toString());
-  const ok    = (msg) => res.redirect("/reset-password/request?" + new URLSearchParams({ ok: msg }).toString());
+  // ユーザー名の存在有無で応答を変えるとアカウント列挙（enumeration）を許してしまうため、
+  // 成否にかかわらず同じ文言を返す。
+  const ok = () => res.redirect("/reset-password/request?" + new URLSearchParams({ ok: "✅ 申請を受け付けました。該当アカウントが存在する場合、管理者が承認すると新しいパスワードでログインできるようになります。" }).toString());
   if (!username) return redir("ユーザー名を入力してください");
   try {
     const result = await pool.query("SELECT 1 FROM users WHERE username=$1", [username]);
-    if (result.rows.length === 0) return redir("ユーザーが見つかりません");
+    if (result.rows.length === 0) return ok();
     const existing = await pool.query("SELECT 1 FROM password_reset_requests WHERE username=$1 AND status='pending'", [username]);
-    if (existing.rows.length > 0) return ok("既に申請済みです。管理者の承認をお待ちください。");
+    if (existing.rows.length > 0) return ok();
     await pool.query("INSERT INTO password_reset_requests (username, message, status) VALUES ($1, $2, 'pending')", [username, message || null]);
-    return ok("✅ 申請を受け付けました。管理者が承認すると新しいパスワードでログインできます。");
+    return ok();
   } catch (e) { console.error("reset request error:", e); redir("申請に失敗しました。しばらく後にお試しください"); }
 });
 
@@ -1629,11 +1682,11 @@ app.get("/admin/login", (req, res) => {
 </div></body></html>`);
 });
 
-app.post("/admin/login", (req, res) => {
+app.post("/admin/login", authLimiter, (req, res) => {
   const user = getSessionUser(req);
   if (!user || user !== ADMIN_USER) return res.redirect("/login");
   const { pass } = req.body;
-  if (pass !== ADMIN_PASS) return res.redirect("/admin/login?msg=" + encodeURIComponent("パスワードが違います"));
+  if (!timingSafeStrEqual(pass, ADMIN_PASS)) return res.redirect("/admin/login?msg=" + encodeURIComponent("パスワードが違います"));
   req.session.adminAuthed = true;
   req.session.save((err) => {
     if (err) { console.error("session save error:", err); return res.redirect("/admin/login"); }
@@ -1656,7 +1709,7 @@ app.get("/admin", requireAdmin, async (req, res) => {
 
   let resetRequestsHTML = "";
   try {
-    const reqs = await pool.query("SELECT id, username, message, status, new_password, created_at FROM password_reset_requests ORDER BY created_at DESC");
+    const reqs = await pool.query("SELECT id, username, message, status, created_at FROM password_reset_requests ORDER BY created_at DESC");
     const pending = reqs.rows.filter(r => r.status === "pending");
     const done    = reqs.rows.filter(r => r.status !== "pending");
     if (reqs.rows.length === 0) {
@@ -1678,7 +1731,7 @@ app.get("/admin", requireAdmin, async (req, res) => {
             <input type="hidden" name="id" value="${r.id}">
             <button class="btn btn-danger" style="font-size:12px;padding:6px 12px;margin:0;" onclick="return confirm('拒否しますか？')">✕ 拒否</button>
           </form>` : r.status === "approved"
-          ? `<span style="font-size:12px;color:#27ae60;">新PW: <code>${escHtml(r.new_password||"")}</code></span>`
+          ? `<span style="font-size:12px;color:#27ae60;">承認済み（パスワードは承認時に本人へ個別連絡してください。DBには保存されません）</span>`
           : `<span style="font-size:12px;color:#999;">拒否済み</span>`;
         return `<tr style="border-bottom:1px solid #eee;">
   <td style="padding:10px 12px;">${escHtml(r.username)}</td>
@@ -1813,7 +1866,8 @@ app.post("/admin/reset-request/approve", requireAdmin, async (req, res) => {
     const username = reqRow.rows[0].username;
     const hashed = await hashPassword(new_password);
     await pool.query("UPDATE users SET password=$1 WHERE username=$2", [hashed, username]);
-    await pool.query("UPDATE password_reset_requests SET status='approved', new_password=$1, updated_at=NOW() WHERE id=$2", [new_password, id]);
+    // 平文パスワードをDBに永続化しない（漏洩時のリスクを避けるため new_password 列には保存しない）
+    await pool.query("UPDATE password_reset_requests SET status='approved', updated_at=NOW() WHERE id=$1", [id]);
     res.redirect("/admin?addok=" + encodeURIComponent(`✅ ${username} のパスワードをリセットしました`) + "#tab-reset");
   } catch(e) { console.error("reset approve error:", e); res.redirect("/admin?addmsg=" + encodeURIComponent("処理に失敗しました") + "#tab-reset"); }
 });
