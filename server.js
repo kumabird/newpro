@@ -27,6 +27,7 @@ app.use(helmet({
   contentSecurityPolicy: false,   // インラインscript/styleを多用しているため個別に見直すまで無効化
   crossOriginEmbedderPolicy: false, // 有効だとYouTube/ニコニコの埋め込みiframeがブロックされ「エラー153」等の原因になるため無効化
   crossOriginResourcePolicy: false, // 同上。外部埋め込み・画像読み込みを妨げないようにする
+  referrerPolicy: { policy: "strict-origin-when-cross-origin" }, // helmetの既定値 no-referrer だとYouTube埋め込みがReferer無しで拒否され「エラー153」の原因になるため、ブラウザ標準相当の値に変更
 }));
 
 const PORT = process.env.PORT || 3000;
